@@ -379,12 +379,60 @@ class ScraperService {
     return articles;
   }
 
+  // ─── Sanitization ─────────────────────────────────────────────────────────
+
+  // Strip potential prompt injection attempts from scraped text fields.
+  // Scraped content is untrusted and should never contain AI instructions.
+  sanitizeText(text) {
+    if (!text || typeof text !== 'string') return text;
+
+    // Truncate to reasonable length first
+    let sanitized = text.slice(0, 2000);
+
+    // Remove null bytes and non-printable control characters (except newlines/tabs)
+    sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+    // Strip common prompt injection patterns
+    const injectionPatterns = [
+      /ignore\s+(all\s+)?(previous|prior|above)\s+instructions?/gi,
+      /disregard\s+(all\s+)?(previous|prior|above)\s+instructions?/gi,
+      /forget\s+(all\s+)?(previous|prior|above)\s+instructions?/gi,
+      /system\s*:\s*\[/gi,
+      /\[system\s+prompt\]/gi,
+      /you\s+are\s+now\s+(a\s+)?(?!learning|able|going)/gi, // "you are now a [new persona]"
+      /new\s+instructions?\s*:/gi,
+      /override\s*(previous\s+)?instructions?/gi,
+      /<\s*system\s*>/gi,
+      /<<\s*SYS\s*>>/gi,
+    ];
+
+    for (const pattern of injectionPatterns) {
+      sanitized = sanitized.replace(pattern, '[removed]');
+    }
+
+    return sanitized.trim();
+  }
+
+  sanitizeItem(item) {
+    if (!item || typeof item !== 'object') return item;
+    const textFields = ['title', 'description', 'excerpt', 'author', 'channel', 'source'];
+    const sanitized = { ...item };
+    for (const field of textFields) {
+      if (sanitized[field]) sanitized[field] = this.sanitizeText(sanitized[field]);
+    }
+    return sanitized;
+  }
+
   // ─── Validation ───────────────────────────────────────────────────────────
 
   validateContent(content) {
     const isValidUrl = url => url && url.startsWith('http');
-    content.videos = (content.videos || []).filter(v => v.title && isValidUrl(v.url));
-    content.articles = (content.articles || []).filter(a => a.title && isValidUrl(a.url));
+    content.videos = (content.videos || [])
+      .filter(v => v.title && isValidUrl(v.url))
+      .map(v => this.sanitizeItem(v));
+    content.articles = (content.articles || [])
+      .filter(a => a.title && isValidUrl(a.url))
+      .map(a => this.sanitizeItem(a));
     return content;
   }
 }
