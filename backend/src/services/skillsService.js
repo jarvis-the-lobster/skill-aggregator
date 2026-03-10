@@ -1,69 +1,64 @@
 const db = require('../models/database');
 const scraper = require('./scraperService');
 
-class SkillsService {
-  // Get all available skills
-  async getAllSkills() {
-    // For MVP, we'll start with hardcoded high-demand skills
-    const mvpSkills = [
-      {
-        id: 'python',
-        name: 'Python Programming',
-        category: 'programming',
-        difficulty: 'beginner',
-        description: 'Learn Python from basics to advanced concepts',
-        estimatedHours: 40
-      },
-      {
-        id: 'web-development',
-        name: 'Web Development',
-        category: 'programming', 
-        difficulty: 'beginner',
-        description: 'HTML, CSS, JavaScript, and modern web frameworks',
-        estimatedHours: 60
-      },
-      {
-        id: 'digital-marketing',
-        name: 'Digital Marketing',
-        category: 'business',
-        difficulty: 'beginner',
-        description: 'SEO, social media, email marketing, and analytics',
-        estimatedHours: 30
-      },
-      {
-        id: 'ui-ux-design',
-        name: 'UI/UX Design',
-        category: 'design',
-        difficulty: 'beginner',
-        description: 'User interface and experience design principles',
-        estimatedHours: 35
-      },
-      {
-        id: 'data-science',
-        name: 'Data Science',
-        category: 'programming',
-        difficulty: 'intermediate',
-        description: 'Statistics, machine learning, and data visualization',
-        estimatedHours: 80
-      }
-    ];
+const MVP_SKILLS = [
+  {
+    id: 'python',
+    name: 'Python Programming',
+    category: 'programming',
+    difficulty: 'beginner',
+    description: 'Learn Python from basics to advanced concepts',
+    estimatedHours: 40
+  },
+  {
+    id: 'web-development',
+    name: 'Web Development',
+    category: 'programming',
+    difficulty: 'beginner',
+    description: 'HTML, CSS, JavaScript, and modern web frameworks',
+    estimatedHours: 60
+  },
+  {
+    id: 'digital-marketing',
+    name: 'Digital Marketing',
+    category: 'business',
+    difficulty: 'beginner',
+    description: 'SEO, social media, email marketing, and analytics',
+    estimatedHours: 30
+  },
+  {
+    id: 'ui-ux-design',
+    name: 'UI/UX Design',
+    category: 'design',
+    difficulty: 'beginner',
+    description: 'User interface and experience design principles',
+    estimatedHours: 35
+  },
+  {
+    id: 'data-science',
+    name: 'Data Science',
+    category: 'programming',
+    difficulty: 'intermediate',
+    description: 'Statistics, machine learning, and data visualization',
+    estimatedHours: 80
+  }
+];
 
-    // TODO: Replace with database query once we have content
-    return mvpSkills;
+class SkillsService {
+  async getAllSkills() {
+    return MVP_SKILLS;
   }
 
-  // Get curated content for a specific skill
   async getSkillContent(skillId, filters = {}) {
     try {
-      // For MVP, we'll have some sample data and real scraping
       const content = await this.getCuratedContent(skillId, filters);
-      
-      if (!content || content.length === 0) {
-        // If no content exists, trigger scraping
-        console.log(`No content found for ${skillId}, initiating scraping...`);
-        await this.scrapeSkillContent(skillId);
-        
-        // Return basic structure while scraping happens
+      const hasContent = content.videos.length > 0 || content.articles.length > 0;
+
+      if (!hasContent) {
+        console.log(`No content found for ${skillId}, triggering background scrape...`);
+        this.scrapeSkillContent(skillId).catch(err =>
+          console.error(`Background scrape failed for ${skillId}:`, err.message)
+        );
         return {
           videos: [],
           articles: [],
@@ -79,68 +74,63 @@ class SkillsService {
     }
   }
 
-  // Get curated content from database
-  async getCuratedContent(skillId, filters) {
-    // TODO: Implement database queries
-    // For now, return sample structure
-    return {
-      videos: [
-        {
-          id: 'sample1',
-          title: `${skillId} - Getting Started`,
-          url: '#',
-          source: 'YouTube',
-          duration: '10:30',
-          views: '1.2M',
-          rating: 4.8,
-          thumbnail: 'https://via.placeholder.com/320x180',
-          description: 'A comprehensive introduction to get you started'
-        }
-      ],
-      articles: [
-        {
-          id: 'article1',
-          title: `Complete ${skillId} Guide`,
-          url: '#',
-          source: 'Medium',
-          readTime: '15 min',
-          author: 'Expert Author',
-          publishedDate: new Date().toISOString()
-        }
-      ],
-      courses: [],
-      totalCount: 1
-    };
+  async getCuratedContent(skillId, filters = {}) {
+    const rows = await db.getSkillContent(skillId, filters.type || null);
+
+    const videos = rows
+      .filter(r => r.type === 'video')
+      .map(r => ({
+        id: r.id,
+        title: r.title,
+        url: r.url,
+        source: r.source,
+        channel: r.author,
+        duration: r.duration,
+        views: r.views,
+        likes: r.likes,
+        rating: r.rating,
+        thumbnail: r.thumbnail,
+        description: r.description,
+        publishedDate: r.published_date,
+        tags: r.tags ? JSON.parse(r.tags) : []
+      }));
+
+    const articles = rows
+      .filter(r => r.type === 'article')
+      .map(r => ({
+        id: r.id,
+        title: r.title,
+        url: r.url,
+        source: r.source,
+        author: r.author,
+        readTime: r.read_time,
+        excerpt: r.description,
+        publishedDate: r.published_date,
+        tags: r.tags ? JSON.parse(r.tags) : []
+      }));
+
+    return { videos, articles, courses: [], totalCount: rows.length };
   }
 
-  // Trigger content scraping for a skill
   async scrapeSkillContent(skillId) {
-    try {
-      console.log(`Starting content scraping for skill: ${skillId}`);
-      
-      // Use our scraper service to gather content
-      const scrapingResults = await scraper.scrapeSkill(skillId);
-      
-      // TODO: Store results in database
-      console.log(`Scraping completed for ${skillId}:`, {
-        videos: scrapingResults.videos?.length || 0,
-        articles: scrapingResults.articles?.length || 0
-      });
-
-      return scrapingResults;
-    } catch (error) {
-      console.error(`Error scraping content for ${skillId}:`, error);
-      throw error;
-    }
+    console.log(`Starting content scraping for skill: ${skillId}`);
+    const result = await scraper.scrapeSkill(skillId);
+    console.log(`Scraping done for ${skillId}: ${result.videos.length} videos, ${result.articles.length} articles`);
+    return result;
   }
 
-  // Get statistics for a skill
   async getSkillStats(skillId) {
+    const rows = await db.getSkillContent(skillId);
+    const videos = rows.filter(r => r.type === 'video');
+    const articles = rows.filter(r => r.type === 'article');
+    const ratings = rows.filter(r => r.rating).map(r => r.rating);
+    const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+
     return {
-      totalVideos: 0,
-      totalArticles: 0,
+      totalVideos: videos.length,
+      totalArticles: articles.length,
       totalCourses: 0,
-      avgRating: 0,
+      avgRating: Math.round(avgRating * 10) / 10,
       lastUpdated: new Date().toISOString()
     };
   }
