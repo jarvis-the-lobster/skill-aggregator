@@ -26,8 +26,8 @@ export function SignupPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
     setSubmitting(true);
@@ -102,7 +102,7 @@ export function SignupPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="••••••••"
             />
-            <p className="text-xs text-gray-400 mt-1">Minimum 6 characters</p>
+            <p className="text-xs text-gray-400 mt-1">Minimum 8 characters</p>
           </div>
 
           {error && (
