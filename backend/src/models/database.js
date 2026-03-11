@@ -58,6 +58,18 @@ class Database {
         interaction_type TEXT, -- 'view', 'like', 'complete'
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (content_id) REFERENCES content (id)
+      )`,
+
+      // Users table for authentication
+      `CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT,
+        google_id TEXT UNIQUE,
+        name TEXT,
+        avatar_url TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_login DATETIME
       )`
     ];
 
@@ -174,6 +186,36 @@ class Database {
   // Update last_scraped_at timestamp for a skill
   async updateSkillLastScraped(skillId) {
     return this.insert('UPDATE skills SET last_scraped_at = CURRENT_TIMESTAMP WHERE id = ?', [skillId]);
+  }
+
+  // --- User methods ---
+
+  async createUser({ email, password_hash = null, google_id = null, name = null, avatar_url = null }) {
+    const result = await this.insert(
+      `INSERT INTO users (email, password_hash, google_id, name, avatar_url)
+       VALUES (?, ?, ?, ?, ?)`,
+      [email, password_hash, google_id, name, avatar_url]
+    );
+    return this.getUserById(result.id);
+  }
+
+  async getUserByEmail(email) {
+    const rows = await this.query('SELECT * FROM users WHERE email = ?', [email]);
+    return rows[0] || null;
+  }
+
+  async getUserById(id) {
+    const rows = await this.query('SELECT * FROM users WHERE id = ?', [id]);
+    return rows[0] || null;
+  }
+
+  async getUserByGoogleId(googleId) {
+    const rows = await this.query('SELECT * FROM users WHERE google_id = ?', [googleId]);
+    return rows[0] || null;
+  }
+
+  async updateLastLogin(id) {
+    return this.insert('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [id]);
   }
 
   // Close database connection
