@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const skillsService = require('../services/skillsService');
+const analytics = require('../services/analyticsService');
 
 // GET /api/skills - List all skills from DB
 router.get('/', async (req, res) => {
@@ -21,6 +22,11 @@ router.get('/search', async (req, res) => {
       return res.status(400).json({ error: 'Query parameter "q" is required' });
     }
     const result = await skillsService.searchSkill(q.trim());
+    analytics.trackSkillSearched({
+      skillId: result.skill?.id,
+      skillName: result.skill?.name,
+      isNewSkill: result.isNew || false,
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -34,6 +40,25 @@ router.get('/:skill', async (req, res) => {
     const { type, difficulty, format } = req.query;
 
     const result = await skillsService.getSkillContent(skill, { type, difficulty, format });
+    if (result.status === 'ready' && result.content) {
+      const { videos = [], articles = [] } = result.content;
+      if (videos.length > 0) {
+        analytics.trackSkillContentServed({
+          skillId: result.skill?.id,
+          skillName: result.skill?.name,
+          contentType: 'video',
+          resultCount: videos.length,
+        });
+      }
+      if (articles.length > 0) {
+        analytics.trackSkillContentServed({
+          skillId: result.skill?.id,
+          skillName: result.skill?.name,
+          contentType: 'article',
+          resultCount: articles.length,
+        });
+      }
+    }
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });

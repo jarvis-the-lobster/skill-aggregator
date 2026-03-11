@@ -3,6 +3,7 @@ const router = express.Router();
 const passport = require('../config/passport');
 const { register, login, generateToken, safeUser } = require('../services/authService');
 const { requireAuth } = require('../middleware/auth');
+const analytics = require('../services/analyticsService');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -15,6 +16,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
     const result = await register(email, password, name);
+    analytics.trackUserRegistered({ userId: result.user?.id, method: 'email' });
     res.status(201).json(result);
   } catch (err) {
     if (err.message === 'Email already in use') {
@@ -33,6 +35,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     const result = await login(email, password);
+    analytics.trackUserLoggedIn({ userId: result.user?.id, method: 'email' });
     res.json(result);
   } catch (err) {
     if (err.message === 'Invalid email or password') {
@@ -72,6 +75,7 @@ router.get('/google/callback', (req, res, next) => {
   })(req, res, next);
 }, (req, res) => {
   const token = generateToken(req.user.id);
+  analytics.trackUserLoggedIn({ userId: req.user.id, method: 'google' });
   res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
 });
 

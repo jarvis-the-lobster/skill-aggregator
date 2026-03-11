@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiService } from '../services/api';
+import analytics from '../services/analytics';
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
@@ -15,6 +16,11 @@ export function SkillPage() {
 
   const pollTimer = useRef(null);
   const timeoutTimer = useRef(null);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    analytics.track('content_tab_switched', { skillId, tab });
+  };
 
   useEffect(() => {
     loadSkillData();
@@ -220,7 +226,7 @@ export function SkillPage() {
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
               <button
-                onClick={() => setActiveTab('videos')}
+                onClick={() => handleTabChange('videos')}
                 className={`py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'videos'
                     ? 'border-primary-500 text-primary-600'
@@ -234,7 +240,7 @@ export function SkillPage() {
               </button>
 
               <button
-                onClick={() => setActiveTab('articles')}
+                onClick={() => handleTabChange('articles')}
                 className={`py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'articles'
                     ? 'border-primary-500 text-primary-600'

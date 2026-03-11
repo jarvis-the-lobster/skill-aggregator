@@ -5,6 +5,7 @@ import { apiService } from '../services/api';
 import { SkillCard } from '../components/SkillCard';
 import { SearchBar } from '../components/SearchBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import analytics from '../services/analytics';
 
 export function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,6 +52,7 @@ export function HomePage() {
   // On Enter or suggestion click: call search API then navigate
   const handleSearch = async (query) => {
     if (!query.trim()) return;
+    analytics.track('search_query_typed', { query: query.trim(), resultCount: filteredSkills.length });
     try {
       const result = await apiService.searchSkill(query.trim());
       navigate(`/skills/${result.skill.id}`);
@@ -156,6 +158,7 @@ export function HomePage() {
                   key={skill.id}
                   skill={skill}
                   contentCount={contentCounts[skill.id]}
+                  onClick={() => analytics.track('skill_card_clicked', { skillId: skill.id, skillName: skill.name })}
                 />
               ))}
             </div>

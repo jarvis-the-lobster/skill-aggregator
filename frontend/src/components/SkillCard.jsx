@@ -21,7 +21,7 @@ const DIFFICULTY_COLORS = {
   'advanced': 'bg-red-100 text-red-700',
 };
 
-export function SkillCard({ skill, contentCount }) {
+export function SkillCard({ skill, contentCount, onClick }) {
   const icon = SKILL_ICONS[skill.id] || '📚';
   const categoryColor = CATEGORY_COLORS[skill.category] || 'bg-gray-100 text-gray-700';
   const difficultyColor = DIFFICULTY_COLORS[skill.difficulty] || 'bg-gray-100 text-gray-700';
@@ -30,6 +30,7 @@ export function SkillCard({ skill, contentCount }) {
     <Link
       to={`/skills/${skill.id}`}
       className="skill-card group flex flex-col"
+      onClick={onClick}
     >
       <div className="flex items-start space-x-4 mb-3">
         <span className="text-4xl" role="img" aria-label={skill.name}>{icon}</span>

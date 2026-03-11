@@ -1,5 +1,7 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
+import analytics from './services/analytics';
 import { HomePage } from './pages/HomePage';
 import { SkillPage } from './pages/SkillPage';
 import { AboutPage } from './pages/AboutPage';
@@ -9,10 +11,19 @@ import { AuthCallback } from './pages/AuthCallback';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    analytics.track('page_view', { path: location.pathname });
+  }, [location.pathname]);
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
       <Router>
+        <RouteTracker />
         <div className="min-h-screen bg-gray-50 flex flex-col">
           <Header />
 
