@@ -44,6 +44,17 @@ const MVP_SKILLS = [
   }
 ];
 
+// Map alternate slugs to canonical skill IDs
+const SLUG_ALIASES = {
+  'python-programming': 'python',
+  'js': 'javascript',
+  'javascript-programming': 'javascript',
+  'ml': 'machine-learning',
+  'ui-ux': 'ui-ux-design',
+  'ux-design': 'ui-ux-design',
+  'web-dev': 'web-development',
+};
+
 // Normalize arbitrary query string to a slug ID
 // "Machine Learning" -> "machine-learning"
 // "C++" -> "c-plus-plus"
@@ -115,7 +126,8 @@ class SkillsService {
 
   // Search for a skill by arbitrary query; creates + scrapes if not found
   async searchSkill(query) {
-    const skillId = normalizeSkillId(query);
+    const rawId = normalizeSkillId(query);
+    const skillId = SLUG_ALIASES[rawId] || rawId;
     const skillName = normalizeSkillName(query);
 
     const existing = await db.getSkillById(skillId);
@@ -208,21 +220,27 @@ class SkillsService {
     return { videos, articles, courses: [], totalCount: rows.length };
   }
 
-  async scrapeSkillContent(skillId) {
+  async updateStatus(skillId, status) {
+    await db.updateSkillStatus(skillId, status);
+  }
+
+  async scrapeSkillContent(skillId, { force = false } = {}) {
     const skillRow = await db.getSkillById(skillId);
 
-    // Guard: don't start a second concurrent scrape
-    if (skillRow?.status === 'scraping') {
-      console.log(`⏳ Scrape already in progress for ${skillId}, skipping`);
-      return;
-    }
-
-    // Guard: don't re-scrape within 24 hours
-    if (skillRow?.last_scraped_at) {
-      const hoursSince = (Date.now() - new Date(skillRow.last_scraped_at).getTime()) / 3600000;
-      if (hoursSince < 24) {
-        console.log(`⏭️  Skipping scrape for ${skillId} — last scraped ${hoursSince.toFixed(1)}h ago`);
+    if (!force) {
+      // Guard: don't start a second concurrent scrape
+      if (skillRow?.status === 'scraping') {
+        console.log(`⏳ Scrape already in progress for ${skillId}, skipping`);
         return;
+      }
+
+      // Guard: don't re-scrape within 24 hours
+      if (skillRow?.last_scraped_at) {
+        const hoursSince = (Date.now() - new Date(skillRow.last_scraped_at).getTime()) / 3600000;
+        if (hoursSince < 24) {
+          console.log(`⏭️  Skipping scrape for ${skillId} — last scraped ${hoursSince.toFixed(1)}h ago`);
+          return;
+        }
       }
     }
 

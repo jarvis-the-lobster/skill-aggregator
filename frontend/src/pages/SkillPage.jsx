@@ -80,6 +80,7 @@ export function SkillPage() {
   const handleScrapeContent = async () => {
     try {
       await apiService.scrapeSkillContent(skillId);
+      clearTimers();
       setStatus('scraping');
       setContent({ videos: [], articles: [] });
       startPolling();

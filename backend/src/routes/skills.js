@@ -69,7 +69,9 @@ router.get('/:skill', async (req, res) => {
 router.post('/:skill/scrape', async (req, res) => {
   try {
     const { skill } = req.params;
-    skillsService.scrapeSkillContent(skill).catch(err =>
+    // Reset status immediately so the frontend poll detects the state change
+    await skillsService.updateStatus(skill, 'scraping');
+    skillsService.scrapeSkillContent(skill, { force: true }).catch(err =>
       console.error(`Manual scrape failed for ${skill}:`, err.message)
     );
     res.json({ message: `Content scraping initiated for "${skill}"` });
