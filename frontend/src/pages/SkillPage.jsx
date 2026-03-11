@@ -4,7 +4,7 @@ import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink } from 'lucid
 import { apiService } from '../services/api';
 
 export function SkillPage() {
-  const { skillId } = useParams();
+  const { id: skillId } = useParams();
   const [skillData, setSkillData] = useState(null);
   const [content, setContent] = useState({ videos: [], articles: [] });
   const [loading, setLoading] = useState(true);
