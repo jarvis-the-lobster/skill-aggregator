@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Play, BookOpen, Clock } from 'lucide-react';
 import { apiService } from '../services/api';
 import { SkillCard } from '../components/SkillCard';
@@ -11,6 +12,7 @@ export function HomePage() {
   const [contentCounts, setContentCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadSkills();
@@ -23,15 +25,18 @@ export function HomePage() {
       const skillsList = data.skills || [];
       setSkills(skillsList);
 
-      // Fetch content counts for each skill in parallel
+      // Fetch content counts for ready skills in parallel
       const statsResults = await Promise.allSettled(
-        skillsList.map((s) => apiService.getSkillStats(s.id))
+        skillsList
+          .filter(s => s.status === 'ready')
+          .map((s) => apiService.getSkillStats(s.id))
       );
+      const readySkills = skillsList.filter(s => s.status === 'ready');
       const counts = {};
       statsResults.forEach((result, i) => {
         if (result.status === 'fulfilled') {
           const { stats } = result.value;
-          counts[skillsList[i].id] = (stats.totalVideos || 0) + (stats.totalArticles || 0);
+          counts[readySkills[i].id] = (stats.totalVideos || 0) + (stats.totalArticles || 0);
         }
       });
       setContentCounts(counts);
@@ -43,12 +48,27 @@ export function HomePage() {
     }
   };
 
+  // On Enter or suggestion click: call search API then navigate
+  const handleSearch = async (query) => {
+    if (!query.trim()) return;
+    try {
+      const result = await apiService.searchSkill(query.trim());
+      navigate(`/skills/${result.skill.id}`);
+    } catch (err) {
+      console.error('Search error:', err);
+      // Fallback: navigate with a best-guess slug
+      const slug = query.trim().toLowerCase().replace(/\s+/g, '-');
+      navigate(`/skills/${slug}`);
+    }
+  };
+
+  // Client-side filter for the skill cards while typing
   const filteredSkills = skills.filter((skill) => {
     const q = searchQuery.toLowerCase();
     return (
       skill.name.toLowerCase().includes(q) ||
-      skill.description.toLowerCase().includes(q) ||
-      skill.category.toLowerCase().includes(q)
+      (skill.description || '').toLowerCase().includes(q) ||
+      (skill.category || '').toLowerCase().includes(q)
     );
   });
 
@@ -69,7 +89,9 @@ export function HomePage() {
             <SearchBar
               value={searchQuery}
               onChange={setSearchQuery}
-              placeholder="Search Python, Web Dev, Design…"
+              onSearch={handleSearch}
+              skills={skills}
+              placeholder="Search Python, Kubernetes, Design…"
             />
           </div>
 
@@ -121,7 +143,7 @@ export function HomePage() {
               <p className="text-5xl mb-4">🔍</p>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No skills found</h3>
               <p className="text-gray-500 mb-4">
-                Try a different search term, or clear the search to browse all skills.
+                Press Enter or click &ldquo;Search for {searchQuery}&rdquo; to find resources for this skill.
               </p>
               <button onClick={() => setSearchQuery('')} className="btn-secondary">
                 Clear Search
@@ -154,13 +176,13 @@ export function HomePage() {
               {[
                 {
                   step: '1',
-                  title: 'Search a Skill',
-                  description: 'Type what you want to learn — Python, design, marketing, anything.',
+                  title: 'Search Any Skill',
+                  description: 'Type what you want to learn — Python, Kubernetes, design, anything.',
                 },
                 {
                   step: '2',
-                  title: 'Get Curated Content',
-                  description: 'We surface the best videos and articles so you skip the noise.',
+                  title: 'We Gather Content',
+                  description: 'We scrape YouTube and top articles so you skip the noise.',
                 },
                 {
                   step: '3',

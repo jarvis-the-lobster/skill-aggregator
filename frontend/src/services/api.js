@@ -67,6 +67,12 @@ export const apiService = {
   async getSkillStats(skillId) {
     const response = await api.get(`/skills/${skillId}/stats`);
     return response.data;
+  },
+
+  // Search for a skill by arbitrary query string (normalizes + creates if needed)
+  async searchSkill(query) {
+    const response = await api.get(`/skills/search?q=${encodeURIComponent(query)}`);
+    return response.data;
   }
 };
 

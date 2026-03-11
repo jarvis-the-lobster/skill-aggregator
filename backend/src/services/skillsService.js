@@ -44,30 +44,126 @@ const MVP_SKILLS = [
   }
 ];
 
+// Normalize arbitrary query string to a slug ID
+// "Machine Learning" -> "machine-learning"
+// "C++" -> "c-plus-plus"
+// "Node.js" -> "nodejs"
+function normalizeSkillId(query) {
+  return query
+    .replace(/\+\+/g, '-plus-plus')
+    .replace(/\./g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+// Title-case the original query string
+function normalizeSkillName(query) {
+  return query
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+// Map a raw DB row to a consistent JS object
+function mapSkillRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category || 'general',
+    difficulty: row.difficulty || 'beginner',
+    description: row.description || `Learn ${row.name}`,
+    estimatedHours: row.estimated_hours || 0,
+    status: row.status || 'pending',
+    lastScrapedAt: row.last_scraped_at || null
+  };
+}
+
 class SkillsService {
-  async getAllSkills() {
-    return MVP_SKILLS;
+  // Seed the 5 MVP skills into DB on startup (idempotent)
+  async seedMVPSkills() {
+    for (const skill of MVP_SKILLS) {
+      const existing = await db.getSkillById(skill.id);
+      if (!existing) {
+        await db.insert(
+          'INSERT INTO skills (id, name, category, difficulty, description, estimated_hours, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [skill.id, skill.name, skill.category, skill.difficulty, skill.description, skill.estimatedHours, 'ready']
+        );
+        console.log(`🌱 Seeded skill: ${skill.name}`);
+      } else if (!existing.status || existing.status === 'pending') {
+        // Existing row missing status — mark ready since content may already be in DB
+        await db.updateSkillStatus(skill.id, 'ready');
+      }
+    }
   }
 
+  async getAllSkills() {
+    const rows = await db.getSkills();
+    return rows.map(mapSkillRow);
+  }
+
+  // Create a brand-new skill record with status "pending"
+  async createSkill(id, name) {
+    await db.insert(
+      'INSERT OR IGNORE INTO skills (id, name, status) VALUES (?, ?, ?)',
+      [id, name, 'pending']
+    );
+    return mapSkillRow(await db.getSkillById(id));
+  }
+
+  // Search for a skill by arbitrary query; creates + scrapes if not found
+  async searchSkill(query) {
+    const skillId = normalizeSkillId(query);
+    const skillName = normalizeSkillName(query);
+
+    const existing = await db.getSkillById(skillId);
+
+    if (existing) {
+      if (existing.status === 'ready') {
+        const content = await this.getCuratedContent(skillId);
+        return { skill: mapSkillRow(existing), status: 'ready', content };
+      }
+      return { skill: mapSkillRow(existing), status: existing.status || 'scraping' };
+    }
+
+    // Not found — create and kick off a background scrape
+    const skill = await this.createSkill(skillId, skillName);
+    this.scrapeSkillContent(skillId).catch(err =>
+      console.error(`Background scrape failed for ${skillId}:`, err.message)
+    );
+    return { skill, status: 'scraping', message: 'Gathering content...' };
+  }
+
+  // Get full skill details + content (used by SkillPage for polling)
   async getSkillContent(skillId, filters = {}) {
     try {
-      const content = await this.getCuratedContent(skillId, filters);
-      const hasContent = content.videos.length > 0 || content.articles.length > 0;
+      const skillRow = await db.getSkillById(skillId);
 
-      if (!hasContent) {
-        console.log(`No content found for ${skillId}, triggering background scrape...`);
+      if (!skillRow) {
+        // Auto-create with skillId as name (handles direct URL navigation)
+        const skillName = skillId
+          .split('-')
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+        const skill = await this.createSkill(skillId, skillName);
         this.scrapeSkillContent(skillId).catch(err =>
           console.error(`Background scrape failed for ${skillId}:`, err.message)
         );
-        return {
-          videos: [],
-          articles: [],
-          courses: [],
-          message: 'Content is being gathered. Please check back in a few minutes.'
-        };
+        return { skill, status: 'scraping', content: { videos: [], articles: [], courses: [] } };
       }
 
-      return content;
+      if (skillRow.status === 'ready') {
+        const content = await this.getCuratedContent(skillId, filters);
+        return { skill: mapSkillRow(skillRow), status: 'ready', content };
+      }
+
+      return {
+        skill: mapSkillRow(skillRow),
+        status: skillRow.status || 'scraping',
+        content: { videos: [], articles: [], courses: [] }
+      };
     } catch (error) {
       console.error('Error getting skill content:', error);
       throw error;
@@ -113,10 +209,37 @@ class SkillsService {
   }
 
   async scrapeSkillContent(skillId) {
-    console.log(`Starting content scraping for skill: ${skillId}`);
-    const result = await scraper.scrapeSkill(skillId);
-    console.log(`Scraping done for ${skillId}: ${result.videos.length} videos, ${result.articles.length} articles`);
-    return result;
+    const skillRow = await db.getSkillById(skillId);
+
+    // Guard: don't start a second concurrent scrape
+    if (skillRow?.status === 'scraping') {
+      console.log(`⏳ Scrape already in progress for ${skillId}, skipping`);
+      return;
+    }
+
+    // Guard: don't re-scrape within 24 hours
+    if (skillRow?.last_scraped_at) {
+      const hoursSince = (Date.now() - new Date(skillRow.last_scraped_at).getTime()) / 3600000;
+      if (hoursSince < 24) {
+        console.log(`⏭️  Skipping scrape for ${skillId} — last scraped ${hoursSince.toFixed(1)}h ago`);
+        return;
+      }
+    }
+
+    await db.updateSkillStatus(skillId, 'scraping');
+
+    try {
+      console.log(`🔍 Starting content scraping for skill: ${skillId}`);
+      const result = await scraper.scrapeSkill(skillId);
+      await db.updateSkillStatus(skillId, 'ready');
+      await db.updateSkillLastScraped(skillId);
+      console.log(`✅ Scraping done for ${skillId}: ${result.videos.length} videos, ${result.articles.length} articles`);
+      return result;
+    } catch (err) {
+      await db.updateSkillStatus(skillId, 'error');
+      console.error(`❌ Scrape failed for ${skillId}:`, err.message);
+      throw err;
+    }
   }
 
   async getSkillStats(skillId) {

@@ -73,7 +73,8 @@ class Database {
       // Migrations: add columns that may not exist in older DBs
       const migrations = [
         'ALTER TABLE skills ADD COLUMN last_scraped_at DATETIME',
-        'ALTER TABLE content ADD COLUMN likes INTEGER DEFAULT 0'
+        'ALTER TABLE content ADD COLUMN likes INTEGER DEFAULT 0',
+        "ALTER TABLE skills ADD COLUMN status TEXT DEFAULT 'pending'"
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -109,6 +110,17 @@ class Database {
   // Get all skills
   async getSkills() {
     return this.query('SELECT * FROM skills ORDER BY name');
+  }
+
+  // Get a single skill by ID
+  async getSkillById(id) {
+    const rows = await this.query('SELECT * FROM skills WHERE id = ?', [id]);
+    return rows[0] || null;
+  }
+
+  // Update skill status
+  async updateSkillStatus(id, status) {
+    return this.insert('UPDATE skills SET status = ? WHERE id = ?', [status, id]);
   }
 
   // Get content for a skill, ordered by quality signals
@@ -161,13 +173,7 @@ class Database {
 
   // Update last_scraped_at timestamp for a skill
   async updateSkillLastScraped(skillId) {
-    return this.insert(
-      'INSERT OR REPLACE INTO skills (id, last_scraped_at) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET last_scraped_at = CURRENT_TIMESTAMP',
-      [skillId]
-    ).catch(() =>
-      // Fallback for older SQLite without ON CONFLICT DO UPDATE
-      this.insert('UPDATE skills SET last_scraped_at = CURRENT_TIMESTAMP WHERE id = ?', [skillId])
-    );
+    return this.insert('UPDATE skills SET last_scraped_at = CURRENT_TIMESTAMP WHERE id = ?', [skillId]);
   }
 
   // Close database connection

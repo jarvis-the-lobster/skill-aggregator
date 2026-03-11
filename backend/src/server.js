@@ -11,6 +11,7 @@ app.use(express.json());
 
 // Routes
 const skillRoutes = require('./routes/skills');
+const skillsService = require('./services/skillsService');
 app.use('/api/skills', skillRoutes);
 
 // Health check
@@ -49,4 +50,11 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`🦞 Skill Aggregator API running on port ${PORT}`);
   console.log(`🌍 Health check: http://localhost:${PORT}/api/health`);
+
+  // Seed MVP skills into DB (idempotent — safe to run every startup)
+  setTimeout(() => {
+    skillsService.seedMVPSkills().catch(err =>
+      console.error('Failed to seed MVP skills:', err.message)
+    );
+  }, 500);
 });

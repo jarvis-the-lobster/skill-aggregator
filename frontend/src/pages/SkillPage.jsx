@@ -1,52 +1,89 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiService } from '../services/api';
+
+const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS = 60000;
 
 export function SkillPage() {
   const { id: skillId } = useParams();
   const [skillData, setSkillData] = useState(null);
   const [content, setContent] = useState({ videos: [], articles: [] });
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
   const [activeTab, setActiveTab] = useState('videos');
+
+  const pollTimer = useRef(null);
+  const timeoutTimer = useRef(null);
 
   useEffect(() => {
     loadSkillData();
+    return () => clearTimers();
   }, [skillId]);
 
+  const clearTimers = () => {
+    if (pollTimer.current) clearInterval(pollTimer.current);
+    if (timeoutTimer.current) clearTimeout(timeoutTimer.current);
+  };
+
   const loadSkillData = async () => {
+    clearTimers();
+    setStatus('loading');
     try {
-      setLoading(true);
-      
-      // Load skill info and content
-      const [skillsResponse, contentResponse] = await Promise.all([
-        apiService.getSkills(),
-        apiService.getSkillContent(skillId)
-      ]);
-      
-      const skill = skillsResponse.skills.find(s => s.id === skillId);
-      setSkillData(skill);
-      setContent(contentResponse.content);
+      const result = await apiService.getSkillContent(skillId);
+      applyResult(result);
+
+      if (result.status === 'scraping' || result.status === 'pending') {
+        startPolling();
+      }
     } catch (error) {
       console.error('Error loading skill data:', error);
-    } finally {
-      setLoading(false);
+      setStatus('error');
     }
+  };
+
+  const applyResult = (result) => {
+    setSkillData(result.skill || null);
+    if (result.content) {
+      setContent(result.content);
+    }
+    setStatus(result.status || 'error');
+  };
+
+  const startPolling = () => {
+    // Timeout after 60 seconds
+    timeoutTimer.current = setTimeout(() => {
+      clearTimers();
+      setStatus('timeout');
+    }, POLL_TIMEOUT_MS);
+
+    pollTimer.current = setInterval(async () => {
+      try {
+        const result = await apiService.getSkillContent(skillId);
+        applyResult(result);
+
+        if (result.status === 'ready' || result.status === 'error') {
+          clearTimers();
+        }
+      } catch (err) {
+        console.error('Poll error:', err);
+      }
+    }, POLL_INTERVAL_MS);
   };
 
   const handleScrapeContent = async () => {
     try {
       await apiService.scrapeSkillContent(skillId);
-      // Reload content after scraping
-      setTimeout(() => {
-        loadSkillData();
-      }, 2000);
+      setStatus('scraping');
+      setContent({ videos: [], articles: [] });
+      startPolling();
     } catch (error) {
-      console.error('Error scraping content:', error);
+      console.error('Error triggering scrape:', error);
     }
   };
 
-  if (loading) {
+  // --- Loading skeleton ---
+  if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-6xl mx-auto">
@@ -64,11 +101,63 @@ export function SkillPage() {
     );
   }
 
-  if (!skillData) {
+  // --- Scraping in progress ---
+  if (status === 'scraping' || status === 'pending') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <div className="text-6xl mb-6 animate-bounce">🔍</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+            Gathering the best resources for{' '}
+            <span className="text-purple-600">{skillData?.name || skillId}</span>…
+          </h1>
+          <p className="text-gray-500 mb-6">
+            We&apos;re scraping YouTube and top articles. This usually takes 15–30 seconds.
+          </p>
+          <div className="flex justify-center space-x-2">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="w-3 h-3 bg-purple-500 rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-6">Checking every 3 seconds…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Timeout ---
+  if (status === 'timeout') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <p className="text-5xl mb-4">⏱️</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Taking longer than expected</h1>
+          <p className="text-gray-500 mb-6">
+            Content gathering is still in progress. Check back in a moment.
+          </p>
+          <div className="flex justify-center space-x-3">
+            <button onClick={loadSkillData} className="btn-primary">
+              Check Again
+            </button>
+            <Link to="/" className="btn-secondary">
+              Back to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Skill not found / error ---
+  if (!skillData || status === 'error') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Skill Not Found</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Could not load skill</h1>
           <Link to="/" className="btn-primary">
             Back to Home
           </Link>
@@ -77,47 +166,47 @@ export function SkillPage() {
     );
   }
 
+  // --- Ready state ---
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center text-primary-600 hover:text-primary-700 mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Skills
           </Link>
-          
+
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                {skillData.name}
-              </h1>
-              <p className="text-xl text-gray-600 mb-4">
-                {skillData.description}
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{skillData.name}</h1>
+              <p className="text-xl text-gray-600 mb-4">{skillData.description}</p>
               <div className="flex items-center space-x-4 text-sm text-gray-500">
-                <span className={`px-3 py-1 rounded-full ${
-                  skillData.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                  skillData.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
+                <span
+                  className={`px-3 py-1 rounded-full ${
+                    skillData.difficulty === 'beginner'
+                      ? 'bg-green-100 text-green-800'
+                      : skillData.difficulty === 'intermediate'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}
+                >
                   {skillData.difficulty}
                 </span>
-                <div className="flex items-center space-x-1">
-                  <Clock className="w-4 h-4" />
-                  <span>~{skillData.estimatedHours} hours</span>
-                </div>
+                {skillData.estimatedHours > 0 && (
+                  <div className="flex items-center space-x-1">
+                    <Clock className="w-4 h-4" />
+                    <span>~{skillData.estimatedHours} hours</span>
+                  </div>
+                )}
                 <span className="capitalize">{skillData.category}</span>
               </div>
             </div>
-            
-            <button 
-              onClick={handleScrapeContent}
-              className="btn-primary"
-            >
+
+            <button onClick={handleScrapeContent} className="btn-primary">
               Refresh Content
             </button>
           </div>
@@ -143,7 +232,7 @@ export function SkillPage() {
                   <span>Videos ({content.videos?.length || 0})</span>
                 </div>
               </button>
-              
+
               <button
                 onClick={() => setActiveTab('articles')}
                 className={`py-4 text-sm font-medium border-b-2 transition-colors ${
@@ -177,9 +266,7 @@ export function SkillPage() {
                           <h3 className="text-lg font-semibold text-gray-900 mb-2">
                             {video.title}
                           </h3>
-                          <p className="text-gray-600 text-sm mb-3">
-                            {video.description}
-                          </p>
+                          <p className="text-gray-600 text-sm mb-3">{video.description}</p>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-4 text-sm text-gray-500">
                               <span>{video.channel || video.source}</span>
@@ -218,7 +305,7 @@ export function SkillPage() {
                     <Play className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No videos yet</h3>
                     <p className="text-gray-500 mb-4">
-                      {content.message || 'Content is being gathered. Try refreshing in a few minutes.'}
+                      Content is being gathered. Try refreshing in a few minutes.
                     </p>
                     <button onClick={handleScrapeContent} className="btn-primary">
                       Find Videos
@@ -236,9 +323,7 @@ export function SkillPage() {
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">
                         {article.title}
                       </h3>
-                      <p className="text-gray-600 mb-4">
-                        {article.excerpt || article.description}
-                      </p>
+                      <p className="text-gray-600 mb-4">{article.excerpt || article.description}</p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <span>{article.source}</span>
@@ -269,7 +354,7 @@ export function SkillPage() {
                     <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No articles yet</h3>
                     <p className="text-gray-500 mb-4">
-                      {content.message || 'Content is being gathered. Try refreshing in a few minutes.'}
+                      Content is being gathered. Try refreshing in a few minutes.
                     </p>
                     <button onClick={handleScrapeContent} className="btn-primary">
                       Find Articles
