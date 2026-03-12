@@ -47,6 +47,15 @@ export function Header() {
             )}
           </nav>
 
+          {/* Early access CTA */}
+          <Link
+            to="/early-access"
+            className="hidden md:inline-flex items-center gap-1.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium px-3 py-1.5 rounded-full transition-colors"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Early Access
+          </Link>
+
           {/* Auth area */}
           <div className="flex items-center space-x-3">
             {user ? (

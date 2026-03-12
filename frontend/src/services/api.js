@@ -83,6 +83,17 @@ export const apiService = {
   async updateCourseStatus(skillId, status) {
     const response = await api.patch(`/courses/${skillId}/status`, { status });
     return response.data;
+  },
+
+  // Newsletter endpoints
+  async subscribeToNewsletter(email, categories = []) {
+    const response = await api.post('/newsletter/subscribe', { email, categories });
+    return response.data;
+  },
+
+  async getSubscriberCount() {
+    const response = await api.get('/newsletter/subscribers/count');
+    return response.data;
   }
 };
 

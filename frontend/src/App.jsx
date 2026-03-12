@@ -10,6 +10,7 @@ import { SignupPage } from './pages/SignupPage';
 import { AuthCallback } from './pages/AuthCallback';
 import { AdminPage } from './pages/AdminPage';
 import { MyCoursesPage } from './pages/MyCoursesPage';
+import { EarlyAccessPage } from './pages/EarlyAccessPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
@@ -48,6 +49,7 @@ function App() {
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/my-courses" element={<MyCoursesPage />} />
+              <Route path="/early-access" element={<EarlyAccessPage />} />
             </Routes>
           </main>
 

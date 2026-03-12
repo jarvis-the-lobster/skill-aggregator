@@ -96,6 +96,15 @@ class Database {
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (skill_id) REFERENCES skills(id),
         UNIQUE(user_id, skill_id)
+      )`,
+
+      // Newsletter subscribers
+      `CREATE TABLE IF NOT EXISTS subscribers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        skill_categories TEXT,
+        confirmed INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`
     ];
 
@@ -363,6 +372,21 @@ class Database {
        WHERE user_id = ? AND skill_id = ?`,
       [status, userId, skillId]
     );
+  }
+
+  // --- Newsletter subscriber methods ---
+
+  async addSubscriber(email, skillCategories = null) {
+    const categoriesJson = skillCategories ? JSON.stringify(skillCategories) : null;
+    return this.insert(
+      `INSERT OR IGNORE INTO subscribers (email, skill_categories) VALUES (?, ?)`,
+      [email, categoriesJson]
+    );
+  }
+
+  async getSubscriberCount() {
+    const rows = await this.query('SELECT COUNT(*) as count FROM subscribers');
+    return rows[0]?.count || 0;
   }
 
   // Close database connection
