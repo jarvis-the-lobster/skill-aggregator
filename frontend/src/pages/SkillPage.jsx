@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
@@ -180,6 +181,15 @@ export function SkillPage() {
   // --- Ready state ---
   return (
     <div className="min-h-screen bg-gray-50">
+      <Helmet>
+        <title>{`Learn ${skillData.name} — Best Videos & Articles | SkillAggregator`}</title>
+        <meta name="description" content={skillData.description || `Discover the best curated YouTube videos and articles to learn ${skillData.name}. Quality-ranked content so you get straight to learning.`} />
+        <meta property="og:title" content={`Learn ${skillData.name} — Best Videos & Articles | SkillAggregator`} />
+        <meta property="og:description" content={skillData.description || `Curated resources to learn ${skillData.name}.`} />
+        <meta property="og:type" content="website" />
+        <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/skills/${skillData.id}`} />
+      </Helmet>
+
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

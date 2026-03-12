@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Play, BookOpen, Clock } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { Search, BookOpen, ListChecks, ArrowRight } from 'lucide-react';
 import { apiService } from '../services/api';
 import { SkillCard } from '../components/SkillCard';
 import { SearchBar } from '../components/SearchBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import analytics from '../services/analytics';
+
+const SITE_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
 export function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,20 +77,46 @@ export function HomePage() {
     );
   });
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'SkillAggregator',
+    url: SITE_URL || 'https://skillaggregator.com',
+    description: 'Curated YouTube videos and articles for any skill you want to learn.',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: `${SITE_URL || 'https://skillaggregator.com'}/skills/{search_term_string}`,
+      },
+      'query-input': 'required name=search_term_string',
+    },
+  };
+
   return (
     <div>
+      <Helmet>
+        <title>SkillAggregator — Learn Any Skill with Curated Resources</title>
+        <meta name="description" content="Discover the best YouTube videos and articles for any skill — curated and quality-ranked so you skip the noise and get straight to learning." />
+        <meta property="og:title" content="SkillAggregator — Learn Any Skill with Curated Resources" />
+        <meta property="og:description" content="Discover the best YouTube videos and articles for any skill — curated and quality-ranked so you skip the noise and get straight to learning." />
+        <meta property="og:type" content="website" />
+        <link rel="canonical" href={SITE_URL + '/'} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
+
       {/* Hero */}
       <section className="search-container text-white py-20">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl md:text-6xl font-bold mb-4">
-            Learn Any Skill,
-            <span className="block text-yellow-300">Faster Than Ever</span>
+            Learn any skill with the best
+            <span className="block text-yellow-300">resources on the internet</span>
           </h1>
           <p className="text-xl md:text-2xl mb-10 opacity-90">
-            Curated videos and articles for the skills that matter most.
+            We curate top-rated YouTube videos and articles for any skill — so you skip the noise and get straight to learning.
           </p>
 
-          <div className="max-w-2xl mx-auto mb-10">
+          <div className="max-w-2xl mx-auto mb-8">
             <SearchBar
               value={searchQuery}
               onChange={setSearchQuery}
@@ -97,29 +126,61 @@ export function HomePage() {
             />
           </div>
 
-          <div className="flex justify-center space-x-8 text-sm opacity-80">
-            <div className="flex items-center space-x-2">
-              <Play className="w-4 h-4" />
-              <span>Videos</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <BookOpen className="w-4 h-4" />
-              <span>Articles</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4" />
-              <span>Save hours of searching</span>
-            </div>
-          </div>
+          <Link
+            to="/early-access"
+            className="inline-flex items-center gap-1.5 text-white/80 hover:text-white text-sm transition-colors"
+          >
+            Get the weekly digest <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </section>
 
-      {/* Skills Grid */}
+      {/* How It Works */}
+      {!searchQuery && (
+        <section className="py-16 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold text-gray-900 mb-3">How It Works</h2>
+              <p className="text-gray-500 text-lg">From search to learning in seconds</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                {
+                  icon: <Search className="w-7 h-7 text-white" />,
+                  title: 'Search any skill',
+                  description: 'Type what you want to learn — Python, Kubernetes, design, anything.',
+                },
+                {
+                  icon: <BookOpen className="w-7 h-7 text-white" />,
+                  title: 'Browse curated, quality-ranked content',
+                  description: 'We surface the top-rated YouTube videos and articles so you skip the noise.',
+                },
+                {
+                  icon: <ListChecks className="w-7 h-7 text-white" />,
+                  title: 'Enroll and follow a structured plan',
+                  description: 'Enroll in a skill and follow a clear learning path from beginner to confident.',
+                },
+              ].map((item, idx) => (
+                <div key={idx} className="text-center">
+                  <div className="w-14 h-14 bg-primary-500 text-white rounded-full flex items-center justify-center mx-auto mb-4">
+                    {item.icon}
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.title}</h3>
+                  <p className="text-gray-500">{item.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Popular Skills / Search Results */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-3">
-              {searchQuery ? 'Search Results' : 'Browse Skills'}
+              {searchQuery ? 'Search Results' : 'Popular skills to explore'}
             </h2>
             <p className="text-gray-500 text-lg">
               {searchQuery
@@ -165,46 +226,6 @@ export function HomePage() {
           )}
         </div>
       </section>
-
-      {/* How It Works */}
-      {!searchQuery && (
-        <section className="py-16 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 mb-3">How It Works</h2>
-              <p className="text-gray-500 text-lg">From search to learning in seconds</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[
-                {
-                  step: '1',
-                  title: 'Search Any Skill',
-                  description: 'Type what you want to learn — Python, Kubernetes, design, anything.',
-                },
-                {
-                  step: '2',
-                  title: 'We Gather Content',
-                  description: 'We scrape YouTube and top articles so you skip the noise.',
-                },
-                {
-                  step: '3',
-                  title: 'Start Learning',
-                  description: 'Dive straight in with quality resources, organized and ready.',
-                },
-              ].map((item) => (
-                <div key={item.step} className="text-center">
-                  <div className="w-14 h-14 bg-primary-500 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
-                    {item.step}
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.title}</h3>
-                  <p className="text-gray-500">{item.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

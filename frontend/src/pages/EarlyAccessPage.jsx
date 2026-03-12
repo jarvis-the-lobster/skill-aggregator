@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { CheckCircle, Mail, BookOpen, Video, FileText, Zap, Users } from 'lucide-react';
 import { apiService } from '../services/api';
 
@@ -48,6 +49,15 @@ export function EarlyAccessPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Helmet>
+        <title>Get Early Access — SkillAggregator</title>
+        <meta name="description" content="Join the SkillAggregator early access list and get a weekly digest of the best curated learning resources for the skills that matter to you." />
+        <meta property="og:title" content="Get Early Access — SkillAggregator" />
+        <meta property="og:description" content="Join the SkillAggregator early access list and get a weekly digest of the best curated learning resources." />
+        <meta property="og:type" content="website" />
+        <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/early-access`} />
+      </Helmet>
+
       {/* Hero */}
       <section className="bg-gradient-to-br from-primary-500 to-indigo-700 text-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
