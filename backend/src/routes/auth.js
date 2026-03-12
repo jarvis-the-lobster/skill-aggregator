@@ -5,6 +5,14 @@ const { register, login, generateToken, safeUser } = require('../services/authSe
 const { requireAuth } = require('../middleware/auth');
 const analytics = require('../services/analyticsService');
 
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: 'lax',
+  path: '/',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+};
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
@@ -17,7 +25,8 @@ router.post('/register', async (req, res) => {
     }
     const result = await register(email, password, name);
     analytics.trackUserRegistered({ userId: result.user?.id, method: 'email' });
-    res.status(201).json(result);
+    res.cookie('token', result.token, COOKIE_OPTIONS);
+    res.status(201).json({ user: result.user });
   } catch (err) {
     if (err.message === 'Email already in use') {
       return res.status(409).json({ error: err.message });
@@ -36,7 +45,8 @@ router.post('/login', async (req, res) => {
     }
     const result = await login(email, password);
     analytics.trackUserLoggedIn({ userId: result.user?.id, method: 'email' });
-    res.json(result);
+    res.cookie('token', result.token, COOKIE_OPTIONS);
+    res.json({ user: result.user });
   } catch (err) {
     if (err.message === 'Invalid email or password') {
       return res.status(401).json({ error: err.message });
@@ -51,8 +61,9 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
-// POST /api/auth/logout  (stateless JWT — client drops the token)
+// POST /api/auth/logout
 router.post('/logout', (req, res) => {
+  res.clearCookie('token', { path: '/' });
   res.json({ message: 'Logged out' });
 });
 
@@ -76,7 +87,8 @@ router.get('/google/callback', (req, res, next) => {
 }, (req, res) => {
   const token = generateToken(req.user.id);
   analytics.trackUserLoggedIn({ userId: req.user.id, method: 'google' });
-  res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+  res.cookie('token', token, COOKIE_OPTIONS);
+  res.redirect(`${process.env.FRONTEND_URL}/auth/callback`);
 });
 
 module.exports = router;

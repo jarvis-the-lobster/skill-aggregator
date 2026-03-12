@@ -1,34 +1,21 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function AuthCallback() {
-  const [searchParams] = useSearchParams();
-  const { setTokenAndUser } = useAuth();
+  const { loadUserFromCookie } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = searchParams.get('token');
-    if (!token) {
-      navigate('/login?error=oauth');
-      return;
-    }
-
-    // Verify token and load user info
-    fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) {
-          setTokenAndUser(token, data.user);
-          navigate('/');
-        } else {
-          navigate('/login?error=oauth');
-        }
-      })
-      .catch(() => navigate('/login?error=oauth'));
+    // Cookie was set server-side before this redirect; just load the user
+    loadUserFromCookie().then(user => {
+      if (user) {
+        navigate('/');
+      } else {
+        navigate('/login?error=oauth');
+      }
+    });
   }, []);
 
   return (

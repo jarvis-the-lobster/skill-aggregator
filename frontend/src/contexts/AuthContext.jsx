@@ -6,48 +6,28 @@ const API_BASE = '/api';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // On mount, restore session from localStorage
+  // On mount, restore session via cookie (sent automatically)
   useEffect(() => {
-    const stored = localStorage.getItem('auth_token');
-    if (stored) {
-      verifyAndSetUser(stored);
-    } else {
-      setLoading(false);
-    }
+    fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.user) setUser(data.user);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
-
-  async function verifyAndSetUser(t) {
-    try {
-      const res = await fetch(`${API_BASE}/auth/me`, {
-        headers: { Authorization: `Bearer ${t}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setToken(t);
-        setUser(data.user);
-      } else {
-        localStorage.removeItem('auth_token');
-      }
-    } catch {
-      localStorage.removeItem('auth_token');
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function login(email, password) {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email, password })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
-    localStorage.setItem('auth_token', data.token);
-    setToken(data.token);
     setUser(data.user);
     return data;
   }
@@ -56,12 +36,11 @@ export function AuthProvider({ children }) {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email, password, name })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
-    localStorage.setItem('auth_token', data.token);
-    setToken(data.token);
     setUser(data.user);
     return data;
   }
@@ -70,20 +49,26 @@ export function AuthProvider({ children }) {
     window.location.href = `${API_BASE}/auth/google`;
   }
 
-  function setTokenAndUser(t, u) {
-    localStorage.setItem('auth_token', t);
-    setToken(t);
-    setUser(u);
+  // Called after Google OAuth redirect — cookie is already set, just load the user
+  async function loadUserFromCookie() {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+        return data.user;
+      }
+    } catch {}
+    return null;
   }
 
-  function logout() {
-    localStorage.removeItem('auth_token');
-    setToken(null);
+  async function logout() {
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout, setTokenAndUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, loadUserFromCookie, logout }}>
       {children}
     </AuthContext.Provider>
   );
