@@ -37,6 +37,14 @@ export function Header() {
             >
               About
             </Link>
+            {user && (
+              <Link
+                to="/my-courses"
+                className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
+              >
+                My Courses
+              </Link>
+            )}
           </nav>
 
           {/* Auth area */}

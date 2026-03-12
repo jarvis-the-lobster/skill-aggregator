@@ -9,6 +9,7 @@ import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { AuthCallback } from './pages/AuthCallback';
 import { AdminPage } from './pages/AdminPage';
+import { MyCoursesPage } from './pages/MyCoursesPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
@@ -46,6 +47,7 @@ function App() {
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/my-courses" element={<MyCoursesPage />} />
             </Routes>
           </main>
 

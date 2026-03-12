@@ -74,6 +74,32 @@ export const apiService = {
   async searchSkill(query) {
     const response = await api.get(`/skills/search?q=${encodeURIComponent(query)}`);
     return response.data;
+  },
+
+  // Courses endpoints
+  async getEnrollmentStatus(skillId) {
+    const response = await api.get(`/courses/enrollment/${skillId}`);
+    return response.data;
+  },
+
+  async enrollCourse(skillId) {
+    const response = await api.post(`/courses/enroll/${skillId}`);
+    return response.data;
+  },
+
+  async unenrollCourse(skillId) {
+    const response = await api.delete(`/courses/enroll/${skillId}`);
+    return response.data;
+  },
+
+  async getMyCourses() {
+    const response = await api.get('/courses/my');
+    return response.data;
+  },
+
+  async updateCourseStatus(skillId, status) {
+    const response = await api.patch(`/courses/${skillId}/status`, { status });
+    return response.data;
   }
 };
 

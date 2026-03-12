@@ -83,6 +83,19 @@ class Database {
         quota_used INTEGER DEFAULT 0,
         duration_ms INTEGER,
         scraped_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      // User course enrollments
+      `CREATE TABLE IF NOT EXISTS user_courses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        skill_id TEXT NOT NULL,
+        enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'active',
+        last_activity_at DATETIME,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (skill_id) REFERENCES skills(id),
+        UNIQUE(user_id, skill_id)
       )`
     ];
 
@@ -300,6 +313,56 @@ class Database {
 
   async updateLastLogin(id) {
     return this.insert('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+  }
+
+  // --- Course enrollment methods ---
+
+  async enrollCourse(userId, skillId) {
+    await this.insert(
+      `INSERT OR IGNORE INTO user_courses (user_id, skill_id) VALUES (?, ?)`,
+      [userId, skillId]
+    );
+    const rows = await this.query(
+      'SELECT * FROM user_courses WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+    return rows[0] || null;
+  }
+
+  async unenrollCourse(userId, skillId) {
+    return this.insert(
+      'DELETE FROM user_courses WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+  }
+
+  async getMyCourses(userId) {
+    return this.query(
+      `SELECT uc.id, uc.skill_id, uc.enrolled_at, uc.status, uc.last_activity_at,
+              s.name, s.category, s.difficulty, s.description, s.estimated_hours,
+              (SELECT COUNT(*) FROM content c WHERE c.skill_id = s.id) as content_count
+       FROM user_courses uc
+       JOIN skills s ON s.id = uc.skill_id
+       WHERE uc.user_id = ?
+       ORDER BY uc.enrolled_at DESC`,
+      [userId]
+    );
+  }
+
+  async getCourseEnrollment(userId, skillId) {
+    const rows = await this.query(
+      'SELECT * FROM user_courses WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+    return rows[0] || null;
+  }
+
+  async updateCourseStatus(userId, skillId, status) {
+    return this.insert(
+      `UPDATE user_courses SET status = ?, last_activity_at = CURRENT_TIMESTAMP
+       WHERE user_id = ? AND skill_id = ?`,
+      [status, userId, skillId]
+    );
   }
 
   // Close database connection

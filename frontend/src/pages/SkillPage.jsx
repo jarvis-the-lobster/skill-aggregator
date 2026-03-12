@@ -3,12 +3,16 @@ import { useParams, Link } from 'react-router-dom';
 import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
+import { useAuth } from '../contexts/AuthContext';
+import { useEnrollment } from '../hooks/useCourses';
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
 
 export function SkillPage() {
   const { id: skillId } = useParams();
+  const { user } = useAuth();
+  const { isEnrolled, loading: enrollLoading, enroll, unenroll } = useEnrollment(skillId);
   const [skillData, setSkillData] = useState(null);
   const [content, setContent] = useState({ videos: [], articles: [] });
   const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
@@ -213,9 +217,34 @@ export function SkillPage() {
               </div>
             </div>
 
-            <button onClick={handleScrapeContent} className="btn-primary">
-              Refresh Content
-            </button>
+            <div className="flex items-center space-x-3">
+              {!user ? (
+                <Link to="/login" className="btn-secondary text-sm">
+                  Sign in to enroll
+                </Link>
+              ) : isEnrolled ? (
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Unenroll from this course?')) await unenroll();
+                  }}
+                  disabled={enrollLoading}
+                  className="flex items-center space-x-1 px-4 py-2 rounded-lg bg-green-100 text-green-800 font-medium text-sm hover:bg-green-200 transition-colors disabled:opacity-50"
+                >
+                  <span>✓ Enrolled</span>
+                </button>
+              ) : (
+                <button
+                  onClick={enroll}
+                  disabled={enrollLoading}
+                  className="btn-primary text-sm disabled:opacity-50"
+                >
+                  ＋ Enroll in this Course
+                </button>
+              )}
+              <button onClick={handleScrapeContent} className="btn-secondary">
+                Refresh Content
+              </button>
+            </div>
           </div>
         </div>
       </div>
