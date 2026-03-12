@@ -22,9 +22,11 @@ app.use(passport.initialize());
 // Routes
 const skillRoutes = require('./routes/skills');
 const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 const skillsService = require('./services/skillsService');
 app.use('/api/skills', skillRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

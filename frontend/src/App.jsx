@@ -8,6 +8,7 @@ import { AboutPage } from './pages/AboutPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { AuthCallback } from './pages/AuthCallback';
+import { AdminPage } from './pages/AdminPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
@@ -44,6 +45,7 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Routes>
           </main>
 

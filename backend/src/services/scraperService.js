@@ -116,12 +116,14 @@ class ScraperService {
 
     const seen = new Set();
     const allVideos = [];
+    const startTime = Date.now();
+    let totalQuotaUsed = 0;
 
     for (const q of queries) {
       try {
         console.log(`  📹 YouTube: "${q}"`);
 
-        // Step 1: search for video IDs
+        // Step 1: search for video IDs (costs 100 quota units per search)
         const searchRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
           params: {
             key: this.youtubeApiKey,
@@ -136,11 +138,12 @@ class ScraperService {
           },
           timeout: 10000
         });
+        totalQuotaUsed += 100; // search.list costs 100 units
 
         const videoIds = searchRes.data.items.map(i => i.id.videoId).filter(Boolean).join(',');
         if (!videoIds) continue;
 
-        // Step 2: fetch statistics + details for quality signals
+        // Step 2: fetch statistics + details for quality signals (1 unit per video)
         const statsRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
           params: {
             key: this.youtubeApiKey,
@@ -149,6 +152,7 @@ class ScraperService {
           },
           timeout: 10000
         });
+        totalQuotaUsed += statsRes.data.items.length; // videos.list costs 1 unit per video
 
         for (const item of statsRes.data.items) {
           if (seen.has(item.id)) continue;
@@ -172,13 +176,37 @@ class ScraperService {
 
         await sleep(200); // respect quota between API calls
       } catch (err) {
-        console.error(`  ❌ YouTube query "${q}": ${err.response?.data?.error?.message || err.message}`);
+        const errMsg = err.response?.data?.error?.message || err.message;
+        console.error(`  ❌ YouTube query "${q}": ${errMsg}`);
+        const isQuotaError = errMsg.includes('quota') || err.response?.status === 403;
+        await db.logScrape({
+          skill_id: skillId,
+          source: 'youtube',
+          status: isQuotaError ? 'quota_exceeded' : 'error',
+          items_fetched: allVideos.length,
+          error_message: errMsg,
+          quota_used: totalQuotaUsed,
+          duration_ms: Date.now() - startTime
+        });
       }
     }
 
     // Sort by quality: views weighted by like ratio and recency
-    allVideos.sort((a, b) => this._videoScore(b) - this._videoScore(a));
-    return allVideos.slice(0, MAX_RESULTS);
+    const result = allVideos.slice(0, MAX_RESULTS);
+    result.sort((a, b) => this._videoScore(b) - this._videoScore(a));
+
+    if (allVideos.length > 0 || totalQuotaUsed > 0) {
+      await db.logScrape({
+        skill_id: skillId,
+        source: 'youtube',
+        status: 'success',
+        items_fetched: result.length,
+        quota_used: totalQuotaUsed,
+        duration_ms: Date.now() - startTime
+      });
+    }
+
+    return result;
   }
 
   _videoScore(video) {
@@ -205,6 +233,8 @@ class ScraperService {
   // ─── Article scrapers ────────────────────────────────────────────────────
 
   async scrapeArticles(skillId) {
+    const startTimes = { devto: Date.now(), medium: Date.now(), freecodecamp: Date.now() };
+
     const [devtoResult, mediumResult, fccResult] = await Promise.allSettled([
       this.scrapeDevTo(skillId),
       this.scrapeMediumRSS(skillId),
@@ -216,22 +246,28 @@ class ScraperService {
     if (devtoResult.status === 'fulfilled') {
       console.log(`    Dev.to: ${devtoResult.value.length} articles`);
       articles.push(...devtoResult.value);
+      await db.logScrape({ skill_id: skillId, source: 'devto', status: 'success', items_fetched: devtoResult.value.length, duration_ms: Date.now() - startTimes.devto });
     } else {
       console.error(`    ❌ Dev.to: ${devtoResult.reason?.message}`);
+      await db.logScrape({ skill_id: skillId, source: 'devto', status: 'error', error_message: devtoResult.reason?.message, duration_ms: Date.now() - startTimes.devto });
     }
 
     if (mediumResult.status === 'fulfilled') {
       console.log(`    Medium: ${mediumResult.value.length} articles`);
       articles.push(...mediumResult.value);
+      await db.logScrape({ skill_id: skillId, source: 'medium', status: 'success', items_fetched: mediumResult.value.length, duration_ms: Date.now() - startTimes.medium });
     } else {
       console.error(`    ❌ Medium: ${mediumResult.reason?.message}`);
+      await db.logScrape({ skill_id: skillId, source: 'medium', status: 'error', error_message: mediumResult.reason?.message, duration_ms: Date.now() - startTimes.medium });
     }
 
     if (fccResult.status === 'fulfilled') {
       console.log(`    freeCodeCamp: ${fccResult.value.length} articles`);
       articles.push(...fccResult.value);
+      await db.logScrape({ skill_id: skillId, source: 'freecodecamp', status: 'success', items_fetched: fccResult.value.length, duration_ms: Date.now() - startTimes.freecodecamp });
     } else {
       console.error(`    ❌ freeCodeCamp: ${fccResult.reason?.message}`);
+      await db.logScrape({ skill_id: skillId, source: 'freecodecamp', status: 'error', error_message: fccResult.reason?.message, duration_ms: Date.now() - startTimes.freecodecamp });
     }
 
     return articles;

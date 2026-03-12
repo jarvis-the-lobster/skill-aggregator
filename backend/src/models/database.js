@@ -70,6 +70,19 @@ class Database {
         avatar_url TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_login DATETIME
+      )`,
+
+      // Scrape log table for ops metrics
+      `CREATE TABLE IF NOT EXISTS scrape_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        skill_id TEXT NOT NULL,
+        source TEXT NOT NULL,
+        status TEXT NOT NULL,
+        items_fetched INTEGER DEFAULT 0,
+        error_message TEXT,
+        quota_used INTEGER DEFAULT 0,
+        duration_ms INTEGER,
+        scraped_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`
     ];
 
@@ -186,6 +199,77 @@ class Database {
   // Update last_scraped_at timestamp for a skill
   async updateSkillLastScraped(skillId) {
     return this.insert('UPDATE skills SET last_scraped_at = CURRENT_TIMESTAMP WHERE id = ?', [skillId]);
+  }
+
+  // --- Scrape log methods ---
+
+  async logScrape({ skill_id, source, status, items_fetched = 0, error_message = null, quota_used = 0, duration_ms = null }) {
+    return this.insert(
+      `INSERT INTO scrape_log (skill_id, source, status, items_fetched, error_message, quota_used, duration_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [skill_id, source, status, items_fetched, error_message, quota_used, duration_ms]
+    );
+  }
+
+  async getMetrics() {
+    const [scrapeStats, skillHealth, youtubeQuotaToday, recentErrors, contentCounts] = await Promise.all([
+      // scrapeStats: success/error/quota_exceeded counts per source, last 7 days
+      this.query(`
+        SELECT source,
+          SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+          SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error,
+          SUM(CASE WHEN status = 'quota_exceeded' THEN 1 ELSE 0 END) as quota_exceeded
+        FROM scrape_log
+        WHERE scraped_at >= datetime('now', '-7 days')
+        GROUP BY source
+      `),
+      // skillHealth: last scraped, content count, last scrape status per skill
+      this.query(`
+        SELECT s.id as skill_id, s.name, s.last_scraped_at,
+          COUNT(c.id) as content_count,
+          (SELECT status FROM scrape_log WHERE skill_id = s.id ORDER BY scraped_at DESC LIMIT 1) as last_scrape_status
+        FROM skills s
+        LEFT JOIN content c ON c.skill_id = s.id
+        GROUP BY s.id
+        ORDER BY s.name
+      `),
+      // YouTube quota used today
+      this.query(`
+        SELECT COALESCE(SUM(quota_used), 0) as quota_used_today
+        FROM scrape_log
+        WHERE source = 'youtube' AND scraped_at >= date('now')
+      `),
+      // recentErrors: last 10 error rows
+      this.query(`
+        SELECT skill_id, source, error_message, scraped_at
+        FROM scrape_log
+        WHERE status IN ('error', 'quota_exceeded')
+        ORDER BY scraped_at DESC
+        LIMIT 10
+      `),
+      // contentCounts: total items per type per skill
+      this.query(`
+        SELECT skill_id, type, COUNT(*) as count
+        FROM content
+        GROUP BY skill_id, type
+        ORDER BY skill_id, type
+      `)
+    ]);
+
+    const quotaUsedToday = youtubeQuotaToday[0]?.quota_used_today || 0;
+    const YOUTUBE_DAILY_LIMIT = 10000;
+
+    return {
+      scrapeStats,
+      skillHealth,
+      youtubeQuota: {
+        used: quotaUsedToday,
+        limit: YOUTUBE_DAILY_LIMIT,
+        percentUsed: Math.round((quotaUsedToday / YOUTUBE_DAILY_LIMIT) * 100)
+      },
+      recentErrors,
+      contentCounts
+    };
   }
 
   // --- User methods ---
