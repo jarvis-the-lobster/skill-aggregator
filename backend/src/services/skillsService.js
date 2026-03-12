@@ -102,7 +102,6 @@ class SkillsService {
           'INSERT INTO skills (id, name, category, difficulty, description, estimated_hours, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [skill.id, skill.name, skill.category, skill.difficulty, skill.description, skill.estimatedHours, 'ready']
         );
-        console.log(`🌱 Seeded skill: ${skill.name}`);
       } else if (!existing.status || existing.status === 'pending') {
         // Existing row missing status — mark ready since content may already be in DB
         await db.updateSkillStatus(skill.id, 'ready');
@@ -230,7 +229,6 @@ class SkillsService {
     if (!force) {
       // Guard: don't start a second concurrent scrape
       if (skillRow?.status === 'scraping') {
-        console.log(`⏳ Scrape already in progress for ${skillId}, skipping`);
         return;
       }
 
@@ -238,7 +236,6 @@ class SkillsService {
       if (skillRow?.last_scraped_at) {
         const hoursSince = (Date.now() - new Date(skillRow.last_scraped_at).getTime()) / 3600000;
         if (hoursSince < 24) {
-          console.log(`⏭️  Skipping scrape for ${skillId} — last scraped ${hoursSince.toFixed(1)}h ago`);
           return;
         }
       }
@@ -247,11 +244,9 @@ class SkillsService {
     await db.updateSkillStatus(skillId, 'scraping');
 
     try {
-      console.log(`🔍 Starting content scraping for skill: ${skillId}`);
       const result = await scraper.scrapeSkill(skillId);
       await db.updateSkillStatus(skillId, 'ready');
       await db.updateSkillLastScraped(skillId);
-      console.log(`✅ Scraping done for ${skillId}: ${result.videos.length} videos, ${result.articles.length} articles`);
       return result;
     } catch (err) {
       await db.updateSkillStatus(skillId, 'error');

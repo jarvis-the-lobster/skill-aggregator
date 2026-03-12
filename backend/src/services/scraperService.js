@@ -30,8 +30,6 @@ class ScraperService {
   // ─── Main orchestration ───────────────────────────────────────────────────
 
   async scrapeSkill(skillId) {
-    console.log(`\n🔍 Scraping: ${skillId}`);
-
     const [youtubeResult, articleResult] = await Promise.allSettled([
       this.scrapeYouTube(skillId),
       this.scrapeArticles(skillId)
@@ -46,7 +44,6 @@ class ScraperService {
       : (console.error(`  ❌ Articles failed: ${articleResult.reason?.message}`), []);
 
     const validated = this.validateContent({ videos, articles });
-    console.log(`  ✅ ${validated.videos.length} videos, ${validated.articles.length} articles`);
 
     // Save to database
     const allContent = [
@@ -58,7 +55,6 @@ class ScraperService {
       try {
         await db.saveContent(allContent, skillId);
         await db.updateSkillLastScraped(skillId);
-        console.log(`  💾 Saved ${allContent.length} items to database`);
       } catch (err) {
         console.error(`  ❌ DB save failed: ${err.message}`);
       }
@@ -87,14 +83,16 @@ class ScraperService {
       }
     }
 
-    console.log('\n📊 Scrape Summary:');
-    summary.forEach(r => {
-      if (r.success) {
-        console.log(`  ✅ ${r.skillId}: ${r.videos} videos, ${r.articles} articles`);
-      } else {
-        console.log(`  ❌ ${r.skillId}: FAILED — ${r.error}`);
-      }
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('\n📊 Scrape Summary:');
+      summary.forEach(r => {
+        if (r.success) {
+          console.log(`  ✅ ${r.skillId}: ${r.videos} videos, ${r.articles} articles`);
+        } else {
+          console.log(`  ❌ ${r.skillId}: FAILED — ${r.error}`);
+        }
+      });
+    }
 
     return summary;
   }
@@ -121,8 +119,6 @@ class ScraperService {
 
     for (const q of queries) {
       try {
-        console.log(`  📹 YouTube: "${q}"`);
-
         // Step 1: search for video IDs (costs 100 quota units per search)
         const searchRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
           params: {
@@ -244,7 +240,6 @@ class ScraperService {
     const articles = [];
 
     if (devtoResult.status === 'fulfilled') {
-      console.log(`    Dev.to: ${devtoResult.value.length} articles`);
       articles.push(...devtoResult.value);
       await db.logScrape({ skill_id: skillId, source: 'devto', status: 'success', items_fetched: devtoResult.value.length, duration_ms: Date.now() - startTimes.devto });
     } else {
@@ -253,7 +248,6 @@ class ScraperService {
     }
 
     if (mediumResult.status === 'fulfilled') {
-      console.log(`    Medium: ${mediumResult.value.length} articles`);
       articles.push(...mediumResult.value);
       await db.logScrape({ skill_id: skillId, source: 'medium', status: 'success', items_fetched: mediumResult.value.length, duration_ms: Date.now() - startTimes.medium });
     } else {
@@ -262,7 +256,6 @@ class ScraperService {
     }
 
     if (fccResult.status === 'fulfilled') {
-      console.log(`    freeCodeCamp: ${fccResult.value.length} articles`);
       articles.push(...fccResult.value);
       await db.logScrape({ skill_id: skillId, source: 'freecodecamp', status: 'success', items_fetched: fccResult.value.length, duration_ms: Date.now() - startTimes.freecodecamp });
     } else {
