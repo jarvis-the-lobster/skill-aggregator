@@ -2,14 +2,7 @@ const { verifyToken } = require('../services/authService');
 const db = require('../models/database');
 
 async function requireAuth(req, res, next) {
-  // Prefer httpOnly cookie; fall back to Authorization header for backwards compat
-  let token = req.cookies?.token;
-  if (!token) {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.slice(7);
-    }
-  }
+  const token = req.cookies?.token;
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
