@@ -14,6 +14,8 @@ export function SkillPage() {
   const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
   const [activeTab, setActiveTab] = useState('videos');
 
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+
   const pollTimer = useRef(null);
   const timeoutTimer = useRef(null);
 

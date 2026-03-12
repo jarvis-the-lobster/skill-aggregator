@@ -19,11 +19,20 @@ function RouteTracker() {
   return null;
 }
 
+function ScrollToTop() {
+  const location = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
       <Router>
         <RouteTracker />
+        <ScrollToTop />
         <div className="min-h-screen bg-gray-50 flex flex-col">
           <Header />
 
