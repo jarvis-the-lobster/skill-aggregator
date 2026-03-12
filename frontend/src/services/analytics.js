@@ -15,6 +15,14 @@ const analytics = {
     if (!key) return;
     posthog.capture(event, properties);
   },
+  identify(userId, traits = {}) {
+    if (!key) return;
+    posthog.identify(String(userId), traits);
+  },
+  reset() {
+    if (!key) return;
+    posthog.reset(); // call on logout to unlink the session
+  },
 };
 
 export default analytics;

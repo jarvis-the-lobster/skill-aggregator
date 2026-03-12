@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import analytics from '../services/analytics';
 
 const AuthContext = createContext(null);
 
@@ -13,7 +14,7 @@ export function AuthProvider({ children }) {
     fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data?.user) setUser(data.user);
+        if (data?.user) { setUser(data.user); analytics.identify(data.user.id, { email: data.user.email, name: data.user.name }); }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -29,6 +30,7 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     setUser(data.user);
+    analytics.identify(data.user.id, { email: data.user.email, name: data.user.name });
     return data;
   }
 
@@ -42,6 +44,7 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
     setUser(data.user);
+    analytics.identify(data.user.id, { email: data.user.email, name: data.user.name });
     return data;
   }
 
@@ -56,6 +59,7 @@ export function AuthProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
+        analytics.identify(data.user.id, { email: data.user.email, name: data.user.name });
         return data.user;
       }
     } catch {}
@@ -65,6 +69,7 @@ export function AuthProvider({ children }) {
   async function logout() {
     await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
     setUser(null);
+    analytics.reset();
   }
 
   return (
