@@ -7,36 +7,19 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Request interceptor for debugging
-api.interceptors.request.use(
-  (config) => {
-    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  },
-  (error) => {
-    console.error('API Request Error:', error);
-    return Promise.reject(error);
-  }
-);
-
 // Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => {
-    console.log(`✅ API Response: ${response.config.url} - ${response.status}`);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API Response Error:', error);
-    
-    // Handle specific error cases
-    if (error.response?.status === 404) {
-      console.error('Resource not found');
-    } else if (error.response?.status === 500) {
-      console.error('Server error');
-    } else if (error.code === 'NETWORK_ERROR') {
-      console.error('Network error - is the backend running?');
+    if (import.meta.env.DEV) {
+      const status = error.response?.status;
+      const url = error.config?.url;
+      if (error.code === 'NETWORK_ERROR') {
+        console.error(`[API] Network error — is the backend running?`);
+      } else if (status >= 500) {
+        console.error(`[API] Server error ${status} on ${url}`);
+      }
     }
-    
     return Promise.reject(error);
   }
 );

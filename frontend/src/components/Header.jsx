@@ -58,12 +58,15 @@ export function Header() {
                       src={user.avatar_url}
                       alt={user.name || user.email}
                       className="w-8 h-8 rounded-full object-cover"
+                      onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
                     />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-white text-sm font-semibold">
-                      {(user.name || user.email).charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                  ) : null}
+                  <div
+                    className="w-8 h-8 rounded-full bg-primary-500 items-center justify-center text-white text-sm font-semibold"
+                    style={{ display: user.avatar_url ? 'none' : 'flex' }}
+                  >
+                    {(user.name || user.email).charAt(0).toUpperCase()}
+                  </div>
                   <span className="text-sm font-medium text-gray-700 hidden sm:block">
                     {user.name || user.email}
                   </span>
