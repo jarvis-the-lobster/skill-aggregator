@@ -107,9 +107,7 @@ class ScraperService {
 
     const searchTerm = this.getSearchTerm(skillId);
     const queries = [
-      `${searchTerm} tutorial for beginners`,
-      `${searchTerm} crash course`,
-      `learn ${searchTerm}`
+      `${searchTerm} tutorial`
     ];
 
     const seen = new Set();
@@ -127,7 +125,7 @@ class ScraperService {
             part: 'snippet',
             type: 'video',
             videoCategoryId: '27', // Education
-            maxResults: Math.ceil(MAX_RESULTS / queries.length),
+            maxResults: Math.min(MAX_RESULTS, 20),
             order: 'relevance',
             relevanceLanguage: 'en',
             safeSearch: 'strict'

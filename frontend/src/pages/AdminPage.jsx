@@ -68,10 +68,13 @@ export function AdminPage() {
     );
   }
 
-  if (error) {
+  if (error && !metrics) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center flex-col gap-4">
         <div className="text-red-600">Error: {error}</div>
+        <button onClick={fetchMetrics} className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700">
+          Retry
+        </button>
       </div>
     );
   }
