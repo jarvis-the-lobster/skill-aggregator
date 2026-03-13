@@ -105,6 +105,19 @@ class Database {
         skill_categories TEXT,
         confirmed INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      // 30-day learning plans
+      `CREATE TABLE IF NOT EXISTS learning_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        skill_id TEXT NOT NULL,
+        day_number INTEGER NOT NULL,
+        content_id TEXT,
+        content_type TEXT,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (skill_id) REFERENCES skills(id),
+        FOREIGN KEY (content_id) REFERENCES content(id)
       )`
     ];
 
@@ -387,6 +400,31 @@ class Database {
   async getSubscriberCount() {
     const rows = await this.query('SELECT COUNT(*) as count FROM subscribers');
     return rows[0]?.count || 0;
+  }
+
+  // --- Learning plan methods ---
+
+  async getLearningPlan(skillId) {
+    return this.query(
+      `SELECT lp.day_number, lp.content_id, lp.content_type, lp.reason,
+              c.title, c.url, c.thumbnail, c.duration, c.author, c.source
+       FROM learning_plans lp
+       LEFT JOIN content c ON c.id = lp.content_id
+       WHERE lp.skill_id = ?
+       ORDER BY lp.day_number ASC`,
+      [skillId]
+    );
+  }
+
+  async saveLearningPlan(skillId, days) {
+    await this.insert('DELETE FROM learning_plans WHERE skill_id = ?', [skillId]);
+    for (const entry of days) {
+      await this.insert(
+        `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason)
+         VALUES (?, ?, ?, ?, ?)`,
+        [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+      );
+    }
   }
 
   // Close database connection

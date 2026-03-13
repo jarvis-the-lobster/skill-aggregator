@@ -21,6 +21,7 @@ import { AuthCallback } from './pages/AuthCallback';
 import { AdminPage } from './pages/AdminPage';
 import { MyCoursesPage } from './pages/MyCoursesPage';
 import { EarlyAccessPage } from './pages/EarlyAccessPage';
+import { LearningPlanPage } from './pages/LearningPlanPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
@@ -54,6 +55,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/skills/:id" element={<SkillPage />} />
+              <Route path="/skills/:skillId/plan" element={<LearningPlanPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
