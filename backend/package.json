@@ -24,7 +24,6 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
     "posthog-node": "^5.28.1",
-    "puppeteer": "^21.5.0",
     "sqlite3": "^5.1.6"
   },
   "devDependencies": {
