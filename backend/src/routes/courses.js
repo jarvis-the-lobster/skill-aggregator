@@ -42,14 +42,19 @@ router.get('/my', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/courses/enrollment/:skillId — check enrollment status
-router.get('/enrollment/:skillId', requireAuth, async (req, res) => {
+// GET /api/courses/enrollment/:skillId — check enrollment status (guest-safe)
+router.get('/enrollment/:skillId', async (req, res) => {
   try {
-    const course = await db.getCourseEnrollment(req.user.id, req.params.skillId);
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    if (!token) return res.json({ enrolled: false, course: null });
+    const { verifyToken } = require('../services/authService');
+    const decoded = verifyToken(token);
+    if (!decoded) return res.json({ enrolled: false, course: null });
+    const course = await db.getCourseEnrollment(decoded.userId, req.params.skillId);
     res.json({ enrolled: !!course, course: course || null });
   } catch (err) {
-    console.error('Check enrollment error:', err);
-    res.status(500).json({ error: 'Failed to check enrollment' });
+    res.json({ enrolled: false, course: null });
   }
 });
 
