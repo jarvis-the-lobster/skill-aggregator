@@ -38,7 +38,10 @@ export function AdminPage() {
 
   const fetchMetrics = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/admin/metrics`);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/admin/metrics`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setMetrics(data);
