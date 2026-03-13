@@ -2,7 +2,8 @@ const { verifyToken } = require('../services/authService');
 const db = require('../models/database');
 
 async function requireAuth(req, res, next) {
-  const token = req.cookies?.token;
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });

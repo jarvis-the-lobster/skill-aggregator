@@ -1,20 +1,18 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function AuthCallback() {
-  const { loadUserFromCookie } = useAuth();
+  const { loadUserFromToken } = useAuth();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Cookie was set server-side before this redirect; just load the user
-    loadUserFromCookie().then(user => {
-      if (user) {
-        navigate('/');
-      } else {
-        navigate('/login?error=oauth');
-      }
+    const token = searchParams.get('token');
+    if (!token) { navigate('/login?error=oauth'); return; }
+    loadUserFromToken(token).then(user => {
+      navigate(user ? '/' : '/login?error=oauth');
     });
   }, []);
 
