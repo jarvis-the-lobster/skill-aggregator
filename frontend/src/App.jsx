@@ -1,8 +1,17 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import analytics from './services/analytics';
+
+const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+
+function AdminGuard({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user || !ADMIN_EMAILS.includes(user.email)) return <Navigate to="/" replace />;
+  return children;
+}
 import { HomePage } from './pages/HomePage';
 import { SkillPage } from './pages/SkillPage';
 import { AboutPage } from './pages/AboutPage';
@@ -49,7 +58,7 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
               <Route path="/my-courses" element={<MyCoursesPage />} />
               <Route path="/early-access" element={<EarlyAccessPage />} />
             </Routes>
