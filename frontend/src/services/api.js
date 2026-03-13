@@ -17,15 +17,6 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (import.meta.env.DEV) {
-      const status = error.response?.status;
-      const url = error.config?.url;
-      if (error.code === 'NETWORK_ERROR') {
-        console.error(`[API] Network error — is the backend running?`);
-      } else if (status >= 500) {
-        console.error(`[API] Server error ${status} on ${url}`);
-      }
-    }
     return Promise.reject(error);
   }
 );
