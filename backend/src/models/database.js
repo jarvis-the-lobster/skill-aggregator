@@ -3,7 +3,7 @@ const path = require('path');
 
 class Database {
   constructor() {
-    const dbPath = path.join(__dirname, '../../../database/skills.db');
+    const dbPath = process.env.DB_PATH || path.join(__dirname, '../../../database/skills.db');
     this.db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         console.error('Error opening database:', err.message);
