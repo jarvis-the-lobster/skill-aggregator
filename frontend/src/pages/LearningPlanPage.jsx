@@ -115,17 +115,6 @@ export function LearningPlanPage() {
           )}
         </p>
 
-        {user && !enrolled && plan.length > 0 && (
-          <div className="mb-8">
-            <button
-              onClick={handleEnroll}
-              disabled={enrolling}
-              className="btn-primary"
-            >
-              {enrolling ? 'Enrolling…' : 'Enroll in this plan'}
-            </button>
-          </div>
-        )}
 
         {plan.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
@@ -137,8 +126,8 @@ export function LearningPlanPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {plan.map((entry) => {
-              const unlocked = entry.day_number <= FREE_DAYS || !!user;
+            {(enrolled ? plan : plan.slice(0, FREE_DAYS)).map((entry) => {
+              const unlocked = entry.day_number <= FREE_DAYS || enrolled;
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
 
@@ -218,17 +207,25 @@ export function LearningPlanPage() {
           </div>
         )}
 
-        {!user && plan.length > 0 && (
+        {!enrolled && plan.length > 0 && (
           <div className="mt-8 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-6 text-center border border-purple-200">
             <h2 className="text-xl font-bold text-gray-900 mb-2">
               Unlock the full 30-day plan
             </h2>
             <p className="text-gray-600 mb-4">
-              Create a free account to access all 30 days of curated content.
+              {user
+                ? 'Enroll to unlock all 30 days and track your progress.'
+                : 'Create a free account to access all 30 days of curated content.'}
             </p>
-            <Link to="/signup" className="btn-primary">
-              Get Started Free
-            </Link>
+            {user ? (
+              <button onClick={handleEnroll} disabled={enrolling} className="btn-primary">
+                {enrolling ? 'Enrolling…' : 'Enroll Free'}
+              </button>
+            ) : (
+              <Link to="/signup" className="btn-primary">
+                Get Started Free
+              </Link>
+            )}
           </div>
         )}
       </div>
