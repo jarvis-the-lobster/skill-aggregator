@@ -32,6 +32,7 @@ function QuotaBar({ used, limit, percentUsed }) {
 
 export function AdminPage() {
   const [metrics, setMetrics] = useState(null);
+  const [users, setUsers] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -39,12 +40,18 @@ export function AdminPage() {
   const fetchMetrics = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/admin/metrics`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const [metricsRes, usersRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/metrics`, { headers }),
+        fetch(`${API_BASE}/admin/users`, { headers }),
+      ]);
+      if (!metricsRes.ok) throw new Error(`HTTP ${metricsRes.status}`);
+      const data = await metricsRes.json();
       setMetrics(data);
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        setUsers(usersData);
+      }
       setLastRefresh(new Date());
       setError(null);
     } catch (err) {
@@ -111,6 +118,14 @@ export function AdminPage() {
           >
             Refresh Now
           </button>
+        </div>
+
+        {/* Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <p className="text-sm text-gray-500 mb-1">Total Users</p>
+            <p className="text-3xl font-bold text-gray-900">{users ? users.length.toLocaleString() : '—'}</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -190,6 +205,39 @@ export function AdminPage() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Users */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Users</h2>
+          {!users ? (
+            <p className="text-gray-400 text-sm">No user data available.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-gray-100">
+                    <th className="pb-2 font-medium w-10">#</th>
+                    <th className="pb-2 font-medium">Email</th>
+                    <th className="pb-2 font-medium">Name</th>
+                    <th className="pb-2 font-medium">Joined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user, i) => (
+                    <tr key={user.id} className="border-b border-gray-50 last:border-0">
+                      <td className="py-2 text-gray-400 text-xs">{i + 1}</td>
+                      <td className="py-2 text-gray-700">{user.email}</td>
+                      <td className="py-2 text-gray-500">{user.display_name || '—'}</td>
+                      <td className="py-2 text-gray-400 text-xs">
+                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Recent Errors */}
