@@ -85,7 +85,11 @@ class LearningPlanService {
   }
 
   async getPlan(skillId) {
-    return db.getLearningPlan(skillId);
+    const existing = await db.getLearningPlan(skillId);
+    if (existing.length > 0) return existing;
+    const allContent = await db.getSkillContent(skillId);
+    if (allContent.length === 0) return [];
+    return this.generatePlan(skillId);
   }
 }
 

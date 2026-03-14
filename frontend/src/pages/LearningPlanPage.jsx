@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Play, BookOpen, Lock, ArrowLeft } from 'lucide-react';
+import { Play, BookOpen, Lock, ArrowLeft, CheckCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -13,6 +13,9 @@ export function LearningPlanPage() {
   const [plan, setPlan] = useState([]);
   const [skillName, setSkillName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [enrolled, setEnrolled] = useState(false);
+  const [completedDays, setCompletedDays] = useState(new Set());
+  const [enrolling, setEnrolling] = useState(false);
 
   useEffect(() => {
     loadPlan();
@@ -21,16 +24,45 @@ export function LearningPlanPage() {
   const loadPlan = async () => {
     setLoading(true);
     try {
-      const [planData, skillData] = await Promise.all([
+      const fetches = [
         apiService.getLearningPlan(skillId),
         apiService.getSkillContent(skillId),
-      ]);
+      ];
+      if (user) fetches.push(apiService.getPlanProgress(skillId).catch(() => null));
+      const [planData, skillData, progressData] = await Promise.all(fetches);
       setPlan(planData.plan || []);
       setSkillName(skillData.skill?.name || skillId);
+      if (progressData?.enrolled) {
+        setEnrolled(true);
+        const days = JSON.parse(progressData.progress?.completed_days || '[]');
+        setCompletedDays(new Set(days));
+      }
     } catch (error) {
       console.error('Error loading learning plan:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEnroll = async () => {
+    setEnrolling(true);
+    try {
+      await apiService.enrollLearningPlan(skillId);
+      setEnrolled(true);
+    } catch (err) {
+      console.error('Enroll error:', err);
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const handleCompleteDay = async (day) => {
+    try {
+      const data = await apiService.completePlanDay(skillId, day);
+      const days = JSON.parse(data.progress?.completed_days || '[]');
+      setCompletedDays(new Set(days));
+    } catch (err) {
+      console.error('Complete day error:', err);
     }
   };
 
@@ -70,7 +102,7 @@ export function LearningPlanPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           30-Day {skillName} Learning Plan
         </h1>
-        <p className="text-gray-600 mb-8">
+        <p className="text-gray-600 mb-4">
           A structured day-by-day roadmap through the best curated content.
           {!user && (
             <span className="ml-1">
@@ -83,6 +115,18 @@ export function LearningPlanPage() {
           )}
         </p>
 
+        {user && !enrolled && plan.length > 0 && (
+          <div className="mb-8">
+            <button
+              onClick={handleEnroll}
+              disabled={enrolling}
+              className="btn-primary"
+            >
+              {enrolling ? 'Enrolling…' : 'Enroll in this plan'}
+            </button>
+          </div>
+        )}
+
         {plan.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
             <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -94,14 +138,17 @@ export function LearningPlanPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {plan.map((entry) => {
-              const unlocked = entry.day_number <= FREE_DAYS;
+              const unlocked = entry.day_number <= FREE_DAYS || !!user;
               const hasContent = Boolean(entry.content_id);
+              const isCompleted = completedDays.has(entry.day_number);
 
               return (
                 <div
                   key={entry.day_number}
                   className={`relative rounded-lg border p-3 flex flex-col min-h-[8rem] ${
-                    unlocked
+                    isCompleted
+                      ? 'bg-green-50 border-green-400'
+                      : unlocked
                       ? 'bg-white border-gray-200 hover:border-primary-300 hover:shadow-sm transition-all'
                       : 'bg-gray-50 border-gray-100'
                   }`}
@@ -109,12 +156,16 @@ export function LearningPlanPage() {
                   <div className="flex items-center justify-between mb-2">
                     <span
                       className={`text-xs font-semibold ${
-                        unlocked ? 'text-primary-600' : 'text-gray-400'
+                        isCompleted ? 'text-green-600' : unlocked ? 'text-primary-600' : 'text-gray-400'
                       }`}
                     >
                       Day {entry.day_number}
                     </span>
-                    {!unlocked && <Lock className="w-3 h-3 text-gray-300" />}
+                    {isCompleted ? (
+                      <CheckCircle className="w-3 h-3 text-green-500" />
+                    ) : !unlocked ? (
+                      <Lock className="w-3 h-3 text-gray-300" />
+                    ) : null}
                   </div>
 
                   {unlocked && hasContent ? (
@@ -142,6 +193,14 @@ export function LearningPlanPage() {
                       >
                         {entry.title || 'Untitled'}
                       </a>
+                      {enrolled && !isCompleted && (
+                        <button
+                          onClick={() => handleCompleteDay(entry.day_number)}
+                          className="mt-2 text-xs text-green-600 hover:text-green-700 text-left"
+                        >
+                          Mark complete
+                        </button>
+                      )}
                     </>
                   ) : unlocked && !hasContent ? (
                     <p className="text-xs text-gray-400 flex-grow flex items-center">
