@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink, CalendarDays } from 'lucide-react';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
 import { useAuth } from '../contexts/AuthContext';
@@ -292,6 +292,16 @@ export function SkillPage() {
                   <span>Articles ({content.articles?.length || 0})</span>
                 </div>
               </button>
+
+              <Link
+                to={`/skills/${skillId}/plan`}
+                className="py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <div className="flex items-center space-x-2">
+                  <CalendarDays className="w-4 h-4" />
+                  <span>30-Day Plan</span>
+                </div>
+              </Link>
             </nav>
           </div>
 

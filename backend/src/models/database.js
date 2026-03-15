@@ -105,6 +105,32 @@ class Database {
         skill_categories TEXT,
         confirmed INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      // 30-day learning plans
+      `CREATE TABLE IF NOT EXISTS learning_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        skill_id TEXT NOT NULL,
+        day_number INTEGER NOT NULL,
+        content_id TEXT,
+        content_type TEXT,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (skill_id) REFERENCES skills(id),
+        FOREIGN KEY (content_id) REFERENCES content(id)
+      )`,
+
+      // Per-user learning plan progress
+      `CREATE TABLE IF NOT EXISTS user_plan_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        skill_id TEXT NOT NULL,
+        enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completed_days TEXT DEFAULT '[]',
+        last_activity_at DATETIME,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (skill_id) REFERENCES skills(id),
+        UNIQUE(user_id, skill_id)
       )`
     ];
 
@@ -387,6 +413,66 @@ class Database {
   async getSubscriberCount() {
     const rows = await this.query('SELECT COUNT(*) as count FROM subscribers');
     return rows[0]?.count || 0;
+  }
+
+  // --- User plan progress methods ---
+
+  async enrollPlan(userId, skillId) {
+    await this.insert(
+      `INSERT OR IGNORE INTO user_plan_progress (user_id, skill_id) VALUES (?, ?)`,
+      [userId, skillId]
+    );
+    const rows = await this.query(
+      'SELECT * FROM user_plan_progress WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+    return rows[0] || null;
+  }
+
+  async getPlanProgress(userId, skillId) {
+    const rows = await this.query(
+      'SELECT * FROM user_plan_progress WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+    return rows[0] || null;
+  }
+
+  async completePlanDay(userId, skillId, day) {
+    const row = await this.getPlanProgress(userId, skillId);
+    if (!row) return null;
+    const completed = JSON.parse(row.completed_days || '[]');
+    if (!completed.includes(day)) completed.push(day);
+    await this.insert(
+      `UPDATE user_plan_progress SET completed_days = ?, last_activity_at = CURRENT_TIMESTAMP
+       WHERE user_id = ? AND skill_id = ?`,
+      [JSON.stringify(completed), userId, skillId]
+    );
+    return this.getPlanProgress(userId, skillId);
+  }
+
+  // --- Learning plan methods ---
+
+  async getLearningPlan(skillId) {
+    return this.query(
+      `SELECT lp.day_number, lp.content_id, lp.content_type, lp.reason,
+              c.title, c.url, c.thumbnail, c.duration, c.author, c.source
+       FROM learning_plans lp
+       LEFT JOIN content c ON c.id = lp.content_id
+       WHERE lp.skill_id = ?
+       ORDER BY lp.day_number ASC`,
+      [skillId]
+    );
+  }
+
+  async saveLearningPlan(skillId, days) {
+    await this.insert('DELETE FROM learning_plans WHERE skill_id = ?', [skillId]);
+    for (const entry of days) {
+      await this.insert(
+        `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason)
+         VALUES (?, ?, ?, ?, ?)`,
+        [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+      );
+    }
   }
 
   // Close database connection

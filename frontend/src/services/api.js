@@ -91,6 +91,32 @@ export const apiService = {
   async getSubscriberCount() {
     const response = await api.get('/newsletter/subscribers/count');
     return response.data;
+  },
+
+  // Learning plan endpoints
+  async getLearningPlan(skillId) {
+    const response = await api.get(`/learning-plans/${skillId}`);
+    return response.data;
+  },
+
+  async generateLearningPlan(skillId) {
+    const response = await api.post(`/learning-plans/${skillId}/generate`);
+    return response.data;
+  },
+
+  async enrollLearningPlan(skillId) {
+    const response = await api.post(`/learning-plans/${skillId}/enroll`);
+    return response.data;
+  },
+
+  async getPlanProgress(skillId) {
+    const response = await api.get(`/learning-plans/${skillId}/my-progress`);
+    return response.data;
+  },
+
+  async completePlanDay(skillId, day) {
+    const response = await api.post(`/learning-plans/${skillId}/complete-day`, { day });
+    return response.data;
   }
 };
 

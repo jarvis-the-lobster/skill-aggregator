@@ -25,12 +25,14 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const courseRoutes = require('./routes/courses');
 const newsletterRoutes = require('./routes/newsletter');
+const learningPlanRoutes = require('./routes/learningPlans');
 const skillsService = require('./services/skillsService');
 app.use('/api/skills', skillRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/learning-plans', learningPlanRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
