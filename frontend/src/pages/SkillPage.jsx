@@ -20,6 +20,7 @@ export function SkillPage() {
   const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
   const [activeTab, setActiveTab] = useState('videos');
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
+  const [lastScrapedAt, setLastScrapedAt] = useState(null);
 
   const pollTimer = useRef(null);
   const timeoutTimer = useRef(null);
@@ -79,6 +80,7 @@ export function SkillPage() {
     setSkillData(result.skill || null);
     if (result.content) {
       setContent(result.content);
+      if (result.content.lastScrapedAt) setLastScrapedAt(result.content.lastScrapedAt);
     }
     if (ratingsData) {
       setRatings(ratingsData);
@@ -113,15 +115,11 @@ export function SkillPage() {
     }, POLL_INTERVAL_MS);
   };
 
-  const handleScrapeContent = async () => {
+  const handleRefreshContent = async () => {
     try {
-      await apiService.scrapeSkillContent(skillId);
-      clearTimers();
-      setStatus('scraping');
-      setContent({ videos: [], articles: [] });
-      startPolling();
+      await loadSkillData();
     } catch (error) {
-      console.error('Error triggering scrape:', error);
+      console.error('Error refreshing content:', error);
     }
   };
 
@@ -282,9 +280,16 @@ export function SkillPage() {
                   ＋ Enroll in this Course
                 </button>
               )}
-              <button onClick={handleScrapeContent} className="btn-secondary">
-                Refresh Content
-              </button>
+              <div className="flex flex-col items-end">
+                <button onClick={handleRefreshContent} className="btn-secondary">
+                  ↻ Refresh
+                </button>
+                <span className="text-xs text-gray-400 mt-1">
+                  {lastScrapedAt
+                    ? `Updated: ${new Date(lastScrapedAt).toLocaleDateString()}`
+                    : 'Never updated'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -402,7 +407,7 @@ export function SkillPage() {
                     <p className="text-gray-500 mb-4">
                       Content is being gathered. Try refreshing in a few minutes.
                     </p>
-                    <button onClick={handleScrapeContent} className="btn-primary">
+                    <button onClick={handleRefreshContent} className="btn-primary">
                       Find Videos
                     </button>
                   </div>
@@ -459,7 +464,7 @@ export function SkillPage() {
                     <p className="text-gray-500 mb-4">
                       Content is being gathered. Try refreshing in a few minutes.
                     </p>
-                    <button onClick={handleScrapeContent} className="btn-primary">
+                    <button onClick={handleRefreshContent} className="btn-primary">
                       Find Articles
                     </button>
                   </div>
