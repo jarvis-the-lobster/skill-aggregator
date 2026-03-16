@@ -32,17 +32,18 @@ export function LearningPlanPage() {
       ];
       if (user) fetches.push(apiService.getPlanProgress(skillId).catch(() => null));
       const [planData, skillData, progressData] = await Promise.all(fetches);
+
+      // Fetch ratings in parallel with nothing — we have the IDs now, before any setState
+      const ids = (planData.plan || []).map(e => e.content_id).filter(Boolean);
+      const ratingsData = ids.length
+        ? await apiService.getRatings(ids).catch(() => ({ counts: {}, userRatings: {} }))
+        : { counts: {}, userRatings: {} };
+
+      // Set all state together so RatingButtons mounts with correct initial props
       setPlan(planData.plan || []);
       setSkillName(skillData.skill?.name || skillId);
-      const ids = (planData.plan || []).map(e => e.content_id).filter(Boolean);
-      if (ids.length) {
-        try {
-          const ratingsData = await apiService.getRatings(ids);
-          setRatings(ratingsData);
-        } catch {
-          // ratings are non-critical, leave defaults
-        }
-      }
+      setRatings(ratingsData);
+
       if (progressData?.enrolled) {
         setEnrolled(true);
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
