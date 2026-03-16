@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "test": "jest",
     "scrape": "node src/scripts/scrape.js",
-    "scrape:skill": "node src/scripts/scrape.js"
+    "scrape:skill": "node src/scripts/scrape.js",
+    "import-skills": "node src/scripts/import-skills.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
