@@ -25,7 +25,7 @@ async function importSkills() {
   }
 
   console.log(`Imported ${imported} new skills, skipped ${skipped} existing`);
-  db.close();
+  await db.close();
 }
 
 importSkills().catch((err) => {
