@@ -65,15 +65,13 @@ router.get('/:skill', async (req, res) => {
   }
 });
 
-// POST /api/skills/:skill/scrape - Manually trigger content scraping
+// POST /api/skills/:skill/scrape - User-facing refresh — returns current DB content only.
+// Scraping is handled by the nightly cron job; user actions must NOT hit the YouTube API.
 router.post('/:skill/scrape', async (req, res) => {
   try {
     const { skill } = req.params;
-    // Reset status immediately so the frontend poll detects the state change
-    skillsService.scrapeSkillContent(skill, { force: false }).catch(err =>
-      console.error(`Manual scrape failed for ${skill}:`, err.message)
-    );
-    res.json({ message: `Content scraping initiated for "${skill}"` });
+    const result = await skillsService.getSkillContent(skill);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

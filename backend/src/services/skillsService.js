@@ -133,7 +133,7 @@ class SkillsService {
 
     if (existing) {
       if (existing.status === 'ready') {
-        const content = await this.getCuratedContent(skillId);
+        const content = await this.getCuratedContent(skillId, {}, existing);
         return { skill: mapSkillRow(existing), status: 'ready', content };
       }
       return { skill: mapSkillRow(existing), status: existing.status || 'scraping' };
@@ -166,7 +166,7 @@ class SkillsService {
       }
 
       if (skillRow.status === 'ready') {
-        const content = await this.getCuratedContent(skillId, filters);
+        const content = await this.getCuratedContent(skillId, filters, skillRow);
         return { skill: mapSkillRow(skillRow), status: 'ready', content };
       }
 
@@ -181,7 +181,7 @@ class SkillsService {
     }
   }
 
-  async getCuratedContent(skillId, filters = {}) {
+  async getCuratedContent(skillId, filters = {}, skillRow = null) {
     const rows = await db.getSkillContent(skillId, filters.type || null);
 
     const videos = rows
@@ -216,7 +216,7 @@ class SkillsService {
         tags: r.tags ? JSON.parse(r.tags) : []
       }));
 
-    return { videos, articles, courses: [], totalCount: rows.length };
+    return { videos, articles, courses: [], totalCount: rows.length, lastScrapedAt: skillRow?.last_scraped_at || null };
   }
 
   async updateStatus(skillId, status) {
