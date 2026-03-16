@@ -98,12 +98,21 @@ async function run() {
     try {
       if (youtubeAborted) {
         // Articles-only path: scrape without YouTube
+        const articlesStart = Date.now();
         const articles = await scraper.scrapeArticles(skill.id);
         if (articles.length > 0) {
           const mapped = articles.map((a) => ({ ...a, type: 'article' }));
           await db.saveContent(mapped, skill.id);
           await db.updateSkillLastScraped(skill.id);
         }
+        await db.logScrape({
+          skill_id: skill.id,
+          source: 'nightly-articles-only',
+          status: 'success',
+          items_fetched: articles.length,
+          quota_used: 0,
+          duration_ms: Date.now() - articlesStart,
+        });
         await db.updateSkillStatus(skill.id, 'ready');
       } else {
         await scraper.scrapeSkill(skill.id);
