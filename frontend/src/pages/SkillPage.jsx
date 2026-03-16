@@ -39,12 +39,32 @@ export function SkillPage() {
     if (timeoutTimer.current) clearTimeout(timeoutTimer.current);
   };
 
+  const fetchRatings = async (videos, articles) => {
+    const ids = [
+      ...(videos || []).map(v => v.id),
+      ...(articles || []).map(a => a.id),
+    ].filter(Boolean);
+    if (!ids.length) return { counts: {}, userRatings: {} };
+    try {
+      return await apiService.getRatings(ids);
+    } catch {
+      return { counts: {}, userRatings: {} };
+    }
+  };
+
   const loadSkillData = async () => {
     clearTimers();
     setStatus('loading');
     try {
       const result = await apiService.getSkillContent(skillId);
-      applyResult(result);
+
+      // If content is ready, fetch ratings in parallel before rendering
+      let ratingsData = { counts: {}, userRatings: {} };
+      if (result.status === 'ready' && result.content) {
+        ratingsData = await fetchRatings(result.content.videos, result.content.articles);
+      }
+
+      applyResult(result, ratingsData);
 
       if (result.status === 'scraping' || result.status === 'pending') {
         startPolling();
@@ -55,25 +75,13 @@ export function SkillPage() {
     }
   };
 
-  const loadRatings = async (videos, articles) => {
-    const ids = [
-      ...(videos || []).map(v => v.id),
-      ...(articles || []).map(a => a.id),
-    ].filter(Boolean);
-    if (!ids.length) return;
-    try {
-      const data = await apiService.getRatings(ids);
-      setRatings(data);
-    } catch {}
-  };
-
-  const applyResult = (result) => {
+  const applyResult = (result, ratingsData = null) => {
     setSkillData(result.skill || null);
     if (result.content) {
       setContent(result.content);
-      if (result.status === 'ready') {
-        loadRatings(result.content.videos, result.content.articles);
-      }
+    }
+    if (ratingsData) {
+      setRatings(ratingsData);
     }
     setStatus(result.status || 'error');
   };
@@ -88,7 +96,13 @@ export function SkillPage() {
     pollTimer.current = setInterval(async () => {
       try {
         const result = await apiService.getSkillContent(skillId);
-        applyResult(result);
+
+        let ratingsData = null;
+        if (result.status === 'ready' && result.content) {
+          ratingsData = await fetchRatings(result.content.videos, result.content.articles);
+        }
+
+        applyResult(result, ratingsData);
 
         if (result.status === 'ready' || result.status === 'error') {
           clearTimers();
