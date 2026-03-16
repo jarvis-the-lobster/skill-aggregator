@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Lock, ArrowLeft, CheckCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { RatingButtons } from '../components/RatingButtons';
 
 const FREE_DAYS = 7;
 
@@ -16,6 +17,7 @@ export function LearningPlanPage() {
   const [enrolled, setEnrolled] = useState(false);
   const [completedDays, setCompletedDays] = useState(new Set());
   const [enrolling, setEnrolling] = useState(false);
+  const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
 
   useEffect(() => {
     loadPlan();
@@ -32,6 +34,15 @@ export function LearningPlanPage() {
       const [planData, skillData, progressData] = await Promise.all(fetches);
       setPlan(planData.plan || []);
       setSkillName(skillData.skill?.name || skillId);
+      const ids = (planData.plan || []).map(e => e.content_id).filter(Boolean);
+      if (ids.length) {
+        try {
+          const ratingsData = await apiService.getRatings(ids);
+          setRatings(ratingsData);
+        } catch {
+          // ratings are non-critical, leave defaults
+        }
+      }
       if (progressData?.enrolled) {
         setEnrolled(true);
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
@@ -182,6 +193,12 @@ export function LearningPlanPage() {
                       >
                         {entry.title || 'Untitled'}
                       </a>
+                      <RatingButtons
+                        contentId={entry.content_id}
+                        skillId={skillId}
+                        initialCounts={ratings.counts[entry.content_id]}
+                        initialUserRating={ratings.userRatings[entry.content_id]}
+                      />
                       {enrolled && !isCompleted && (
                         <button
                           onClick={() => handleCompleteDay(entry.day_number)}
