@@ -126,7 +126,8 @@ export const apiService = {
   },
 
   async getRatings(contentIds) {
-    const response = await api.get(`/ratings?contentIds=${contentIds.join(',')}`);
+    const params = new URLSearchParams({ contentIds: contentIds.join(',') });
+    const response = await api.get(`/ratings?${params}`);
     return response.data;
   }
 };
