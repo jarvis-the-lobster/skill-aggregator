@@ -117,6 +117,17 @@ export const apiService = {
   async completePlanDay(skillId, day) {
     const response = await api.post(`/learning-plans/${skillId}/complete-day`, { day });
     return response.data;
+  },
+
+  // Ratings endpoints
+  async rateContent(contentId, rating) {
+    const response = await api.post(`/ratings/${contentId}`, { rating });
+    return response.data;
+  },
+
+  async getRatings(contentIds) {
+    const response = await api.get(`/ratings?contentIds=${contentIds.join(',')}`);
+    return response.data;
   }
 };
 

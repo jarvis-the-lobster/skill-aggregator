@@ -23,6 +23,9 @@ const analytics = {
     if (!key) return;
     posthog.reset(); // call on logout to unlink the session
   },
+  trackContentRated(contentId, skillId, rating) {
+    this.track('content_rated', { contentId, skillId, rating });
+  },
 };
 
 export default analytics;

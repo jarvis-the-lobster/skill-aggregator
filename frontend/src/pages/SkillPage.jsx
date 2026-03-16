@@ -6,6 +6,7 @@ import { apiService } from '../services/api';
 import analytics from '../services/analytics';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnrollment } from '../hooks/useCourses';
+import { RatingButtons } from '../components/RatingButtons';
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
@@ -18,6 +19,7 @@ export function SkillPage() {
   const [content, setContent] = useState({ videos: [], articles: [] });
   const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
   const [activeTab, setActiveTab] = useState('videos');
+  const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
 
   const pollTimer = useRef(null);
   const timeoutTimer = useRef(null);
@@ -53,10 +55,25 @@ export function SkillPage() {
     }
   };
 
+  const loadRatings = async (videos, articles) => {
+    const ids = [
+      ...(videos || []).map(v => v.id),
+      ...(articles || []).map(a => a.id),
+    ].filter(Boolean);
+    if (!ids.length) return;
+    try {
+      const data = await apiService.getRatings(ids);
+      setRatings(data);
+    } catch {}
+  };
+
   const applyResult = (result) => {
     setSkillData(result.skill || null);
     if (result.content) {
       setContent(result.content);
+      if (result.status === 'ready') {
+        loadRatings(result.content.videos, result.content.articles);
+      }
     }
     setStatus(result.status || 'error');
   };
@@ -341,16 +358,24 @@ export function SkillPage() {
                                 </div>
                               )}
                             </div>
-                            <a
-                              href={video.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn-primary flex items-center space-x-2"
-                            >
-                              <Play className="w-4 h-4" />
-                              <span>Watch</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                            <div className="flex items-center space-x-3">
+                              <RatingButtons
+                                contentId={video.id}
+                                skillId={skillId}
+                                initialCounts={ratings.counts[video.id]}
+                                initialUserRating={ratings.userRatings[video.id]}
+                              />
+                              <a
+                                href={video.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-primary flex items-center space-x-2"
+                              >
+                                <Play className="w-4 h-4" />
+                                <span>Watch</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -392,16 +417,24 @@ export function SkillPage() {
                           )}
                           <span>{new Date(article.publishedDate).toLocaleDateString()}</span>
                         </div>
-                        <a
-                          href={article.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-secondary flex items-center space-x-2"
-                        >
-                          <BookOpen className="w-4 h-4" />
-                          <span>Read</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+                        <div className="flex items-center space-x-3">
+                          <RatingButtons
+                            contentId={article.id}
+                            skillId={skillId}
+                            initialCounts={ratings.counts[article.id]}
+                            initialUserRating={ratings.userRatings[article.id]}
+                          />
+                          <a
+                            href={article.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-secondary flex items-center space-x-2"
+                          >
+                            <BookOpen className="w-4 h-4" />
+                            <span>Read</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
                       </div>
                     </div>
                   ))

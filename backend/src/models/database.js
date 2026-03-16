@@ -147,7 +147,8 @@ class Database {
       const migrations = [
         'ALTER TABLE skills ADD COLUMN last_scraped_at DATETIME',
         'ALTER TABLE content ADD COLUMN likes INTEGER DEFAULT 0',
-        "ALTER TABLE skills ADD COLUMN status TEXT DEFAULT 'pending'"
+        "ALTER TABLE skills ADD COLUMN status TEXT DEFAULT 'pending'",
+        'ALTER TABLE user_interactions ADD COLUMN user_id INTEGER REFERENCES users(id)'
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -196,17 +197,31 @@ class Database {
     return this.insert('UPDATE skills SET status = ? WHERE id = ?', [status, id]);
   }
 
-  // Get content for a skill, ordered by quality signals
+  // Get content for a skill, ordered by rating score + views
   async getSkillContent(skillId, type = null) {
-    let sql = 'SELECT * FROM content WHERE skill_id = ?';
+    let sql = `
+      SELECT c.*,
+             COALESCE(v.thumbs_up, 0) as thumbs_up,
+             COALESCE(v.thumbs_down, 0) as thumbs_down
+      FROM content c
+      LEFT JOIN (
+        SELECT content_id,
+               SUM(CASE WHEN interaction_type = 'thumbs_up' THEN 1 ELSE 0 END) as thumbs_up,
+               SUM(CASE WHEN interaction_type = 'thumbs_down' THEN 1 ELSE 0 END) as thumbs_down
+        FROM user_interactions
+        WHERE interaction_type IN ('thumbs_up', 'thumbs_down')
+        GROUP BY content_id
+      ) v ON v.content_id = c.id
+      WHERE c.skill_id = ?
+    `;
     let params = [skillId];
 
     if (type) {
-      sql += ' AND type = ?';
+      sql += ' AND c.type = ?';
       params.push(type);
     }
 
-    sql += ' ORDER BY views DESC, published_date DESC';
+    sql += ' ORDER BY (COALESCE(v.thumbs_up, 0) - COALESCE(v.thumbs_down, 0)) * 1000 + COALESCE(c.views, 0) DESC';
     return this.query(sql, params);
   }
 
@@ -473,6 +488,60 @@ class Database {
         [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
       );
     }
+  }
+
+  // --- Content rating methods ---
+
+  // Upsert a rating (thumbs_up / thumbs_down) or remove it (rating = null)
+  async rateContent(userId, contentId, rating) {
+    // Delete any existing rating for this user+content first (handles uniqueness)
+    await this.insert(
+      `DELETE FROM user_interactions WHERE user_id = ? AND content_id = ? AND interaction_type IN ('thumbs_up', 'thumbs_down')`,
+      [userId, contentId]
+    );
+    if (rating !== null) {
+      await this.insert(
+        `INSERT INTO user_interactions (user_id, content_id, interaction_type) VALUES (?, ?, ?)`,
+        [userId, contentId, rating]
+      );
+    }
+  }
+
+  // Get the current user's ratings for a list of content IDs
+  // Returns: { [contentId]: 'thumbs_up' | 'thumbs_down' }
+  async getUserRatings(userId, contentIds) {
+    if (!contentIds.length) return {};
+    const placeholders = contentIds.map(() => '?').join(', ');
+    const rows = await this.query(
+      `SELECT content_id, interaction_type FROM user_interactions
+       WHERE user_id = ? AND content_id IN (${placeholders})
+         AND interaction_type IN ('thumbs_up', 'thumbs_down')`,
+      [userId, ...contentIds]
+    );
+    const result = {};
+    for (const row of rows) result[row.content_id] = row.interaction_type;
+    return result;
+  }
+
+  // Get aggregate thumbs up/down counts for a list of content IDs
+  // Returns: { [contentId]: { thumbs_up: N, thumbs_down: N } }
+  async getRatingCounts(contentIds) {
+    if (!contentIds.length) return {};
+    const placeholders = contentIds.map(() => '?').join(', ');
+    const rows = await this.query(
+      `SELECT content_id, interaction_type, COUNT(*) as count
+       FROM user_interactions
+       WHERE content_id IN (${placeholders})
+         AND interaction_type IN ('thumbs_up', 'thumbs_down')
+       GROUP BY content_id, interaction_type`,
+      contentIds
+    );
+    const result = {};
+    for (const row of rows) {
+      if (!result[row.content_id]) result[row.content_id] = { thumbs_up: 0, thumbs_down: 0 };
+      result[row.content_id][row.interaction_type] = row.count;
+    }
+    return result;
   }
 
   // Close database connection
