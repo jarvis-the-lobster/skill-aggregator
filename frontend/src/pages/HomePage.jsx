@@ -10,6 +10,16 @@ import analytics from '../services/analytics';
 
 const SITE_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
+// Curated featured skills shown on the homepage (ordered by priority)
+const FEATURED_SKILL_IDS = [
+  // Originals
+  'python', 'web-development', 'javascript', 'data-science', 'digital-marketing',
+  // Opus top picks
+  'machine-learning', 'sql', 'cybersecurity', 'aws', 'react-native',
+  'product-management', 'personal-finance', 'copywriting', 'figma', 'blender',
+  'excel', 'premiere-pro', 'deep-learning', 'devops', 'ui-ux-design',
+];
+
 export function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [skills, setSkills] = useState([]);
@@ -76,6 +86,11 @@ export function HomePage() {
       (skill.category || '').toLowerCase().includes(q)
     );
   });
+
+  // When not searching, show only curated featured skills in priority order
+  const displayedSkills = searchQuery
+    ? filteredSkills
+    : FEATURED_SKILL_IDS.map(id => skills.find(s => s.id === id)).filter(Boolean);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -201,7 +216,7 @@ export function HomePage() {
                 Retry
               </button>
             </div>
-          ) : filteredSkills.length === 0 ? (
+          ) : displayedSkills.length === 0 ? (
             <div className="text-center py-20">
               <p className="text-5xl mb-4">🔍</p>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No skills found</h3>
@@ -214,7 +229,7 @@ export function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredSkills.map((skill) => (
+              {displayedSkills.map((skill) => (
                 <SkillCard
                   key={skill.id}
                   skill={skill}
