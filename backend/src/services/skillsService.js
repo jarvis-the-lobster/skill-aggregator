@@ -170,6 +170,13 @@ class SkillsService {
         return { skill: mapSkillRow(skillRow), status: 'ready', content };
       }
 
+      // Re-trigger if stuck pending with no scrape ever attempted
+      if ((skillRow.status === 'pending' || skillRow.status === 'error') && !skillRow.last_scraped_at) {
+        this.scrapeSkillContent(skillId).catch(err =>
+          console.error(`Re-trigger scrape failed for ${skillId}:`, err.message)
+        );
+      }
+
       return {
         skill: mapSkillRow(skillRow),
         status: skillRow.status || 'scraping',
