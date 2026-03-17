@@ -167,7 +167,14 @@ class SkillsService {
 
       if (skillRow.status === 'ready') {
         const content = await this.getCuratedContent(skillId, filters, skillRow);
-        return { skill: mapSkillRow(skillRow), status: 'ready', content };
+        // If marked ready but has no content and was never scraped, re-trigger
+        const isEmpty = content.videos.length === 0 && content.articles.length === 0;
+        if (isEmpty && !skillRow.last_scraped_at) {
+          this.scrapeSkillContent(skillId).catch(err =>
+            console.error(`Re-trigger scrape failed for ${skillId}:`, err.message)
+          );
+        }
+        return { skill: mapSkillRow(skillRow), status: isEmpty && !skillRow.last_scraped_at ? 'scraping' : 'ready', content };
       }
 
       // Re-trigger if stuck pending with no scrape ever attempted
