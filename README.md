@@ -33,6 +33,14 @@ Instead of spending hours searching Google and YouTube for scattered learning ma
 /docs              # Documentation
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `CRON_SECRET` | Yes (for cron) | Bearer token protecting `POST /api/admin/scrape/nightly` |
+| `MAX_SKILLS_PER_RUN` | No | Max skills scraped per nightly run (default: 100) |
+| `SCRAPE_DELAY_MS` | No | Delay between skills in nightly scrape (default: 30000) |
+
 ## Getting Started
 
 [Coming soon - development setup instructions]
