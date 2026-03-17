@@ -37,7 +37,7 @@ router.post('/scrape/nightly', (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const scriptPath = path.join(__dirname, '../scripts/nightly-scrape.js');
+  const scriptPath = path.join(__dirname, '../../../scraper/nightly-scrape.js');
   const child = spawn(process.execPath, [scriptPath], {
     detached: true,
     stdio: 'ignore',
