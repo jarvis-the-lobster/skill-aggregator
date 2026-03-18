@@ -1,4 +1,5 @@
-require('dotenv').config();
+// Only load dotenv when run directly (not when required by the server)
+if (require.main === module) require('dotenv').config();
 
 const db = require('../models/database');
 const scraper = require('../services/scraperService');
@@ -155,16 +156,27 @@ async function run() {
   console.log(`  Quota exceeded: ${stats.quota_exceeded > 0 ? 'yes' : 'no'}`);
   console.log('─────────────────────────────────\n');
 
-  await db.close();
+  // Only close DB if running as a standalone script
+  if (require.main === module) await db.close();
 
-  // Exit 1 if more than 20% of attempted skills failed
-  if (stats.attempted > 0 && stats.failed / stats.attempted > 0.2) {
+  // Exit 1 if more than 20% of attempted skills failed (standalone only)
+  if (require.main === module && stats.attempted > 0 && stats.failed / stats.attempted > 0.2) {
     console.error(`❌ Failure rate ${((stats.failed / stats.attempted) * 100).toFixed(1)}% exceeds 20% threshold.`);
     process.exit(1);
   }
 }
 
-run().catch((err) => {
-  console.error('Fatal error in nightly scrape:', err.message);
-  process.exit(1);
-});
+// Export for inline use by the admin route
+async function runNightlyScrape() {
+  return run();
+}
+
+module.exports = { runNightlyScrape };
+
+// Run directly when invoked as a script
+if (require.main === module) {
+  run().catch((err) => {
+    console.error('Fatal error in nightly scrape:', err.message);
+    process.exit(1);
+  });
+}
