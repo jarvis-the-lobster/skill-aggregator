@@ -5,7 +5,7 @@ const scraper = require('../services/scraperService');
 
 const MAX_SKILLS_PER_RUN = parseInt(process.env.MAX_SKILLS_PER_RUN || '100');
 const SCRAPE_DELAY_MS = parseInt(process.env.SCRAPE_DELAY_MS || '30000');
-const STALE_THRESHOLD_MS = 23 * 60 * 60 * 1000; // 23 hours
+const STALE_THRESHOLD_MS = process.env.FORCE_SCRAPE_ALL === 'true' ? 0 : 23 * 60 * 60 * 1000; // 23 hours (or 0 to force all)
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -103,8 +103,9 @@ async function run() {
         if (articles.length > 0) {
           const mapped = articles.map((a) => ({ ...a, type: 'article' }));
           await db.saveContent(mapped, skill.id);
-          await db.updateSkillLastScraped(skill.id);
         }
+        // Always stamp last_scraped_at so skills don't loop forever with 0 results
+        await db.updateSkillLastScraped(skill.id);
         await db.logScrape({
           skill_id: skill.id,
           source: 'nightly-articles-only',
