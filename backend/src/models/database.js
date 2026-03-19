@@ -131,6 +131,19 @@ class Database {
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (skill_id) REFERENCES skills(id),
         UNIQUE(user_id, skill_id)
+      )`,
+
+      // User streaks
+      `CREATE TABLE IF NOT EXISTS user_streaks (
+        user_id INTEGER NOT NULL UNIQUE,
+        current_streak INTEGER DEFAULT 0,
+        longest_streak INTEGER DEFAULT 0,
+        last_activity_date TEXT,
+        freeze_available INTEGER DEFAULT 1,
+        freeze_last_used_date TEXT,
+        freeze_last_recharged_date TEXT,
+        updated_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id)
       )`
     ];
 

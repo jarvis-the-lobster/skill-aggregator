@@ -129,6 +129,17 @@ export const apiService = {
     const params = new URLSearchParams({ contentIds: contentIds.join(',') });
     const response = await api.get(`/ratings?${params}`);
     return response.data;
+  },
+
+  // Streak endpoints
+  async getStreak() {
+    const response = await api.get('/streaks');
+    return response.data;
+  },
+
+  async recordStreakActivity() {
+    const response = await api.post('/streaks/activity');
+    return response.data;
   }
 };
 
