@@ -29,6 +29,10 @@ export function HomePage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    analytics.track('homepage_viewed', {
+      referrer: document.referrer || 'direct',
+      landing: !document.referrer,
+    });
     loadSkills();
   }, []);
 
