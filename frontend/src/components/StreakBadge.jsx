@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useStreak } from '../hooks/useStreak';
 
 export function StreakBadge() {
@@ -9,13 +10,13 @@ export function StreakBadge() {
   const freezeUsedThisWeek = streak.weeklyCalendar?.some(d => d.status === 'frozen');
   const isNewUser = currentStreak === 0 && !streak.lastActivityDate;
 
-  // No streak — minimal display
+  // No streak — link to courses
   if (isNewUser) {
     return (
-      <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white border border-gray-200 shadow-sm">
+      <Link to="/my-courses" className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors">
         <span className="text-lg inline-block opacity-30">🔥</span>
         <span className="text-sm text-gray-400">Start a streak</span>
-      </div>
+      </Link>
     );
   }
 
