@@ -312,7 +312,7 @@ export function SkillPage() {
                 <button
                   onClick={handleRefreshContent}
                   disabled={isRefreshing || refreshMessage === 'already-up-to-date'}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className={isRefreshing ? 'animate-spin inline-block' : ''}>↻</span>{' '}
                   {isRefreshing ? 'Refreshing...' : refreshMessage === 'already-up-to-date' ? 'Up to date' : 'Refresh'}
