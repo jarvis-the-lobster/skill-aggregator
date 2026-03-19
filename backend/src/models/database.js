@@ -198,6 +198,7 @@ class Database {
   }
 
   // Get content for a skill, ordered by rating score + views
+  // Filters out low-quality video content (shorts, memes, very short duration)
   async getSkillContent(skillId, type = null) {
     let sql = `
       SELECT c.*,
@@ -220,6 +221,24 @@ class Database {
       sql += ' AND c.type = ?';
       params.push(type);
     }
+
+    // Filter out low-quality video content:
+    // 1. Videos under 3 minutes (catches shorts, memes, teasers)
+    //    Duration format is either "M:SS" or "H:MM:SS"
+    //    Keep videos with "H:MM:SS" format (always 1hr+), filter short "M:SS" ones
+    // 2. Title-based heuristics for non-educational content
+    sql += ` AND NOT (
+      c.type = 'video' AND (
+        (c.duration IS NOT NULL
+         AND c.duration NOT LIKE '%:%:%'
+         AND CAST(SUBSTR(c.duration, 1, INSTR(c.duration, ':') - 1) AS INTEGER) < 3)
+        OR LOWER(c.title) LIKE '%#short%'
+        OR LOWER(c.title) LIKE '%shorts%'
+        OR LOWER(c.title) LIKE '%meme%'
+        OR LOWER(c.title) LIKE '%compilation%'
+        OR LOWER(c.title) LIKE '%reaction%'
+      )
+    )`;
 
     sql += ' ORDER BY (COALESCE(v.thumbs_up, 0) - COALESCE(v.thumbs_down, 0)) * 1000 + COALESCE(c.views, 0) DESC';
     return this.query(sql, params);
