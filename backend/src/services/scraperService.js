@@ -450,13 +450,42 @@ class ScraperService {
     return sanitized;
   }
 
+  // ─── Quality filtering ─────────────────────────────────────────────────────
+
+  // Convert duration string ("M:SS" or "H:MM:SS") to total seconds
+  _durationToSeconds(duration) {
+    if (!duration) return null;
+    const parts = duration.split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return null;
+  }
+
+  // Filter out low-quality video content before it enters the database
+  _isLowQualityVideo(video) {
+    // Duration check: videos under 3 minutes are almost always shorts/memes/teasers
+    const seconds = this._durationToSeconds(video.duration);
+    if (seconds !== null && seconds < 180) return true;
+
+    // Title heuristics for non-educational content
+    const title = (video.title || '').toLowerCase();
+    const junkPatterns = ['#short', 'shorts', 'meme', 'compilation', 'reaction'];
+    if (junkPatterns.some(p => title.includes(p))) return true;
+
+    return false;
+  }
+
   // ─── Validation ───────────────────────────────────────────────────────────
 
   validateContent(content) {
     const isValidUrl = url => url && url.startsWith('http');
+    const videoBefore = (content.videos || []).length;
     content.videos = (content.videos || [])
       .filter(v => v.title && isValidUrl(v.url))
+      .filter(v => !this._isLowQualityVideo(v))
       .map(v => this.sanitizeItem(v));
+    const filtered = videoBefore - content.videos.length;
+    if (filtered > 0) console.log(`  🗑  Filtered ${filtered} low-quality video(s)`);
     content.articles = (content.articles || [])
       .filter(a => a.title && isValidUrl(a.url))
       .map(a => this.sanitizeItem(a));
