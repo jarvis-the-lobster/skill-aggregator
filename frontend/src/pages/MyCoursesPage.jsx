@@ -131,7 +131,7 @@ export function MyCoursesPage() {
                     ))}
                   </select>
                   <Link
-                    to={`/skills/${course.skill_id}`}
+                    to={`/skills/${course.skill_id}/plan`}
                     className="btn-primary text-sm"
                   >
                     Continue

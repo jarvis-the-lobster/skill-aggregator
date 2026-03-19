@@ -5,7 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 
 const VALID_STATUSES = ['active', 'paused', 'completed'];
 
-// POST /api/courses/enroll/:skillId — enroll current user
+// POST /api/courses/enroll/:skillId — enroll current user in course + plan
 router.post('/enroll/:skillId', requireAuth, async (req, res) => {
   try {
     const { skillId } = req.params;
@@ -13,6 +13,8 @@ router.post('/enroll/:skillId', requireAuth, async (req, res) => {
     if (!skill) return res.status(404).json({ error: 'Skill not found' });
 
     const course = await db.enrollCourse(req.user.id, skillId);
+    // Also enroll in the 30-day plan automatically
+    await db.enrollPlan(req.user.id, skillId);
     res.json({ enrolled: true, course });
   } catch (err) {
     console.error('Enroll error:', err);
