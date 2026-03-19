@@ -284,31 +284,31 @@ export function SkillPage() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
-              {!user ? (
-                <Link to="/login" className="btn-secondary text-sm">
-                  Sign in to enroll
-                </Link>
-              ) : isEnrolled ? (
-                <button
-                  onClick={async () => {
-                    if (window.confirm('Unenroll from this course?')) await unenroll();
-                  }}
-                  disabled={enrollLoading}
-                  className="flex items-center space-x-1 px-4 py-2 rounded-lg bg-green-100 text-green-800 font-medium text-sm hover:bg-green-200 transition-colors disabled:opacity-50"
-                >
-                  <span>✓ Enrolled</span>
-                </button>
-              ) : (
-                <button
-                  onClick={enroll}
-                  disabled={enrollLoading}
-                  className="btn-primary text-sm disabled:opacity-50"
-                >
-                  ＋ Enroll in this Course
-                </button>
-              )}
-              <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end space-y-2">
+              <div className="flex items-center space-x-3">
+                {!user ? (
+                  <Link to="/login" className="btn-secondary text-sm">
+                    Sign in to enroll
+                  </Link>
+                ) : isEnrolled ? (
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('Unenroll from this course?')) await unenroll();
+                    }}
+                    disabled={enrollLoading}
+                    className="flex items-center space-x-1 px-4 py-2 rounded-lg bg-green-100 text-green-800 font-medium text-sm hover:bg-green-200 transition-colors disabled:opacity-50"
+                  >
+                    <span>✓ Enrolled</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={enroll}
+                    disabled={enrollLoading}
+                    className="btn-primary text-sm disabled:opacity-50"
+                  >
+                    ＋ Enroll in this Course
+                  </button>
+                )}
                 <button
                   onClick={handleRefreshContent}
                   disabled={isRefreshing || refreshMessage === 'already-up-to-date'}
@@ -317,13 +317,13 @@ export function SkillPage() {
                   <span className={isRefreshing ? 'animate-spin inline-block' : ''}>↻</span>{' '}
                   {isRefreshing ? 'Refreshing...' : refreshMessage === 'already-up-to-date' ? 'Up to date' : 'Refresh'}
                 </button>
-                <span className="text-xs mt-1 transition-all">
-                  {refreshMessage && refreshMessage !== 'already-up-to-date'
-                    ? <span className="text-blue-500">{refreshMessage}</span>
-                    : <span className="text-gray-400">{lastScrapedAt ? `Updated: ${new Date(lastScrapedAt).toLocaleDateString()}` : 'Never updated'}</span>
-                  }
-                </span>
               </div>
+              <span className="text-xs transition-all">
+                {refreshMessage && refreshMessage !== 'already-up-to-date'
+                  ? <span className="text-blue-500">{refreshMessage}</span>
+                  : <span className="text-gray-400">{lastScrapedAt ? `Updated: ${new Date(lastScrapedAt).toLocaleDateString()}` : 'Never updated'}</span>
+                }
+              </span>
             </div>
           </div>
         </div>
