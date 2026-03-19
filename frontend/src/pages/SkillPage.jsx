@@ -258,11 +258,11 @@ export function SkillPage() {
             Back to Skills
           </Link>
 
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{skillData.name}</h1>
-              <p className="text-xl text-gray-600 mb-4">{skillData.description}</p>
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{skillData.name}</h1>
+              <p className="text-lg sm:text-xl text-gray-600 mb-4">{skillData.description}</p>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                 <span
                   className={`px-3 py-1 rounded-full ${
                     skillData.difficulty === 'beginner'
@@ -284,7 +284,7 @@ export function SkillPage() {
               </div>
             </div>
 
-            <div className="flex flex-col items-end space-y-2">
+            <div className="flex flex-col items-start sm:items-end space-y-2 shrink-0">
               <div className="flex items-center space-x-3">
                 {!user ? (
                   <Link to="/login" className="btn-secondary text-sm">
@@ -381,20 +381,20 @@ export function SkillPage() {
               <div className="space-y-6">
                 {content.videos?.length > 0 ? (
                   content.videos.map((video) => (
-                    <div key={video.id} className="content-card">
-                      <div className="flex space-x-4">
+                    <div key={video.id} className="content-card overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:space-x-4">
                         <img
                           src={video.thumbnail || 'https://via.placeholder.com/320x180'}
                           alt={video.title}
-                          className="w-32 h-20 object-cover rounded-lg flex-shrink-0"
+                          className="w-full sm:w-32 h-44 sm:h-20 object-cover rounded-lg flex-shrink-0 mb-3 sm:mb-0"
                         />
-                        <div className="flex-grow">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        <div className="min-w-0 flex-grow">
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 break-words">
                             {video.title}
                           </h3>
-                          <p className="text-gray-600 text-sm mb-3">{video.description}</p>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <p className="text-gray-600 text-sm mb-3 line-clamp-2">{video.description}</p>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                               <span>{video.channel || video.source}</span>
                               <div className="flex items-center space-x-1">
                                 <Clock className="w-3 h-3" />
@@ -453,13 +453,13 @@ export function SkillPage() {
               <div className="space-y-6">
                 {content.articles?.length > 0 ? (
                   content.articles.map((article) => (
-                    <div key={article.id} className="content-card">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <div key={article.id} className="content-card overflow-hidden">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 break-words">
                         {article.title}
                       </h3>
-                      <p className="text-gray-600 mb-4">{article.excerpt || article.description}</p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <p className="text-gray-600 mb-4 text-sm sm:text-base line-clamp-3">{article.excerpt || article.description}</p>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                           <span>{article.source}</span>
                           <span>by {article.author}</span>
                           {article.readTime && (
