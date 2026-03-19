@@ -23,9 +23,17 @@ export function SignupPage() {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (!isValidEmail(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     if (password.length < 8) {
       setError('Password must be at least 8 characters');
       return;
