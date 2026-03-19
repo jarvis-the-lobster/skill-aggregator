@@ -21,6 +21,8 @@ export function SkillPage() {
   const [activeTab, setActiveTab] = useState('videos');
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
   const [lastScrapedAt, setLastScrapedAt] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState(null);
 
   const pollTimer = useRef(null);
   const timeoutTimer = useRef(null);
@@ -116,10 +118,36 @@ export function SkillPage() {
   };
 
   const handleRefreshContent = async () => {
+    setIsRefreshing(true);
+    setRefreshMessage(null);
     try {
-      await loadSkillData();
+      clearTimers();
+      const prevLastScraped = lastScrapedAt;
+      const [result] = await Promise.all([
+        apiService.getSkillContent(skillId),
+        new Promise((resolve) => setTimeout(resolve, 1000)),
+      ]);
+      let ratingsData = { counts: {}, userRatings: {} };
+      if (result.status === 'ready' && result.content) {
+        ratingsData = await fetchRatings(result.content.videos, result.content.articles);
+      }
+      applyResult(result, ratingsData);
+      if (result.status === 'scraping' || result.status === 'pending') {
+        startPolling();
+        setRefreshMessage('Scraping in progress...');
+        setTimeout(() => setRefreshMessage(null), 3000);
+      } else if (result.content?.lastScrapedAt === prevLastScraped) {
+        setRefreshMessage('already-up-to-date');
+      } else {
+        setRefreshMessage('Content updated!');
+        setTimeout(() => setRefreshMessage(null), 3000);
+      }
     } catch (error) {
       console.error('Error refreshing content:', error);
+      setRefreshMessage('Refresh failed');
+      setTimeout(() => setRefreshMessage(null), 3000);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -281,13 +309,19 @@ export function SkillPage() {
                 </button>
               )}
               <div className="flex flex-col items-end">
-                <button onClick={handleRefreshContent} className="btn-secondary">
-                  ↻ Refresh
+                <button
+                  onClick={handleRefreshContent}
+                  disabled={isRefreshing || refreshMessage === 'already-up-to-date'}
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className={isRefreshing ? 'animate-spin inline-block' : ''}>↻</span>{' '}
+                  {isRefreshing ? 'Refreshing...' : refreshMessage === 'already-up-to-date' ? 'Up to date' : 'Refresh'}
                 </button>
-                <span className="text-xs text-gray-400 mt-1">
-                  {lastScrapedAt
-                    ? `Updated: ${new Date(lastScrapedAt).toLocaleDateString()}`
-                    : 'Never updated'}
+                <span className="text-xs mt-1 transition-all">
+                  {refreshMessage && refreshMessage !== 'already-up-to-date'
+                    ? <span className="text-blue-500">{refreshMessage}</span>
+                    : <span className="text-gray-400">{lastScrapedAt ? `Updated: ${new Date(lastScrapedAt).toLocaleDateString()}` : 'Never updated'}</span>
+                  }
                 </span>
               </div>
             </div>

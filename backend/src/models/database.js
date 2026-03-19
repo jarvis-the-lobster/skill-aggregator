@@ -302,13 +302,27 @@ class Database {
         FROM scrape_log
         WHERE source = 'youtube' AND scraped_at >= date('now')
       `),
-      // recentErrors: last 10 error rows
+      // recentErrors: last 20 error rows, excluding per-source failures
+      // where the skill has content from other sources (e.g. freeCodeCamp 404s
+      // on non-tech skills that have YouTube/Dev.to content)
       this.query(`
-        SELECT skill_id, source, error_message, scraped_at
-        FROM scrape_log
-        WHERE status IN ('error', 'quota_exceeded')
-        ORDER BY scraped_at DESC
-        LIMIT 10
+        SELECT sl.skill_id, sl.source, sl.error_message, sl.scraped_at
+        FROM scrape_log sl
+        WHERE sl.status IN ('error', 'quota_exceeded')
+          AND (
+            -- Always show quota_exceeded errors
+            sl.status = 'quota_exceeded'
+            -- Show source errors only if the skill has no content at all,
+            -- or the skill's overall status is 'error'
+            OR NOT EXISTS (
+              SELECT 1 FROM content c WHERE c.skill_id = sl.skill_id
+            )
+            OR EXISTS (
+              SELECT 1 FROM skills s WHERE s.id = sl.skill_id AND s.status = 'error'
+            )
+          )
+        ORDER BY sl.scraped_at DESC
+        LIMIT 20
       `),
       // contentCounts: total items per type per skill
       this.query(`

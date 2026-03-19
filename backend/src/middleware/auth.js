@@ -23,4 +23,22 @@ async function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { requireAuth };
+async function optionalAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+  if (token) {
+    try {
+      const payload = verifyToken(token);
+      const user = await db.getUserById(payload.userId);
+      if (user) {
+        const { password_hash, ...safe } = user;
+        req.user = safe;
+      }
+    } catch {
+      // ignore invalid tokens — treat as anonymous
+    }
+  }
+  next();
+}
+
+module.exports = { requireAuth, optionalAuth };

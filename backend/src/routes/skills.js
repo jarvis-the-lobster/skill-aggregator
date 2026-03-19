@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const skillsService = require('../services/skillsService');
 const analytics = require('../services/analyticsService');
+const { optionalAuth } = require('../middleware/auth');
 
 // GET /api/skills - List all skills from DB
 router.get('/', async (req, res) => {
@@ -15,7 +16,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/skills/search?q=kubernetes - On-demand skill search
 // IMPORTANT: must be defined before /:skill to avoid route shadowing
-router.get('/search', async (req, res) => {
+router.get('/search', optionalAuth, async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || !q.trim()) {
@@ -26,6 +27,8 @@ router.get('/search', async (req, res) => {
       skillId: result.skill?.id,
       skillName: result.skill?.name,
       isNewSkill: result.isNew || false,
+      url: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
+      distinctId: req.user ? `user_${req.user.id}` : undefined,
     });
     res.json(result);
   } catch (error) {
@@ -34,7 +37,7 @@ router.get('/search', async (req, res) => {
 });
 
 // GET /api/skills/:skill - Get skill details + content (with status)
-router.get('/:skill', async (req, res) => {
+router.get('/:skill', optionalAuth, async (req, res) => {
   try {
     const { skill } = req.params;
     const { type, difficulty, format } = req.query;
@@ -42,22 +45,16 @@ router.get('/:skill', async (req, res) => {
     const result = await skillsService.getSkillContent(skill, { type, difficulty, format });
     if (result.status === 'ready' && result.content) {
       const { videos = [], articles = [] } = result.content;
-      if (videos.length > 0) {
-        analytics.trackSkillContentServed({
-          skillId: result.skill?.id,
-          skillName: result.skill?.name,
-          contentType: 'video',
-          resultCount: videos.length,
-        });
-      }
-      if (articles.length > 0) {
-        analytics.trackSkillContentServed({
-          skillId: result.skill?.id,
-          skillName: result.skill?.name,
-          contentType: 'article',
-          resultCount: articles.length,
-        });
-      }
+      const skillUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      const distinctId = req.user ? `user_${req.user.id}` : undefined;
+      analytics.trackSkillContentServed({
+        skillId: result.skill?.id,
+        skillName: result.skill?.name,
+        videoCount: videos.length,
+        articleCount: articles.length,
+        url: skillUrl,
+        distinctId,
+      });
     }
     res.json(result);
   } catch (error) {

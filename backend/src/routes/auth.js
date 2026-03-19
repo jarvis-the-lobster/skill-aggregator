@@ -16,7 +16,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
     const result = await register(email, password, name);
-    analytics.trackUserRegistered({ userId: result.user?.id, method: 'email' });
+    analytics.trackUserRegistered({ userId: result.user?.id, method: 'email', url: `${req.protocol}://${req.get('host')}${req.originalUrl}` });
     res.status(201).json({ user: result.user, token: result.token });
   } catch (err) {
     if (err.message === 'Email already in use') {
@@ -35,7 +35,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     const result = await login(email, password);
-    analytics.trackUserLoggedIn({ userId: result.user?.id, method: 'email' });
+    analytics.trackUserLoggedIn({ userId: result.user?.id, method: 'email', url: `${req.protocol}://${req.get('host')}${req.originalUrl}` });
     res.json({ user: result.user, token: result.token });
   } catch (err) {
     if (err.message === 'Invalid email or password') {
@@ -75,7 +75,7 @@ router.get('/google/callback', (req, res, next) => {
   })(req, res, next);
 }, (req, res) => {
   const token = generateToken(req.user.id);
-  analytics.trackUserLoggedIn({ userId: req.user.id, method: 'google' });
+  analytics.trackUserLoggedIn({ userId: req.user.id, method: 'google', url: `${process.env.FRONTEND_URL}/auth/callback` });
   res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
 });
 
