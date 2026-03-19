@@ -77,47 +77,4 @@ router.post('/scrape/nightly', (req, res) => {
   });
 });
 
-// POST /api/admin/cleanup-low-quality — one-time removal of junk videos from DB
-router.post('/cleanup-low-quality', async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers['authorization'];
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  try {
-    // Preview what will be deleted
-    const toDelete = await db.query(`
-      SELECT id, title, duration FROM content
-      WHERE type = 'video' AND (
-        (duration IS NOT NULL
-         AND duration NOT LIKE '%:%:%'
-         AND CAST(SUBSTR(duration, 1, INSTR(duration, ':') - 1) AS INTEGER) < 3)
-        OR LOWER(title) LIKE '%#short%'
-        OR LOWER(title) LIKE '%shorts%'
-        OR LOWER(title) LIKE '%meme%'
-        OR LOWER(title) LIKE '%compilation%'
-        OR LOWER(title) LIKE '%reaction%'
-      )
-    `);
-
-    if (req.query.dry === 'true') {
-      return res.json({ dryRun: true, count: toDelete.length, items: toDelete.map(v => `${v.id}: ${v.title} (${v.duration})`) });
-    }
-
-    // Also clean up any ratings/interactions for these videos
-    const ids = toDelete.map(v => v.id);
-    if (ids.length > 0) {
-      const placeholders = ids.map(() => '?').join(',');
-      await db.insert(`DELETE FROM user_interactions WHERE content_id IN (${placeholders})`, ids);
-      await db.insert(`DELETE FROM learning_plans WHERE content_id IN (${placeholders})`, ids);
-      await db.insert(`DELETE FROM content WHERE id IN (${placeholders})`, ids);
-    }
-
-    res.json({ ok: true, deleted: ids.length, items: toDelete.map(v => `${v.id}: ${v.title} (${v.duration})`) });
-  } catch (err) {
-    console.error('Cleanup error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 module.exports = router;
