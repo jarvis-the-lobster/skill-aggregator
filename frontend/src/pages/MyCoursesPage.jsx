@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, Clock, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
+import { StreakWidget } from '../components/StreakWidget';
 
 const STATUS_OPTIONS = ['active', 'paused', 'completed'];
 
@@ -61,6 +62,10 @@ export function MyCoursesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="mb-8">
+          <StreakWidget />
+        </div>
+
         <h1 className="text-3xl font-bold text-gray-900 mb-2">My Courses</h1>
         <p className="text-gray-500 mb-8">Track your learning journey</p>
 

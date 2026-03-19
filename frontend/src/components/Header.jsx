@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Zap, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { StreakBadge } from './StreakBadge';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -80,6 +81,8 @@ export function Header() {
                     {user.name || user.email}
                   </span>
                 </div>
+
+                <StreakBadge />
 
                 <button
                   onClick={handleLogout}

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const learningPlanService = require('../services/learningPlanService');
+const streakService = require('../services/streakService');
 const { requireAuth } = require('../middleware/auth');
 
 // GET /api/learning-plans/:skillId — public, returns saved 30-day plan
@@ -61,6 +62,8 @@ router.post('/:skillId/complete-day', requireAuth, async (req, res) => {
     }
     const progress = await db.completePlanDay(req.user.id, req.params.skillId, day);
     if (!progress) return res.status(404).json({ error: 'Not enrolled in this plan' });
+    // Record streak activity on plan day completion
+    await streakService.recordActivity(req.user.id);
     res.json({ progress });
   } catch (err) {
     console.error('Complete day error:', err);

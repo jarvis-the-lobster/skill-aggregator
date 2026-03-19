@@ -27,6 +27,7 @@ const courseRoutes = require('./routes/courses');
 const newsletterRoutes = require('./routes/newsletter');
 const learningPlanRoutes = require('./routes/learningPlans');
 const ratingsRoutes = require('./routes/ratings');
+const streakRoutes = require('./routes/streaks');
 const skillsService = require('./services/skillsService');
 app.use('/api/skills', skillRoutes);
 app.use('/api/auth', authRoutes);
@@ -35,6 +36,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/learning-plans', learningPlanRoutes);
 app.use('/api/ratings', ratingsRoutes);
+app.use('/api/streaks', streakRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
