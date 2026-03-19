@@ -11,6 +11,13 @@ import { RatingButtons } from '../components/RatingButtons';
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
 
+function formatViews(num) {
+  if (!num && num !== 0) return '0';
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (num >= 1_000) return `${Math.round(num / 1_000)}K`;
+  return num.toLocaleString();
+}
+
 export function SkillPage() {
   const { id: skillId } = useParams();
   const { user } = useAuth();
@@ -402,7 +409,7 @@ export function SkillPage() {
                               </div>
                               <div className="flex items-center space-x-1">
                                 <Eye className="w-3 h-3" />
-                                <span>{video.views}</span>
+                                <span>{formatViews(video.views)} views</span>
                               </div>
                               {video.rating && (
                                 <div className="flex items-center space-x-1">
