@@ -13,7 +13,27 @@ const SKILL_SEARCH_TERMS = {
   'web-development': 'web development',
   'digital-marketing': 'digital marketing',
   'ui-ux-design': 'UI UX design',
-  'data-science': 'data science'
+  'data-science': 'data science',
+  // Ambiguous or underperforming skills — add context to search query
+  'mandarin': 'learn Mandarin Chinese language',
+  'greek': 'learn Greek language',
+  'drawing': 'drawing tutorial for beginners',
+  'gardening': 'gardening tips for beginners',
+  'creative-writing': 'creative writing course',
+  'documentary-making': 'how to make a documentary film',
+  'food-photography': 'food photography tutorial',
+  'podcast-marketing': 'podcast marketing strategy',
+  'podcast-production': 'how to start a podcast',
+  'saas-business': 'how to build a SaaS business',
+  'twitter-marketing': 'Twitter marketing strategy',
+  'youtube-content': 'YouTube content creation tutorial',
+  'icon-design': 'icon design tutorial',
+  'print-design': 'print design tutorial',
+  'typography': 'typography design tutorial',
+  'public-speaking-skills': 'public speaking tips',
+  'injury-prevention': 'exercise injury prevention',
+  'business-analysis': 'business analysis tutorial',
+  'local-seo': 'local SEO tutorial',
 };
 
 const ALL_SKILLS = Object.keys(SKILL_SEARCH_TERMS);
@@ -124,7 +144,9 @@ class ScraperService {
             q,
             part: 'snippet',
             type: 'video',
-            videoCategoryId: '27', // Education
+            // Removed videoCategoryId: '27' (Education) — too restrictive.
+            // Many tutorials are under "Howto & Style", "Science & Technology",
+            // or uncategorized. Our duration filter + quality scoring handles junk.
             maxResults: Math.min(MAX_RESULTS, 20),
             order: 'relevance',
             relevanceLanguage: 'en',
