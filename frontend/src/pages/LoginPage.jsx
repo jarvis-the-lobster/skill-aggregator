@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import analytics from '../services/analytics';
 
 function GoogleIcon() {
   return (
@@ -25,6 +26,10 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
 
   const oauthError = searchParams.get('error') === 'oauth';
+
+  useEffect(() => {
+    analytics.track('login_page_viewed');
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();

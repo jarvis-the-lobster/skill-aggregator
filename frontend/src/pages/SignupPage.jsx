@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import analytics from '../services/analytics';
 
 function GoogleIcon() {
   return (
@@ -23,6 +24,10 @@ export function SignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    analytics.track('signup_page_viewed');
+  }, []);
 
   function isValidEmail(value) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
