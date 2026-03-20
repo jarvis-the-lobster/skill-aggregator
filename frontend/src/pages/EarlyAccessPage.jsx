@@ -50,10 +50,10 @@ export function EarlyAccessPage() {
   return (
     <div className="min-h-screen bg-white">
       <Helmet>
-        <title>Get Early Access — SkillAggregator</title>
-        <meta name="description" content="Join the SkillAggregator early access list and get a weekly digest of the best curated learning resources for the skills that matter to you." />
-        <meta property="og:title" content="Get Early Access — SkillAggregator" />
-        <meta property="og:description" content="Join the SkillAggregator early access list and get a weekly digest of the best curated learning resources." />
+        <title>Get Early Access — LearnStack</title>
+        <meta name="description" content="Join the LearnStack early access list and get a weekly digest of the best curated learning resources for the skills that matter to you." />
+        <meta property="og:title" content="Get Early Access — LearnStack" />
+        <meta property="og:description" content="Join the LearnStack early access list and get a weekly digest of the best curated learning resources." />
         <meta property="og:type" content="website" />
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/early-access`} />
       </Helmet>

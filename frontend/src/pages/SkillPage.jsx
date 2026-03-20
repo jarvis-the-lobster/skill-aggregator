@@ -246,13 +246,13 @@ export function SkillPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Helmet>
-        <title>{`Learn ${skillData.name} — Best Videos & Articles | SkillAggregator`}</title>
+        <title>{`Learn ${skillData.name} — Best Videos & Articles | LearnStack`}</title>
         <meta name="description" content={skillData.description || `Discover the best curated YouTube videos and articles to learn ${skillData.name}. Quality-ranked content so you get straight to learning.`} />
-        <meta property="og:title" content={`Learn ${skillData.name} — Best Videos & Articles | SkillAggregator`} />
+        <meta property="og:title" content={`Learn ${skillData.name} — Best Videos & Articles | LearnStack`} />
         <meta property="og:description" content={skillData.description || `Curated resources to learn ${skillData.name}.`} />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary" />
-        <meta name="twitter:title" content={`Learn ${skillData.name} — Best Videos & Articles | SkillAggregator`} />
+        <meta name="twitter:title" content={`Learn ${skillData.name} — Best Videos & Articles | LearnStack`} />
         <meta name="twitter:description" content={skillData.description || `Curated resources to learn ${skillData.name}.`} />
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/skills/${skillData.id}`} />
         <script type="application/ld+json">{JSON.stringify({
@@ -260,7 +260,7 @@ export function SkillPage() {
           '@type': 'Course',
           name: skillData.name,
           description: skillData.description,
-          provider: { '@type': 'Organization', name: 'SkillAggregator' },
+          provider: { '@type': 'Organization', name: 'LearnStack' },
           educationalLevel: skillData.difficulty,
           url: `https://learnstack.dev/skills/${skillData.id}`,
         })}</script>

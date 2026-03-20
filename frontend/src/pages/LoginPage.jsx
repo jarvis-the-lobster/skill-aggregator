@@ -43,7 +43,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <Helmet>
-        <title>Sign In — SkillAggregator</title>
+        <title>Sign In — LearnStack</title>
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/login`} />
       </Helmet>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
@@ -52,7 +52,7 @@ export function LoginPage() {
           <div className="p-2 bg-primary-500 rounded-lg">
             <Zap className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-900">SkillAggregator</span>
+          <span className="text-xl font-bold text-gray-900">LearnStack</span>
         </div>
 
         <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">Welcome back</h1>

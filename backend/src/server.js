@@ -89,7 +89,7 @@ app.get('/api/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Skill Aggregator API - Making learning faster and smarter 🦞',
+    message: 'LearnStack API - Making learning faster and smarter 🚀',
     endpoints: [
       'GET /api/health - Health check',
       'GET /api/skills - List all skills',
@@ -111,7 +111,7 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🦞 Skill Aggregator API running on port ${PORT}`);
+  console.log(`🚀 LearnStack API running on port ${PORT}`);
   console.log(`🌍 Health check: http://localhost:${PORT}/api/health`);
 
   // Seed MVP skills into DB (idempotent — safe to run every startup)

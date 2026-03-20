@@ -63,7 +63,7 @@ export function MyCoursesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Helmet>
-        <title>My Courses — SkillAggregator</title>
+        <title>My Courses — LearnStack</title>
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/my-courses`} />
       </Helmet>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">

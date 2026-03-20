@@ -12,7 +12,7 @@ export function Footer() {
               <div className="p-2 bg-primary-500 rounded-lg">
                 <Zap className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-bold">SkillAggregator</span>
+              <span className="text-xl font-bold">LearnStack</span>
             </div>
             <p className="text-gray-400 text-sm max-w-md">
               Discover the best learning content for any skill. We curate videos, articles, 
@@ -41,7 +41,7 @@ export function Footer() {
           <div>
             <h3 className="text-lg font-semibold mb-4">Contact</h3>
             <p className="text-gray-400 text-sm">
-              Built by Brent & Jarvis 🦞
+              Questions? Reach out at hello@learnstack.dev
             </p>
           </div>
         </div>

@@ -99,7 +99,7 @@ export function HomePage() {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'SkillAggregator',
+    name: 'LearnStack',
     url: SITE_URL || 'https://learnstack.dev',
     description: 'Curated YouTube videos and articles for any skill you want to learn.',
     potentialAction: {
@@ -115,13 +115,13 @@ export function HomePage() {
   return (
     <div>
       <Helmet>
-        <title>SkillAggregator — Learn Any Skill with Curated Resources</title>
+        <title>LearnStack — Learn Any Skill with Curated Resources</title>
         <meta name="description" content="Discover the best YouTube videos and articles for any skill — curated and quality-ranked so you skip the noise and get straight to learning." />
-        <meta property="og:title" content="SkillAggregator — Learn Any Skill with Curated Resources" />
+        <meta property="og:title" content="LearnStack — Learn Any Skill with Curated Resources" />
         <meta property="og:description" content="Discover the best YouTube videos and articles for any skill — curated and quality-ranked so you skip the noise and get straight to learning." />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary" />
-        <meta name="twitter:title" content="SkillAggregator — Learn Any Skill with Curated Resources" />
+        <meta name="twitter:title" content="LearnStack — Learn Any Skill with Curated Resources" />
         <meta name="twitter:description" content="Discover the best YouTube videos and articles for any skill — curated and quality-ranked so you skip the noise and get straight to learning." />
         <link rel="canonical" href={SITE_URL + '/'} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>

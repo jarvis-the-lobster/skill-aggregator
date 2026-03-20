@@ -6,8 +6,8 @@ export function AboutPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Helmet>
-        <title>About — SkillAggregator</title>
-        <meta name="description" content="Learn about SkillAggregator — we curate the best educational content so you can focus on learning." />
+        <title>About — LearnStack</title>
+        <meta name="description" content="Learn about LearnStack — we curate the best educational content so you can focus on learning." />
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/about`} />
       </Helmet>
 
@@ -21,11 +21,11 @@ export function AboutPage() {
               </div>
             </div>
             <h1 className="text-4xl font-bold text-gray-900 mb-6">
-              About SkillAggregator
+              About LearnStack
             </h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               We believe learning new skills shouldn't be about endless searching. 
-              SkillAggregator curates the best educational content so you can focus 
+              LearnStack curates the best educational content so you can focus 
               on what matters most: actually learning.
             </p>
           </div>
@@ -135,8 +135,8 @@ export function AboutPage() {
             Built by Learners
           </h2>
           <p className="text-lg text-gray-600 mb-8">
-            SkillAggregator was created by Brent and Jarvis 🦞 — a human-AI team 
-            passionate about making learning more efficient and enjoyable.
+            LearnStack was built by a small team passionate about making 
+            learning more efficient and enjoyable.
           </p>
           <div className="bg-gray-100 rounded-lg p-6">
             <p className="text-sm text-gray-500 italic">

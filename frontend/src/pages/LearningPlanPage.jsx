@@ -98,9 +98,9 @@ export function LearningPlanPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Helmet>
-        <title>{`30-Day ${skillName} Learning Plan | SkillAggregator`}</title>
+        <title>{`30-Day ${skillName} Learning Plan | LearnStack`}</title>
         <meta name="description" content={`A structured 30-day day-by-day learning plan for ${skillName}. Follow a curated sequence of videos and articles.`} />
-        <meta property="og:title" content={`30-Day ${skillName} Learning Plan | SkillAggregator`} />
+        <meta property="og:title" content={`30-Day ${skillName} Learning Plan | LearnStack`} />
         <meta property="og:description" content={`A structured 30-day day-by-day learning plan for ${skillName}. Follow a curated sequence of videos and articles.`} />
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/skills/${skillId}/plan`} />
       </Helmet>

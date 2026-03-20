@@ -280,7 +280,7 @@ class ScraperService {
         const res = await axios.get('https://dev.to/api/articles', {
           params: { tag, top: 30, per_page: 30 },
           timeout: 10000,
-          headers: { 'User-Agent': 'SkillAggregator/1.0' }
+          headers: { 'User-Agent': 'LearnStack/1.0' }
         });
 
         for (const item of res.data) {
@@ -316,7 +316,7 @@ class ScraperService {
 
     const res = await axios.get(url, {
       timeout: 10000,
-      headers: { 'User-Agent': 'SkillAggregator/1.0' }
+      headers: { 'User-Agent': 'LearnStack/1.0' }
     });
 
     const $ = cheerio.load(res.data, { xmlMode: true });
@@ -370,7 +370,7 @@ class ScraperService {
 
     const res = await axios.get(url, {
       timeout: 10000,
-      headers: { 'User-Agent': 'SkillAggregator/1.0' }
+      headers: { 'User-Agent': 'LearnStack/1.0' }
     });
 
     const $ = cheerio.load(res.data, { xmlMode: true });
