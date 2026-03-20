@@ -1,32 +1,45 @@
-import posthog from 'posthog-js';
+const isServer = typeof window === 'undefined';
 
-const key = import.meta.env.VITE_POSTHOG_KEY;
-const host = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
+let posthogInstance = null;
+let initialized = false;
 
-if (key) {
-  posthog.init(key, {
-    api_host: host,
-    capture_pageview: false, // we track page views manually
-    persistence: 'localStorage+cookie',
+function getPosthog() {
+  return posthogInstance;
+}
+
+// Dynamically load and init posthog (client-side only)
+if (!isServer) {
+  import('posthog-js').then(mod => {
+    posthogInstance = mod.default;
+    const key = import.meta.env.VITE_POSTHOG_KEY;
+    const host = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
+    if (key) {
+      posthogInstance.init(key, {
+        api_host: host,
+        capture_pageview: false, // we track page views manually
+        persistence: 'localStorage+cookie',
+      });
+      initialized = true;
+    }
   });
 }
 
 const analytics = {
   track(event, properties = {}) {
-    if (!key) return;
+    if (!initialized) return;
     try {
-      posthog.capture(event, properties);
+      getPosthog()?.capture(event, properties);
     } catch (e) {
       console.warn('[analytics] capture failed:', e.message);
     }
   },
   identify(userId, traits = {}) {
-    if (!key) return;
-    posthog.identify(String(userId), traits);
+    if (!initialized) return;
+    getPosthog()?.identify(String(userId), traits);
   },
   reset() {
-    if (!key) return;
-    posthog.reset(); // call on logout to unlink the session
+    if (!initialized) return;
+    getPosthog()?.reset(); // call on logout to unlink the session
   },
   trackContentRated(contentId, skillId, rating) {
     this.track('content_rated', { contentId, skillId, rating });
