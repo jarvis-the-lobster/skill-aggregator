@@ -14,8 +14,8 @@ export function StreakBadge() {
   if (isNewUser) {
     return (
       <Link to="/my-courses" className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors">
-        <span className="text-lg inline-block opacity-30">🔥</span>
-        <span className="text-sm text-gray-400">Start a streak</span>
+        <span className="text-lg inline-block">🔥</span>
+        <span className="text-sm text-gray-600">Start a streak</span>
       </Link>
     );
   }
