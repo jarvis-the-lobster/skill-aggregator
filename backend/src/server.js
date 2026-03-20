@@ -38,6 +38,45 @@ app.use('/api/learning-plans', learningPlanRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/streaks', streakRoutes);
 
+// Sitemap
+const sitemapDb = require('./models/database');
+app.get('/api/sitemap.xml', async (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://skill-aggregator.vercel.app';
+  try {
+    const skills = await sitemapDb.getSkills();
+
+    const staticPages = [
+      { loc: '/', changefreq: 'daily', priority: '1.0' },
+      { loc: '/about', changefreq: 'monthly', priority: '0.5' },
+      { loc: '/early-access', changefreq: 'weekly', priority: '0.6' },
+      { loc: '/login', changefreq: 'monthly', priority: '0.3' },
+      { loc: '/signup', changefreq: 'monthly', priority: '0.3' },
+    ];
+
+    const urls = staticPages.map(
+      (p) =>
+        `  <url>\n    <loc>${frontendUrl}${p.loc}</loc>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority}</priority>\n  </url>`
+    );
+
+    for (const skill of skills) {
+      urls.push(
+        `  <url>\n    <loc>${frontendUrl}/skills/${skill.id}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`
+      );
+      urls.push(
+        `  <url>\n    <loc>${frontendUrl}/skills/${skill.id}/plan</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`
+      );
+    }
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`;
+
+    res.set('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    console.error('Sitemap error:', err.message);
+    res.status(500).set('Content-Type', 'application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 

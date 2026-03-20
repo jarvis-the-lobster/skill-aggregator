@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { BookOpen, Clock, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
@@ -61,6 +62,10 @@ export function MyCoursesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Helmet>
+        <title>My Courses — SkillAggregator</title>
+        <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/my-courses`} />
+      </Helmet>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-8">
           <StreakWidget />

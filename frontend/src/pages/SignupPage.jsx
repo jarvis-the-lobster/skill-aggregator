@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -51,6 +52,10 @@ export function SignupPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <Helmet>
+        <title>Sign Up — SkillAggregator</title>
+        <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/signup`} />
+      </Helmet>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
         {/* Logo */}
         <div className="flex items-center justify-center space-x-2 mb-8">

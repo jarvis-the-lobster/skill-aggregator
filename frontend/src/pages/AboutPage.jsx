@@ -1,9 +1,16 @@
 import { Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Zap, Target, Users, Rocket } from 'lucide-react';
 
 export function AboutPage() {
   return (
     <div className="min-h-screen bg-gray-50">
+      <Helmet>
+        <title>About — SkillAggregator</title>
+        <meta name="description" content="Learn about SkillAggregator — we curate the best educational content so you can focus on learning." />
+        <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/about`} />
+      </Helmet>
+
       {/* Hero Section */}
       <div className="bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">

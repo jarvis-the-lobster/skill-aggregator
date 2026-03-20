@@ -251,7 +251,19 @@ export function SkillPage() {
         <meta property="og:title" content={`Learn ${skillData.name} — Best Videos & Articles | SkillAggregator`} />
         <meta property="og:description" content={skillData.description || `Curated resources to learn ${skillData.name}.`} />
         <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={`Learn ${skillData.name} — Best Videos & Articles | SkillAggregator`} />
+        <meta name="twitter:description" content={skillData.description || `Curated resources to learn ${skillData.name}.`} />
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/skills/${skillData.id}`} />
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Course',
+          name: skillData.name,
+          description: skillData.description,
+          provider: { '@type': 'Organization', name: 'SkillAggregator' },
+          educationalLevel: skillData.difficulty,
+          url: `https://skill-aggregator.vercel.app/skills/${skillData.id}`,
+        })}</script>
       </Helmet>
 
       {/* Header */}

@@ -100,6 +100,9 @@ export function LearningPlanPage() {
       <Helmet>
         <title>{`30-Day ${skillName} Learning Plan | SkillAggregator`}</title>
         <meta name="description" content={`A structured 30-day day-by-day learning plan for ${skillName}. Follow a curated sequence of videos and articles.`} />
+        <meta property="og:title" content={`30-Day ${skillName} Learning Plan | SkillAggregator`} />
+        <meta property="og:description" content={`A structured 30-day day-by-day learning plan for ${skillName}. Follow a curated sequence of videos and articles.`} />
+        <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/skills/${skillId}/plan`} />
       </Helmet>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
