@@ -251,7 +251,7 @@ export function StreakWidget() {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 }
 
 function formatShortDate(dateStr) {

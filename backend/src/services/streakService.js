@@ -1,7 +1,9 @@
 const db = require('../models/database');
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  // Use Pacific time for streak date boundaries so users on the US West Coast
+  // (our primary audience) don't have streaks break/freeze due to UTC midnight
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 }
 
 function daysBetween(dateStrA, dateStrB) {
