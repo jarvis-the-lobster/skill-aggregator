@@ -4,9 +4,10 @@ if (require.main === module) require('dotenv').config();
 const db = require('../models/database');
 const scraper = require('../services/scraperService');
 
-const MAX_SKILLS_PER_RUN = parseInt(process.env.MAX_SKILLS_PER_RUN || '100');
+const MAX_SKILLS_PER_RUN = parseInt(process.env.MAX_SKILLS_PER_RUN || '75');
 const SCRAPE_DELAY_MS = parseInt(process.env.SCRAPE_DELAY_MS || '30000');
-const STALE_THRESHOLD_MS = process.env.FORCE_SCRAPE_ALL === 'true' ? 0 : 23 * 60 * 60 * 1000; // 23 hours (or 0 to force all)
+const STALE_THRESHOLD_DAYS = parseInt(process.env.STALE_THRESHOLD_DAYS || '7');
+const STALE_THRESHOLD_MS = process.env.FORCE_SCRAPE_ALL === 'true' ? 0 : STALE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000; // default 7 days (or 0 to force all)
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
