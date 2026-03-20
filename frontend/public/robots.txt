@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://skill-aggregator-production.up.railway.app/api/sitemap.xml
+Sitemap: https://api.learnstack.dev/api/sitemap.xml

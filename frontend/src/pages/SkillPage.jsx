@@ -262,7 +262,7 @@ export function SkillPage() {
           description: skillData.description,
           provider: { '@type': 'Organization', name: 'SkillAggregator' },
           educationalLevel: skillData.difficulty,
-          url: `https://skill-aggregator.vercel.app/skills/${skillData.id}`,
+          url: `https://learnstack.dev/skills/${skillData.id}`,
         })}</script>
       </Helmet>
 

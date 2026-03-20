@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, 'dist');
 const serverEntry = path.resolve(__dirname, 'dist/server/entry-server.js');
 
-const API_BASE = 'https://skill-aggregator-production.up.railway.app';
+const API_BASE = 'https://api.learnstack.dev';
 
 async function prerender() {
   // Load the SSR bundle

@@ -100,13 +100,13 @@ export function HomePage() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: 'SkillAggregator',
-    url: SITE_URL || 'https://skill-aggregator.vercel.app',
+    url: SITE_URL || 'https://learnstack.dev',
     description: 'Curated YouTube videos and articles for any skill you want to learn.',
     potentialAction: {
       '@type': 'SearchAction',
       target: {
         '@type': 'EntryPoint',
-        urlTemplate: `${SITE_URL || 'https://skill-aggregator.vercel.app'}/skills/{search_term_string}`,
+        urlTemplate: `${SITE_URL || 'https://learnstack.dev'}/skills/{search_term_string}`,
       },
       'query-input': 'required name=search_term_string',
     },

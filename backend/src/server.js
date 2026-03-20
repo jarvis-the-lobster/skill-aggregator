@@ -41,7 +41,7 @@ app.use('/api/streaks', streakRoutes);
 // Sitemap
 const sitemapDb = require('./models/database');
 app.get('/api/sitemap.xml', async (req, res) => {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://skill-aggregator.vercel.app';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://learnstack.dev';
   try {
     const skills = await sitemapDb.getSkills();
 
