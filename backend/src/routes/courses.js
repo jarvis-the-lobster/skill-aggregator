@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../models/database');
 const { requireAuth } = require('../middleware/auth');
 
-const VALID_STATUSES = ['active', 'paused', 'completed'];
+const VALID_STATUSES = ['active', 'completed'];
 
 // POST /api/courses/enroll/:skillId — enroll current user in course + plan
 router.post('/enroll/:skillId', requireAuth, async (req, res) => {
@@ -65,7 +65,7 @@ router.patch('/:skillId/status', requireAuth, async (req, res) => {
   try {
     const { status } = req.body;
     if (!VALID_STATUSES.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be active, paused, or completed.' });
+      return res.status(400).json({ error: 'Invalid status. Must be active or completed.' });
     }
     await db.updateCourseStatus(req.user.id, req.params.skillId, status);
     const course = await db.getCourseEnrollment(req.user.id, req.params.skillId);

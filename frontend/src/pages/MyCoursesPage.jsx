@@ -5,11 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import { StreakWidget } from '../components/StreakWidget';
 
-const STATUS_OPTIONS = ['active', 'paused', 'completed'];
+const STATUS_OPTIONS = ['active', 'completed'];
 
 const STATUS_STYLES = {
   active: 'bg-green-100 text-green-800',
-  paused: 'bg-yellow-100 text-yellow-800',
+
   completed: 'bg-blue-100 text-blue-800',
 };
 

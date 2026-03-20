@@ -210,9 +210,19 @@ export function LearningPlanPage() {
                       )}
                     </>
                   ) : unlocked && !hasContent ? (
-                    <p className="text-xs text-gray-400 flex-grow flex items-center">
-                      No content assigned
-                    </p>
+                    <div className="flex flex-col flex-grow">
+                      <p className="text-xs text-gray-400 flex-grow flex items-center">
+                        📝 Review & practice day
+                      </p>
+                      {enrolled && !isCompleted && (
+                        <button
+                          onClick={() => handleCompleteDay(entry.day_number)}
+                          className="mt-2 text-xs text-green-600 hover:text-green-700 text-left"
+                        >
+                          Mark complete
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center flex-grow py-2">
                       <Lock className="w-5 h-5 text-gray-300 mb-1" />

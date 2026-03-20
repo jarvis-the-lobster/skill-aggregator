@@ -64,6 +64,11 @@ router.post('/:skillId/complete-day', requireAuth, async (req, res) => {
     if (!progress) return res.status(404).json({ error: 'Not enrolled in this plan' });
     // Record streak activity on plan day completion
     await streakService.recordActivity(req.user.id);
+    // Auto-complete course when all 30 days are done
+    const completedDays = JSON.parse(progress.completed_days || '[]');
+    if (completedDays.length >= 30) {
+      await db.updateCourseStatus(req.user.id, req.params.skillId, 'completed');
+    }
     res.json({ progress });
   } catch (err) {
     console.error('Complete day error:', err);
