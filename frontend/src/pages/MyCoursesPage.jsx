@@ -8,11 +8,8 @@ import { StreakWidget } from '../components/StreakWidget';
 import { PushOptIn } from '../components/PushOptIn';
 import { useStreak } from '../hooks/useStreak';
 
-const STATUS_OPTIONS = ['active', 'completed'];
-
 const STATUS_STYLES = {
   active: 'bg-green-100 text-green-800',
-
   completed: 'bg-blue-100 text-blue-800',
 };
 
@@ -37,16 +34,7 @@ export function MyCoursesPage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  async function handleStatusChange(skillId, newStatus) {
-    try {
-      await apiService.updateCourseStatus(skillId, newStatus);
-      setCourses(prev =>
-        prev.map(c => c.skill_id === skillId ? { ...c, status: newStatus } : c)
-      );
-    } catch (err) {
-      console.error('Failed to update status:', err);
-    }
-  }
+
 
   if (authLoading || loading) {
     return (
@@ -132,21 +120,21 @@ export function MyCoursesPage() {
                 </div>
 
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <select
-                    value={course.status}
-                    onChange={e => handleStatusChange(course.skill_id, e.target.value)}
-                    className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    {STATUS_OPTIONS.map(s => (
-                      <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                    ))}
-                  </select>
-                  <Link
-                    to={`/skills/${course.skill_id}/plan`}
-                    className="btn-primary text-sm"
-                  >
-                    Continue
-                  </Link>
+                  {course.status === 'completed' ? (
+                    <Link
+                      to={`/skills/${course.skill_id}/plan`}
+                      className="btn-secondary text-sm"
+                    >
+                      ✅ Completed — Review
+                    </Link>
+                  ) : (
+                    <Link
+                      to={`/skills/${course.skill_id}/plan`}
+                      className="btn-primary text-sm"
+                    >
+                      Continue
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}
