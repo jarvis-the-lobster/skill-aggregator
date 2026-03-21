@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+// SQLite timestamps are UTC but lack a 'Z' suffix — append it so JS parses correctly
+function utcToLocal(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function StatusBadge({ status }) {
   const colors = {
     success: 'bg-green-100 text-green-800',
@@ -191,7 +198,7 @@ export function AdminPage() {
                     <td className="py-2 font-medium text-gray-900">{skill.name}</td>
                     <td className="py-2 text-gray-500 text-xs">
                       {skill.last_scraped_at
-                        ? new Date(skill.last_scraped_at).toLocaleString()
+                        ? utcToLocal(skill.last_scraped_at)?.toLocaleString() || "—"
                         : <span className="text-gray-300">never</span>}
                     </td>
                     <td className="py-2">
@@ -230,7 +237,7 @@ export function AdminPage() {
                       <td className="py-2 text-gray-700">{user.email}</td>
                       <td className="py-2 text-gray-500">{user.display_name || '—'}</td>
                       <td className="py-2 text-gray-400 text-xs">
-                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+                        {user.created_at ? utcToLocal(user.created_at)?.toLocaleDateString() || "—" : '—'}
                       </td>
                     </tr>
                   ))}
@@ -252,7 +259,7 @@ export function AdminPage() {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">{err.source}</span>
                     <span className="text-gray-600 font-medium">{err.skill_id}</span>
-                    <span className="text-gray-400 text-xs ml-auto">{new Date(err.scraped_at).toLocaleString()}</span>
+                    <span className="text-gray-400 text-xs ml-auto">{utcToLocal(err.scraped_at)?.toLocaleString() || "—"}</span>
                   </div>
                   <p className="text-red-700 text-xs">{err.error_message}</p>
                 </div>
