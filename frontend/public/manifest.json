@@ -1,0 +1,15 @@
+{
+  "name": "LearnStack",
+  "short_name": "LearnStack",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#6366f1",
+  "background_color": "#f9fafb",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
