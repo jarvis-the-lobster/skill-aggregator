@@ -144,6 +144,18 @@ class Database {
         freeze_last_recharged_date TEXT,
         updated_at TEXT,
         FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+
+      // Push notification subscriptions
+      `CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        endpoint TEXT UNIQUE,
+        keys_p256dh TEXT NOT NULL,
+        keys_auth TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        UNIQUE(user_id, endpoint)
       )`
     ];
 

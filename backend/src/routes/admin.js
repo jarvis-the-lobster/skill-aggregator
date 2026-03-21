@@ -77,4 +77,50 @@ router.post('/scrape/nightly', (req, res) => {
   });
 });
 
+// POST /api/admin/send-streak-reminders — send push reminders (Bearer CRON_SECRET)
+router.post('/send-streak-reminders', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers['authorization'];
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const pushService = require('../services/pushService');
+
+    // Get today's date in Pacific time (matches streak system)
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+
+    // Users with active streaks who haven't completed today
+    const users = await db.query(
+      `SELECT us.user_id, us.current_streak
+       FROM user_streaks us
+       INNER JOIN push_subscriptions ps ON ps.user_id = us.user_id
+       WHERE us.current_streak > 0
+         AND (us.last_activity_date IS NULL OR us.last_activity_date != ?)
+       GROUP BY us.user_id`,
+      [today]
+    );
+
+    let sent = 0;
+    let failed = 0;
+    for (const user of users) {
+      try {
+        const result = await pushService.sendStreakReminder(user.user_id, user.current_streak);
+        sent += result.sent;
+        failed += result.failed;
+      } catch (err) {
+        failed++;
+        console.error(`[streak-reminders] Failed for user ${user.user_id}:`, err.message);
+      }
+    }
+
+    console.log(`[streak-reminders] Sent ${sent}, failed ${failed}, users targeted ${users.length}`);
+    res.json({ ok: true, usersTargeted: users.length, sent, failed });
+  } catch (err) {
+    console.error('[streak-reminders] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

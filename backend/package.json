@@ -26,7 +26,8 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
     "posthog-node": "^5.28.1",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "jest": "^29.7.0",

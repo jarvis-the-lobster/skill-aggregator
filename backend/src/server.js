@@ -28,6 +28,7 @@ const newsletterRoutes = require('./routes/newsletter');
 const learningPlanRoutes = require('./routes/learningPlans');
 const ratingsRoutes = require('./routes/ratings');
 const streakRoutes = require('./routes/streaks');
+const pushRoutes = require('./routes/push');
 const skillsService = require('./services/skillsService');
 app.use('/api/skills', skillRoutes);
 app.use('/api/auth', authRoutes);
@@ -37,6 +38,7 @@ app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/learning-plans', learningPlanRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/streaks', streakRoutes);
+app.use('/api/push', pushRoutes);
 
 // Sitemap
 const sitemapDb = require('./models/database');

@@ -140,6 +140,22 @@ export const apiService = {
   async recordStreakActivity() {
     const response = await api.post('/streaks/activity');
     return response.data;
+  },
+
+  // Push notification endpoints
+  async getVapidKey() {
+    const response = await api.get('/push/vapid-key');
+    return response.data;
+  },
+
+  async subscribePush(subscription) {
+    const response = await api.post('/push/subscribe', subscription);
+    return response.data;
+  },
+
+  async unsubscribePush(endpoint) {
+    const response = await api.delete('/push/unsubscribe', { data: { endpoint } });
+    return response.data;
   }
 };
 
