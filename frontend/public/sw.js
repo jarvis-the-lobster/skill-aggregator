@@ -8,6 +8,9 @@ self.addEventListener('push', (event) => {
     icon: data.icon || '/vite.svg',
     badge: '/vite.svg',
     data: { url: data.url || '/my-courses' },
+    vibrate: [200, 100, 200],
+    sound: '/notification.mp3',
+    requireInteraction: false,
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
