@@ -123,4 +123,27 @@ router.post('/send-streak-reminders', async (req, res) => {
   }
 });
 
+// POST /api/admin/test-push — send a test push to a user (Bearer CRON_SECRET)
+router.post('/test-push', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers['authorization'];
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const pushService = require('../services/pushService');
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pushService.sendPushToUser(userId, {
+      title: '🔥 LearnStack Test',
+      body: 'Push notifications are working! Keep learning.',
+      icon: '/vite.svg',
+      url: '/my-courses',
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
