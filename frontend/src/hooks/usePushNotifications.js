@@ -19,14 +19,22 @@ export function usePushNotifications() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Check existing subscription on mount
+  // Check subscription status — use localStorage per-user key since browser
+  // subscription is shared across all accounts in the same browser
   useEffect(() => {
     if (!isSupported) return;
-    navigator.serviceWorker.ready.then((registration) => {
-      registration.pushManager.getSubscription().then((sub) => {
-        setIsSubscribed(!!sub);
-      });
-    }).catch(() => {});
+    const userId = localStorage.getItem('push-subscribed-user');
+    const currentUser = localStorage.getItem('token');
+    // Only mark as subscribed if the same user who subscribed is logged in
+    if (userId && currentUser) {
+      navigator.serviceWorker.ready.then((registration) => {
+        registration.pushManager.getSubscription().then((sub) => {
+          setIsSubscribed(!!sub);
+        });
+      }).catch(() => {});
+    } else {
+      setIsSubscribed(false);
+    }
   }, [isSupported]);
 
   const requestPermission = useCallback(async () => {
@@ -47,6 +55,7 @@ export function usePushNotifications() {
 
       const { endpoint, keys } = subscription.toJSON();
       await apiService.subscribePush({ endpoint, keys });
+      localStorage.setItem('push-subscribed-user', 'true');
       setIsSubscribed(true);
       return true;
     } catch (err) {
