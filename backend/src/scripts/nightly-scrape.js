@@ -60,7 +60,8 @@ async function run() {
 
   if (stale.length === 0) {
     console.log('✅ All skills are fresh — nothing to scrape.');
-    await db.close();
+    // Only close DB if running as a standalone script (not inline via server)
+    if (require.main === module) await db.close();
     return;
   }
 
