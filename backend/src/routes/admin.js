@@ -77,30 +77,4 @@ router.post('/scrape/nightly', (req, res) => {
   });
 });
 
-// POST /api/admin/reset-stale — reset last_scraped_at for low-content skills (one-time use)
-router.post('/reset-stale', async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers['authorization'];
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  try {
-    const threshold = parseInt(req.query.threshold || '30');
-    const skills = await db.query(`
-      SELECT s.id, COUNT(c.id) as content_count
-      FROM skills s LEFT JOIN content c ON c.skill_id = s.id
-      GROUP BY s.id HAVING content_count < ?
-    `, [threshold]);
-    const ids = skills.map(s => s.id);
-    if (ids.length > 0) {
-      const placeholders = ids.map(() => '?').join(',');
-      await db.insert(`UPDATE skills SET last_scraped_at = NULL WHERE id IN (${placeholders})`, ids);
-    }
-    res.json({ ok: true, reset: ids.length, skills: ids });
-  } catch (err) {
-    console.error('Reset stale error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 module.exports = router;
