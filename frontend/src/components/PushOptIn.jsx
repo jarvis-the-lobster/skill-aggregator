@@ -9,13 +9,11 @@ export function PushOptIn({ streak }) {
     () => localStorage.getItem(DISMISSED_KEY) === '1'
   );
 
-  // Only show after first plan day completed (currentStreak === 1 && todayCompleted)
+  // Show until user subscribes or dismisses
   const shouldShow =
     isSupported &&
     !isSubscribed &&
-    !dismissed &&
-    streak?.currentStreak === 1 &&
-    streak?.todayCompleted;
+    !dismissed;
 
   if (!shouldShow) return null;
 
