@@ -22,7 +22,8 @@ router.get('/search', optionalAuth, async (req, res) => {
     if (!q || !q.trim()) {
       return res.status(400).json({ error: 'Query parameter "q" is required' });
     }
-    const result = await skillsService.searchSkill(q.trim());
+    const sanitizedQuery = q.trim().slice(0, 200).replace(/[<>"']/g, '');
+    const result = await skillsService.searchSkill(sanitizedQuery);
     analytics.trackSkillSearched({
       skillId: result.skill?.id,
       skillName: result.skill?.name,
