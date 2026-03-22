@@ -10,15 +10,19 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    let { email, password, name } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
+    email = email.trim().toLowerCase().slice(0, 254);
     if (!EMAIL_REGEX.test(email)) {
       return res.status(400).json({ error: 'Please enter a valid email address' });
     }
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (password.length < 8 || password.length > 128) {
+      return res.status(400).json({ error: 'Password must be between 8 and 128 characters' });
+    }
+    if (name) {
+      name = name.trim().slice(0, 100).replace(/[<>"'&]/g, '');
     }
     const result = await register(email, password, name);
     analytics.trackUserRegistered({ userId: result.user?.id, method: 'email', url: `${req.protocol}://${req.get('host')}${req.originalUrl}` });
@@ -35,10 +39,11 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
+    email = email.trim().toLowerCase().slice(0, 254);
     const result = await login(email, password);
     analytics.trackUserLoggedIn({ userId: result.user?.id, method: 'email', url: `${req.protocol}://${req.get('host')}${req.originalUrl}` });
     res.json({ user: result.user, token: result.token });
