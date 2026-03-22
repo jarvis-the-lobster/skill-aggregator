@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { apiService } from '../services/api';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function AuthCallback() {
@@ -11,8 +12,14 @@ export function AuthCallback() {
   useEffect(() => {
     const token = searchParams.get('token');
     if (!token) { navigate('/login?error=oauth'); return; }
-    loadUserFromToken(token).then(user => {
-      navigate(user ? '/' : '/login?error=oauth');
+    loadUserFromToken(token).then(async (user) => {
+      if (!user) { navigate('/login?error=oauth'); return; }
+      try {
+        const { completed } = await apiService.getOnboardingStatus();
+        navigate(completed ? '/' : '/welcome');
+      } catch {
+        navigate('/');
+      }
     });
   }, []);
 

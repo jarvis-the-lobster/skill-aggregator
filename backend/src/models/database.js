@@ -156,6 +156,17 @@ class Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id),
         UNIQUE(user_id, endpoint)
+      )`,
+
+      // User onboarding answers
+      `CREATE TABLE IF NOT EXISTS user_onboarding (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE,
+        user_type TEXT,
+        goal TEXT,
+        daily_time TEXT,
+        completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
       )`
     ];
 

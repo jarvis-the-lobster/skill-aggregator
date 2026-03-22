@@ -47,7 +47,7 @@ export function SignupPage() {
     setSubmitting(true);
     try {
       await register(email, password, name);
-      navigate('/');
+      navigate('/welcome');
     } catch (err) {
       setError(err.message);
     } finally {

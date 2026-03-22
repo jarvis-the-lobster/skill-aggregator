@@ -156,6 +156,17 @@ export const apiService = {
   async unsubscribePush(endpoint) {
     const response = await api.delete('/push/unsubscribe', { data: { endpoint } });
     return response.data;
+  },
+
+  // Onboarding endpoints
+  async getOnboardingStatus() {
+    const response = await api.get('/onboarding');
+    return response.data;
+  },
+
+  async saveOnboarding(data) {
+    const response = await api.post('/onboarding', data);
+    return response.data;
   }
 };
 
