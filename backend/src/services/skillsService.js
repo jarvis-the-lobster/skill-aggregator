@@ -629,12 +629,21 @@ class SkillsService {
       return { skill: mapSkillRow(existing), status: existing.status || 'scraping' };
     }
 
-    // Not found — create and kick off a background scrape
+    // Not found — create skill but DON'T auto-scrape
+    // Scraping is expensive (100+ YouTube quota units per skill).
+    // New skills will be picked up by the nightly scrape instead.
+    // Rate limit: max 10 new skills per hour to prevent abuse
+    if (!this._newSkillCount) this._newSkillCount = { count: 0, resetAt: Date.now() + 3600000 };
+    if (Date.now() > this._newSkillCount.resetAt) {
+      this._newSkillCount = { count: 0, resetAt: Date.now() + 3600000 };
+    }
+    if (this._newSkillCount.count >= 10) {
+      return { skill: null, status: 'rate_limited', message: 'Too many new skill requests. Please try again later.' };
+    }
+    this._newSkillCount.count++;
+
     const skill = await this.createSkill(skillId, skillName);
-    this.scrapeSkillContent(skillId).catch(err =>
-      console.error(`Background scrape failed for ${skillId}:`, err.message)
-    );
-    return { skill, status: 'scraping', message: 'Gathering content...' };
+    return { skill, status: 'pending', message: 'This skill is new! Content will be available within 24 hours.' };
   }
 
   // Get full skill details + content (used by SkillPage for polling)
@@ -644,26 +653,19 @@ class SkillsService {
 
       if (!skillRow) {
         // Auto-create with skillId as name (handles direct URL navigation)
+        // DON'T auto-scrape — nightly will handle it
         const skillName = skillId
           .split('-')
           .map(w => w.charAt(0).toUpperCase() + w.slice(1))
           .join(' ');
         const skill = await this.createSkill(skillId, skillName);
-        this.scrapeSkillContent(skillId).catch(err =>
-          console.error(`Background scrape failed for ${skillId}:`, err.message)
-        );
-        return { skill, status: 'scraping', content: { videos: [], articles: [], courses: [] } };
+        return { skill, status: 'pending', content: { videos: [], articles: [], courses: [] } };
       }
 
       if (skillRow.status === 'ready') {
         const content = await this.getCuratedContent(skillId, filters, skillRow);
-        // If marked ready but has no content and was never scraped, re-trigger
-        const isEmpty = content.videos.length === 0 && content.articles.length === 0;
-        if (isEmpty && !skillRow.last_scraped_at) {
-          this.scrapeSkillContent(skillId).catch(err =>
-            console.error(`Re-trigger scrape failed for ${skillId}:`, err.message)
-          );
-        }
+        // If marked ready but has no content, nightly scrape will handle it
+        // DON'T auto-scrape from user requests — prevents quota abuse
         return { skill: mapSkillRow(skillRow), status: isEmpty && !skillRow.last_scraped_at ? 'scraping' : 'ready', content };
       }
 
