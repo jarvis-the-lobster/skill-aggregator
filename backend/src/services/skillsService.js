@@ -666,15 +666,11 @@ class SkillsService {
         const content = await this.getCuratedContent(skillId, filters, skillRow);
         // If marked ready but has no content, nightly scrape will handle it
         // DON'T auto-scrape from user requests — prevents quota abuse
-        return { skill: mapSkillRow(skillRow), status: isEmpty && !skillRow.last_scraped_at ? 'scraping' : 'ready', content };
+        return { skill: mapSkillRow(skillRow), status: 'ready', content };
       }
 
-      // Re-trigger if stuck pending with no scrape ever attempted
-      if ((skillRow.status === 'pending' || skillRow.status === 'error') && !skillRow.last_scraped_at) {
-        this.scrapeSkillContent(skillId).catch(err =>
-          console.error(`Re-trigger scrape failed for ${skillId}:`, err.message)
-        );
-      }
+      // Pending/error skills will be handled by the nightly scrape
+      // DON'T auto-scrape from user requests — prevents quota abuse
 
       return {
         skill: mapSkillRow(skillRow),
