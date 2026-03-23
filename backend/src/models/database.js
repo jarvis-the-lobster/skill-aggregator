@@ -183,6 +183,36 @@ class Database {
           }
         });
       });
+
+      // Indexes for frequently queried columns
+      const indexes = [
+        // Content lookups by skill (every skill page load)
+        'CREATE INDEX IF NOT EXISTS idx_content_skill_id ON content(skill_id)',
+        // User interactions by content (rating aggregation on every skill page)
+        'CREATE INDEX IF NOT EXISTS idx_interactions_content_id ON user_interactions(content_id)',
+        // User interactions by user (user-specific ratings)
+        'CREATE INDEX IF NOT EXISTS idx_interactions_user_id ON user_interactions(user_id)',
+        // Scrape log by skill + date (admin metrics, nightly scrape checks)
+        'CREATE INDEX IF NOT EXISTS idx_scrape_log_skill_id ON scrape_log(skill_id)',
+        'CREATE INDEX IF NOT EXISTS idx_scrape_log_scraped_at ON scrape_log(scraped_at)',
+        'CREATE INDEX IF NOT EXISTS idx_scrape_log_source ON scrape_log(source)',
+        // Course lookups by user (my courses page)
+        'CREATE INDEX IF NOT EXISTS idx_courses_user_id ON user_courses(user_id)',
+        // Learning plans by skill (plan page load)
+        'CREATE INDEX IF NOT EXISTS idx_plans_skill_id ON learning_plans(skill_id)',
+        // Plan progress by user (progress checks)
+        'CREATE INDEX IF NOT EXISTS idx_plan_progress_user_id ON user_plan_progress(user_id)',
+        // Push subscriptions by user (sending notifications)
+        'CREATE INDEX IF NOT EXISTS idx_push_subs_user_id ON push_subscriptions(user_id)',
+        // Skills by status (nightly scrape filtering)
+        'CREATE INDEX IF NOT EXISTS idx_skills_status ON skills(status)',
+        'CREATE INDEX IF NOT EXISTS idx_skills_last_scraped ON skills(last_scraped_at)',
+      ];
+      indexes.forEach(sql => {
+        this.db.run(sql, (err) => {
+          if (err) console.error('Index creation error:', err.message);
+        });
+      });
     });
   }
 
