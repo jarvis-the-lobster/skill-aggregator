@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest",
+    "test": "jest --forceExit --detectOpenHandles",
     "scrape": "node src/scripts/scrape.js",
     "scrape:skill": "node src/scripts/scrape.js",
     "import-skills": "node src/scripts/import-skills.js",
@@ -31,7 +31,8 @@
   },
   "devDependencies": {
     "jest": "^29.7.0",
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.4"
   },
   "keywords": [
     "skill-learning",

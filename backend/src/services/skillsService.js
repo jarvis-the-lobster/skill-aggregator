@@ -774,4 +774,6 @@ class SkillsService {
   }
 }
 
-module.exports = new SkillsService();
+const service = new SkillsService();
+service.normalizeSkillId = normalizeSkillId;
+module.exports = service;
