@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://api.learnstack.dev/api/sitemap.xml
+Sitemap: https://learnstack.dev/sitemap.xml
