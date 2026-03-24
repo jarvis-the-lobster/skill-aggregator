@@ -21,6 +21,7 @@ import { AdminPage } from './pages/AdminPage';
 import { MyCoursesPage } from './pages/MyCoursesPage';
 import { EarlyAccessPage } from './pages/EarlyAccessPage';
 import { LearningPlanPage } from './pages/LearningPlanPage';
+import { WelcomePage } from './pages/WelcomePage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
@@ -60,6 +61,7 @@ export function AppContent() {
             <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
             <Route path="/my-courses" element={<MyCoursesPage />} />
             <Route path="/early-access" element={<EarlyAccessPage />} />
+            <Route path="/welcome" element={<WelcomePage />} />
           </Routes>
         </main>
 

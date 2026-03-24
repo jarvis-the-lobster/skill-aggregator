@@ -28,6 +28,7 @@ const learningPlanRoutes = require('./routes/learningPlans');
 const ratingsRoutes = require('./routes/ratings');
 const streakRoutes = require('./routes/streaks');
 const pushRoutes = require('./routes/push');
+const onboardingRoutes = require('./routes/onboarding');
 app.use('/api/skills', skillRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -37,6 +38,7 @@ app.use('/api/learning-plans', learningPlanRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/streaks', streakRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 
 // Sitemap
 const sitemapDb = require('./models/database');
