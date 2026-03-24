@@ -23,7 +23,8 @@ const USER_TYPES = [
 
 const GOALS = [
   { value: 'new-skill-for-work', emoji: '\uD83D\uDCBB', label: 'Learn a new skill for work' },
-  { value: 'interviews-certs', emoji: '\uD83D\uDCDD', label: 'Prepare for interviews or certifications' },
+  { value: 'school-coursework', emoji: '\uD83C\uDF93', label: 'Keep up with school or coursework' },
+  { value: 'interviews-certs', emoji: '\uD83D\uDCDD', label: 'Prepare for exams or certifications' },
   { value: 'career-switch', emoji: '\uD83D\uDE80', label: 'Switch to a new career field' },
   { value: 'personal-interest', emoji: '\uD83C\uDFAF', label: 'Personal interest / hobby' },
   { value: 'side-project', emoji: '\uD83D\uDEE0\uFE0F', label: 'Build a side project' },
