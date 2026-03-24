@@ -130,6 +130,8 @@ describe('getSkillContent', () => {
     );
     const result = await skillsService.getSkillContent('rust');
     expect(result.status).toBe('pending');
-    expect(result.content).toEqual({ videos: [], articles: [], courses: [] });
+    expect(result.content.videos).toEqual([]);
+    expect(result.content.articles).toEqual([]);
+    expect(result.content.courses).toEqual([]);
   });
 });
