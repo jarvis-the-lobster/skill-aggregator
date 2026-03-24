@@ -638,7 +638,7 @@ class SkillsService {
     if (Date.now() > this._newSkillCount.resetAt) {
       this._newSkillCount = { count: 0, resetAt: Date.now() + 3600000 };
     }
-    if (this._newSkillCount.count >= 10) {
+    if (this._newSkillCount.count >= 30) {
       return { skill: null, status: 'rate_limited', message: 'Too many new skill requests. Please try again later.' };
     }
     this._newSkillCount.count++;
