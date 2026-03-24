@@ -61,11 +61,14 @@ app.get('/api/sitemap.xml', async (req, res) => {
     );
 
     for (const skill of skills) {
+      const lastmod = skill.last_scraped_at
+        ? `\n    <lastmod>${new Date(skill.last_scraped_at + 'Z').toISOString().split('T')[0]}</lastmod>`
+        : '';
       urls.push(
-        `  <url>\n    <loc>${frontendUrl}/skills/${skill.id}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`
+        `  <url>\n    <loc>${frontendUrl}/skills/${skill.id}</loc>${lastmod}\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`
       );
       urls.push(
-        `  <url>\n    <loc>${frontendUrl}/skills/${skill.id}/plan</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`
+        `  <url>\n    <loc>${frontendUrl}/skills/${skill.id}/plan</loc>${lastmod}\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`
       );
     }
 
