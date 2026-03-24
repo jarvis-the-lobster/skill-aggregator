@@ -14,15 +14,13 @@ const db = require('../models/database');
 let token;
 
 beforeAll(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 500)); // wait for DB init
+  await new Promise((resolve) => setTimeout(resolve, 2000)); // wait for DB init
   // Create a test user and get token
   const res = await request(app)
     .post('/api/auth/register')
-    .send({ email: 'onboard-test@test.com', password: 'testpass123', name: 'Test' });
+    .send({ email: `onboard-${Date.now()}@test.com`, password: 'testpass123', name: 'Test' });
   token = res.body.token;
-});
-
-// DB cleanup handled by Jest --forceExit (shared DB instance)
+}, 15000);
 
 describe('Onboarding API', () => {
   test('GET /api/onboarding returns not completed for new user', async () => {
