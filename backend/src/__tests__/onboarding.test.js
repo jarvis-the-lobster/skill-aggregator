@@ -22,9 +22,7 @@ beforeAll(async () => {
   token = res.body.token;
 });
 
-afterAll(async () => {
-  await db.close();
-});
+// DB cleanup handled by Jest --forceExit (shared DB instance)
 
 describe('Onboarding API', () => {
   test('GET /api/onboarding returns not completed for new user', async () => {
