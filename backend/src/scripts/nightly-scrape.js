@@ -51,6 +51,8 @@ async function run() {
   const now = Date.now();
 
   const stale = allSkills.filter((skill) => {
+    // Always retry skills that errored or hit quota on last scrape
+    if (skill.status === 'error' || skill.status === 'scraping') return true;
     if (!skill.last_scraped_at) return true;
     const age = now - new Date(skill.last_scraped_at).getTime();
     return age > STALE_THRESHOLD_MS;
