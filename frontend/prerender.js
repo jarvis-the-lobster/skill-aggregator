@@ -110,9 +110,10 @@ async function prerender() {
       // Add OG URL and Twitter card tags before </head>
       const socialTags = [
         `<meta property="og:url" content="${canonical}" />`,
-        '<meta name="twitter:card" content="summary" />',
+        '<meta name="twitter:card" content="summary_large_image" />',
         `<meta name="twitter:title" content="${pageTitle}" />`,
         `<meta name="twitter:description" content="${pageDesc}" />`,
+        '<meta name="twitter:image" content="https://learnstack.dev/learnstack.png" />',
       ].join('\n    ');
       page = page.replace('</head>', `    ${socialTags}\n  </head>`);
 
