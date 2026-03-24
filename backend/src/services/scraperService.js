@@ -55,9 +55,17 @@ class ScraperService {
       this.scrapeArticles(skillId)
     ]);
 
+    let youtubeQuotaExceeded = false;
     const videos = youtubeResult.status === 'fulfilled'
       ? youtubeResult.value
-      : (console.error(`  ❌ YouTube failed: ${youtubeResult.reason?.message}`), []);
+      : (() => {
+          const errMsg = youtubeResult.reason?.message || '';
+          console.error(`  ❌ YouTube failed: ${errMsg}`);
+          if (errMsg.includes('quota') || errMsg.includes('quotaExceeded')) {
+            youtubeQuotaExceeded = true;
+          }
+          return [];
+        })();
 
     const articles = articleResult.status === 'fulfilled'
       ? articleResult.value
@@ -80,7 +88,13 @@ class ScraperService {
       }
     }
 
-    return { skill: skillId, videos: validated.videos, articles: validated.articles, scrapedAt: new Date().toISOString() };
+    return {
+      skill: skillId,
+      videos: validated.videos,
+      articles: validated.articles,
+      youtubeQuotaExceeded,
+      scrapedAt: new Date().toISOString()
+    };
   }
 
   async scrapeAllSkills() {
@@ -204,6 +218,12 @@ class ScraperService {
           quota_used: totalQuotaUsed,
           duration_ms: Date.now() - startTime
         });
+        // Re-throw quota errors so callers can detect and fall back to articles-only
+        if (isQuotaError) {
+          const quotaErr = new Error(`YouTube quota exceeded: ${errMsg}`);
+          quotaErr.code = 'YOUTUBE_QUOTA_EXCEEDED';
+          throw quotaErr;
+        }
       }
     }
 

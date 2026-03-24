@@ -33,6 +33,7 @@ export function SkillPage() {
 
   const pollTimer = useRef(null);
   const timeoutTimer = useRef(null);
+  const initialTabSet = useRef(false);
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -90,6 +91,11 @@ export function SkillPage() {
     if (result.content) {
       setContent(result.content);
       if (result.content.lastScrapedAt) setLastScrapedAt(result.content.lastScrapedAt);
+      // Auto-switch to articles tab if we have articles but no videos (first time only)
+      if (!initialTabSet.current && result.content.articles?.length > 0 && !result.content.videos?.length) {
+        setActiveTab('articles');
+        initialTabSet.current = true;
+      }
     }
     if (ratingsData) {
       setRatings(ratingsData);
@@ -177,8 +183,13 @@ export function SkillPage() {
     );
   }
 
-  // --- Scraping in progress ---
-  if (status === 'scraping' || status === 'pending') {
+  // Check if we have any content despite non-ready status
+  const hasArticles = content.articles?.length > 0;
+  const hasVideos = content.videos?.length > 0;
+  const hasAnyContent = hasArticles || hasVideos;
+
+  // --- Scraping in progress (only show if truly zero content) ---
+  if ((status === 'scraping' || status === 'pending') && !hasAnyContent) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md px-4">
@@ -205,8 +216,8 @@ export function SkillPage() {
     );
   }
 
-  // --- Timeout ---
-  if (status === 'timeout') {
+  // --- Timeout (only show if truly zero content) ---
+  if (status === 'timeout' && !hasAnyContent) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md px-4">
@@ -398,6 +409,13 @@ export function SkillPage() {
           <div className="p-6">
             {activeTab === 'videos' && (
               <div className="space-y-6">
+                {/* Banner: videos coming soon when we have articles but no videos */}
+                {!content.videos?.length && content.articles?.length > 0 && (
+                  <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                    <span className="text-lg">🎬</span>
+                    <p>Video content for this skill is being gathered and will be available within 24 hours. Check out the <button onClick={() => handleTabChange('articles')} className="underline font-medium hover:text-blue-900">articles</button> in the meantime!</p>
+                  </div>
+                )}
                 {content.videos?.length > 0 ? (
                   content.videos.map((video) => (
                     <div key={video.id} className="content-card overflow-hidden">
