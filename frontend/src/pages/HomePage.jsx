@@ -29,9 +29,19 @@ export function HomePage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const utm = {
+      utm_source: params.get('utm_source') || undefined,
+      utm_medium: params.get('utm_medium') || undefined,
+      utm_campaign: params.get('utm_campaign') || undefined,
+    };
+    // Store UTM params for attribution on later events
+    if (utm.utm_source) localStorage.setItem('utm_params', JSON.stringify(utm));
+
     analytics.track('homepage_viewed', {
       referrer: document.referrer || 'direct',
       landing: !document.referrer,
+      ...utm,
     });
     loadSkills();
   }, []);

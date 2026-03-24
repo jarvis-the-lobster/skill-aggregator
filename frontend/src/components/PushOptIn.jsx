@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import analytics from '../services/analytics';
 
 const DISMISSED_KEY = 'push-optin-dismissed';
 
@@ -15,16 +16,24 @@ export function PushOptIn({ streak }) {
     !isSubscribed &&
     !dismissed;
 
+  useEffect(() => {
+    if (shouldShow) analytics.track('push_optin_shown');
+  }, [shouldShow]);
+
   if (!shouldShow) return null;
 
   function handleDismiss() {
     localStorage.setItem(DISMISSED_KEY, '1');
     setDismissed(true);
+    analytics.track('push_optin_dismissed');
   }
 
   async function handleEnable() {
     const success = await requestPermission();
-    if (success) handleDismiss();
+    if (success) {
+      analytics.track('push_optin_enabled');
+      handleDismiss();
+    }
   }
 
   return (

@@ -5,6 +5,7 @@ import { Play, BookOpen, Lock, ArrowLeft, CheckCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { RatingButtons } from '../components/RatingButtons';
+import analytics from '../services/analytics';
 
 const FREE_DAYS = 7;
 
@@ -20,6 +21,7 @@ export function LearningPlanPage() {
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
 
   useEffect(() => {
+    analytics.track('plan_viewed', { skillId });
     loadPlan();
   }, [skillId]);
 
@@ -73,6 +75,7 @@ export function LearningPlanPage() {
       const data = await apiService.completePlanDay(skillId, day);
       const days = JSON.parse(data.progress?.completed_days || '[]');
       setCompletedDays(new Set(days));
+      analytics.track('plan_day_completed', { skillId, day, totalCompleted: days.length });
     } catch (err) {
       console.error('Complete day error:', err);
     }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { CheckCircle, Mail, BookOpen, Video, FileText, Zap, Users } from 'lucide-react';
 import { apiService } from '../services/api';
+import analytics from '../services/analytics';
 
 const CATEGORIES = [
   { id: 'programming', label: 'Programming', emoji: '💻' },
@@ -19,6 +20,7 @@ export function EarlyAccessPage() {
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
+    analytics.track('early_access_viewed');
     apiService.getSubscriberCount()
       .then(data => setSubscriberCount(data.count))
       .catch(() => {}); // fail silently
@@ -41,6 +43,7 @@ export function EarlyAccessPage() {
       await apiService.subscribeToNewsletter(email.trim(), selectedCategories);
       setStatus('success');
       setSubscriberCount(prev => prev !== null ? prev + 1 : null);
+      analytics.track('newsletter_subscribed', { categories: selectedCategories });
     } catch (err) {
       setStatus('error');
       setErrorMessage(err.response?.data?.error || 'Something went wrong. Please try again.');

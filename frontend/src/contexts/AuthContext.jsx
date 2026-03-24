@@ -63,7 +63,9 @@ export function AuthProvider({ children }) {
     if (!res.ok) throw new Error(data.error || 'Registration failed');
     setToken(data.token);
     setUser(data.user);
-    analytics.identify(data.user.id, { email: data.user.email, name: data.user.name });
+    const utmRaw = localStorage.getItem('utm_params');
+    const utm = utmRaw ? JSON.parse(utmRaw) : {};
+    analytics.identify(data.user.id, { email: data.user.email, name: data.user.name, ...utm });
     return data;
   }
 

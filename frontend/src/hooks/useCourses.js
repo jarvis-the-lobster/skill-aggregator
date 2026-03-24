@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import analytics from '../services/analytics';
 
 export function useEnrollment(skillId) {
   const { user } = useAuth();
@@ -30,6 +31,7 @@ export function useEnrollment(skillId) {
       const data = await apiService.enrollCourse(skillId);
       setIsEnrolled(true);
       setCourse(data.course);
+      analytics.track('course_enrolled', { skillId });
     } finally {
       setLoading(false);
     }

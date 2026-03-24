@@ -442,6 +442,7 @@ export function SkillPage() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="btn-primary flex items-center space-x-2"
+                                onClick={() => analytics.track('content_link_clicked', { skillId, contentId: video.id, type: 'video', source: video.source })}
                               >
                                 <Play className="w-4 h-4" />
                                 <span>Watch</span>
@@ -501,6 +502,7 @@ export function SkillPage() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn-secondary flex items-center space-x-2"
+                            onClick={() => analytics.track('content_link_clicked', { skillId, contentId: article.id, type: 'article', source: article.source })}
                           >
                             <BookOpen className="w-4 h-4" />
                             <span>Read</span>
