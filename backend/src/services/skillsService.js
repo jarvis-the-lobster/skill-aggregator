@@ -634,11 +634,16 @@ class SkillsService {
     // Not found — create skill and immediately scrape articles (free, no quota).
     // YouTube will be filled in by the nightly cron.
     // Rate limit: max 10 new skills per hour to prevent abuse
-    if (!this._newSkillCount) this._newSkillCount = { count: 0, resetAt: Date.now() + 3600000 };
+    // Rate limit: 9 new skills per 6 hours
+    // Math: 10k daily quota × 80% = 8k usable. Nightly scrape uses ~3.6k.
+    // Remaining 4.4k / 120 units per skill = 36/day = 9 per 6-hour window.
+    const SIX_HOURS = 6 * 60 * 60 * 1000;
+    const MAX_NEW_SKILLS = 9;
+    if (!this._newSkillCount) this._newSkillCount = { count: 0, resetAt: Date.now() + SIX_HOURS };
     if (Date.now() > this._newSkillCount.resetAt) {
-      this._newSkillCount = { count: 0, resetAt: Date.now() + 3600000 };
+      this._newSkillCount = { count: 0, resetAt: Date.now() + SIX_HOURS };
     }
-    if (this._newSkillCount.count >= 30) {
+    if (this._newSkillCount.count >= MAX_NEW_SKILLS) {
       return { skill: null, status: 'rate_limited', message: 'Too many new skill requests. Please try again later.' };
     }
     this._newSkillCount.count++;

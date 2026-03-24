@@ -82,4 +82,26 @@ describe('HomePage', () => {
     await user.click(pythonCard.closest('a'));
     expect(analytics.track).toHaveBeenCalledWith('skill_card_clicked', expect.objectContaining({ skillId: 'python' }));
   });
+
+  it('search filters displayed skills while typing', async () => {
+    renderWithRouter(<HomePage />);
+    await screen.findByText('Python');
+    const searchInput = screen.getByPlaceholderText(/Search Python/);
+    const user = userEvent.setup();
+    await user.type(searchInput, 'data');
+    // Data Science should match, JavaScript should be filtered out
+    expect(screen.getAllByText('Data Science').length).toBeGreaterThan(0);
+    expect(screen.queryByText('JavaScript')).not.toBeInTheDocument();
+  });
+
+  it('search submit triggers analytics and navigation', async () => {
+    apiService.searchSkill.mockResolvedValue({ skill: { id: 'python', name: 'Python' } });
+    renderWithRouter(<HomePage />);
+    await screen.findByText('Python');
+    const searchInput = screen.getByPlaceholderText(/Search Python/);
+    const user = userEvent.setup();
+    await user.type(searchInput, 'python{Enter}');
+    expect(analytics.track).toHaveBeenCalledWith('search_query_typed', expect.objectContaining({ query: 'python' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/skills/python');
+  });
 });
