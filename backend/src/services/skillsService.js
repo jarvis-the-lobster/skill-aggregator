@@ -638,7 +638,7 @@ class SkillsService {
     // Math: 10k daily quota × 80% = 8k usable. Nightly scrape uses ~3.6k.
     // Remaining 4.4k / 120 units per skill = 36/day = 9 per 6-hour window.
     const SIX_HOURS = 6 * 60 * 60 * 1000;
-    const MAX_NEW_SKILLS = 9;
+    const MAX_NEW_SKILLS = 10;
     if (!this._newSkillCount) this._newSkillCount = { count: 0, resetAt: Date.now() + SIX_HOURS };
     if (Date.now() > this._newSkillCount.resetAt) {
       this._newSkillCount = { count: 0, resetAt: Date.now() + SIX_HOURS };
