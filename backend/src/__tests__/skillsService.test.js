@@ -82,8 +82,8 @@ describe('searchSkill', () => {
     expect(result.message).toBeTruthy();
   });
 
-  test('rate limits after 9 new skills per 6 hours', async () => {
-    for (let i = 0; i < 9; i++) {
+  test('rate limits after 10 new skills per 6 hours', async () => {
+    for (let i = 0; i < 10; i++) {
       await skillsService.searchSkill(`newskill${i}`);
     }
     const result = await skillsService.searchSkill('newskill99');
