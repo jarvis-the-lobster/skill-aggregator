@@ -116,6 +116,39 @@ async function prerender() {
       ].join('\n    ');
       page = page.replace('</head>', `    ${socialTags}\n  </head>`);
 
+      // Inject JSON-LD structured data for skill pages
+      if (skillMatch) {
+        const skillId = skillMatch[1];
+        const isPlan = !!skillMatch[2];
+        const skill = skills.find(s => s.id === skillId);
+        if (skill) {
+          const jsonLd = isPlan ? {
+            '@context': 'https://schema.org',
+            '@type': 'Course',
+            name: `30-Day ${skill.name} Learning Plan`,
+            description: pageDesc,
+            provider: { '@type': 'Organization', name: 'LearnStack', url: 'https://learnstack.dev' },
+            educationalLevel: skill.difficulty || 'Beginner',
+            timeRequired: 'P30D',
+            isAccessibleForFree: true,
+            url: canonical,
+          } : {
+            '@context': 'https://schema.org',
+            '@type': ['Course', 'LearningResource'],
+            name: `Learn ${skill.name}`,
+            description: pageDesc,
+            provider: { '@type': 'Organization', name: 'LearnStack', url: 'https://learnstack.dev' },
+            educationalLevel: skill.difficulty || 'Beginner',
+            isAccessibleForFree: true,
+            url: canonical,
+            about: { '@type': 'Thing', name: skill.name },
+            learningResourceType: 'curated collection',
+          };
+          const ldScript = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
+          page = page.replace('</head>', `    ${ldScript}\n  </head>`);
+        }
+      }
+
       // Remove empty Helmet title tag
       page = page.replace(/<title data-rh="true"><\/title>/g, '');
 
