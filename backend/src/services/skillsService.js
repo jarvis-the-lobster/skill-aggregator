@@ -645,12 +645,13 @@ class SkillsService {
 
     const skill = await this.createSkill(skillId, skillName);
 
-    // Fire-and-forget: scrape articles immediately so user sees content on first visit
-    this.scrapeArticlesOnly(skillId).catch(err => {
-      console.error(`Articles-only scrape failed for new skill ${skillId}:`, err.message);
+    // Fire-and-forget: scrape both articles and YouTube for new skills
+    // Rate limit (30/hr) already protects against abuse
+    this.scrapeSkillContent(skillId).catch(err => {
+      console.error(`Scrape failed for new skill ${skillId}:`, err.message);
     });
 
-    return { skill, status: 'pending', message: 'This skill is new! Articles are being gathered now, videos will follow within 24 hours.' };
+    return { skill, status: 'scraping', message: 'Gathering content for this skill...' };
   }
 
   // Get full skill details + content (used by SkillPage for polling)
