@@ -57,6 +57,68 @@ async function prerender() {
         .replace('<!--app-html-->', appHtml)
         .replace('<!--head-tags-->', headTags);
 
+      // Inject per-page SEO meta tags
+      const BASE_URL = 'https://learnstack.dev';
+      const DEFAULT_TITLE = 'LearnStack — Learn Any Skill with Curated Resources';
+      const DEFAULT_DESC = 'Discover the best YouTube videos and articles for any skill — curated and quality-ranked so you skip the noise and get straight to learning.';
+
+      const skillMatch = route.match(/^\/skills\/([^/]+)(\/plan)?$/);
+      let pageTitle = DEFAULT_TITLE;
+      let pageDesc = DEFAULT_DESC;
+      let canonical = `${BASE_URL}${route === '/' ? '/' : route}`;
+
+      if (skillMatch) {
+        const skillId = skillMatch[1];
+        const isPlan = !!skillMatch[2];
+        const skill = skills.find(s => s.id === skillId);
+
+        if (skill) {
+          if (isPlan) {
+            pageTitle = `30-Day ${skill.name} Learning Plan | LearnStack`;
+            pageDesc = `Follow a structured 30-day learning plan for ${skill.name} with curated videos and articles.`;
+          } else {
+            pageTitle = `Learn ${skill.name} — Curated Videos & Articles | LearnStack`;
+            pageDesc = `Discover the best curated YouTube videos and articles to learn ${skill.name}. Quality-ranked content for ${skill.difficulty || 'all'} learners.`;
+          }
+        }
+      } else if (route === '/about') {
+        pageTitle = 'About LearnStack';
+      } else if (route === '/early-access') {
+        pageTitle = 'Get Early Access — LearnStack';
+      }
+
+      // Replace default tags with per-page values
+      page = page
+        .replace(`<title>${DEFAULT_TITLE}</title>`, `<title>${pageTitle}</title>`)
+        .replace(
+          `<meta name="description" content="${DEFAULT_DESC}" />`,
+          `<meta name="description" content="${pageDesc}" />`,
+        )
+        .replace(
+          '<link rel="canonical" href="/" />',
+          `<link rel="canonical" href="${canonical}" />`,
+        )
+        .replace(
+          `<meta property="og:title" content="${DEFAULT_TITLE}" />`,
+          `<meta property="og:title" content="${pageTitle}" />`,
+        )
+        .replace(
+          `<meta property="og:description" content="${DEFAULT_DESC}" />`,
+          `<meta property="og:description" content="${pageDesc}" />`,
+        );
+
+      // Add OG URL and Twitter card tags before </head>
+      const socialTags = [
+        `<meta property="og:url" content="${canonical}" />`,
+        '<meta name="twitter:card" content="summary" />',
+        `<meta name="twitter:title" content="${pageTitle}" />`,
+        `<meta name="twitter:description" content="${pageDesc}" />`,
+      ].join('\n    ');
+      page = page.replace('</head>', `    ${socialTags}\n  </head>`);
+
+      // Remove empty Helmet title tag
+      page = page.replace(/<title data-rh="true"><\/title>/g, '');
+
       // Determine output path
       let filePath;
       if (route === '/') {
