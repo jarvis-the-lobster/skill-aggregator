@@ -146,4 +146,134 @@ router.post('/test-push', async (req, res) => {
   }
 });
 
+// ─── Skill Management ──────────────────────────────────────────────────────
+
+// Helper: verify CRON_SECRET
+function requireCronSecret(req, res) {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers['authorization'];
+  if (!secret || auth !== `Bearer ${secret}`) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+// DELETE /api/admin/skills/:id — delete a skill and all related data
+router.delete('/skills/:id', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+  try {
+    const { id } = req.params;
+    const skill = await db.query('SELECT id FROM skills WHERE id = ?', [id]);
+    if (skill.length === 0) return res.status(404).json({ error: 'Skill not found' });
+
+    await db.insert('DELETE FROM content WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM learning_plans WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM user_courses WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM user_plan_progress WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM scrape_log WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM skills WHERE id = ?', [id]);
+
+    res.json({ ok: true, deleted: id });
+  } catch (err) {
+    console.error('Delete skill error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/skills/:id/rename — rename a skill ID (moves all related data)
+router.post('/skills/:id/rename', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+  try {
+    const { id } = req.params;
+    const { newId, newName } = req.body;
+    if (!newId) return res.status(400).json({ error: 'newId required' });
+
+    const existing = await db.query('SELECT id FROM skills WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Skill not found' });
+
+    const conflict = await db.query('SELECT id FROM skills WHERE id = ?', [newId]);
+    if (conflict.length > 0) return res.status(409).json({ error: `Skill '${newId}' already exists. Use merge instead.` });
+
+    // Create new skill with old skill's data
+    await db.insert(
+      `INSERT INTO skills (id, name, category, difficulty, description, estimated_hours, status, last_scraped_at)
+       SELECT ?, COALESCE(?, name), category, difficulty, description, estimated_hours, status, last_scraped_at
+       FROM skills WHERE id = ?`,
+      [newId, newName || null, id]
+    );
+
+    // Move all related data
+    await db.insert('UPDATE content SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE learning_plans SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE user_courses SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE user_plan_progress SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE scrape_log SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('DELETE FROM skills WHERE id = ?', [id]);
+
+    res.json({ ok: true, renamed: `${id} → ${newId}` });
+  } catch (err) {
+    console.error('Rename skill error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/skills/:id/merge — merge a skill into another (moves content, deletes source)
+router.post('/skills/:id/merge', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+  try {
+    const { id } = req.params;
+    const { targetId } = req.body;
+    if (!targetId) return res.status(400).json({ error: 'targetId required' });
+
+    const source = await db.query('SELECT id FROM skills WHERE id = ?', [id]);
+    if (source.length === 0) return res.status(404).json({ error: `Source skill '${id}' not found` });
+
+    const target = await db.query('SELECT id FROM skills WHERE id = ?', [targetId]);
+    if (target.length === 0) return res.status(404).json({ error: `Target skill '${targetId}' not found` });
+
+    // Move content that doesn't already exist in target (avoid duplicates)
+    await db.insert(
+      `UPDATE content SET skill_id = ? WHERE skill_id = ? AND id NOT IN (SELECT id FROM content WHERE skill_id = ?)`,
+      [targetId, id, targetId]
+    );
+
+    // Clean up remaining references
+    await db.insert('DELETE FROM content WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM learning_plans WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM scrape_log WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM user_courses WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM user_plan_progress WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM skills WHERE id = ?', [id]);
+
+    res.json({ ok: true, merged: `${id} → ${targetId}` });
+  } catch (err) {
+    console.error('Merge skill error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/skills/reset-stale — reset last_scraped_at for low-content skills
+router.post('/skills/reset-stale', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+  try {
+    const threshold = parseInt(req.query.threshold || '30');
+    const skills = await db.query(
+      `SELECT s.id, COUNT(c.id) as content_count
+       FROM skills s LEFT JOIN content c ON c.skill_id = s.id
+       GROUP BY s.id HAVING content_count < ?`,
+      [threshold]
+    );
+    const ids = skills.map(s => s.id);
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      await db.insert(`UPDATE skills SET last_scraped_at = NULL WHERE id IN (${placeholders})`, ids);
+    }
+    res.json({ ok: true, reset: ids.length, skills: ids });
+  } catch (err) {
+    console.error('Reset stale error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
