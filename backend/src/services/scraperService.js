@@ -34,6 +34,7 @@ const SKILL_SEARCH_TERMS = {
   'injury-prevention': 'exercise injury prevention',
   'business-analysis': 'business analysis tutorial',
   'local-seo': 'local SEO tutorial',
+  'laravel': 'Laravel PHP framework tutorial',
 };
 
 const ALL_SKILLS = Object.keys(SKILL_SEARCH_TERMS);
