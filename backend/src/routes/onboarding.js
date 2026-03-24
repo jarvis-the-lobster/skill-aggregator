@@ -11,7 +11,7 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' });
     }
     const VALID_USER_TYPES = ['student', 'self-learner', 'career-switcher', 'professional', 'freelancer-creator'];
-    const VALID_GOALS = ['new-skill-for-work', 'interviews-certs', 'career-switch', 'personal-interest', 'side-project'];
+    const VALID_GOALS = ['new-skill-for-work', 'school-coursework', 'interviews-certs', 'career-switch', 'personal-interest', 'side-project'];
     const VALID_DAILY_TIMES = ['10-min', '20-min', '30-plus-min'];
     if (!VALID_USER_TYPES.includes(userType) || !VALID_GOALS.includes(goal) || !VALID_DAILY_TIMES.includes(dailyTime)) {
       return res.status(400).json({ error: 'Invalid onboarding values' });
