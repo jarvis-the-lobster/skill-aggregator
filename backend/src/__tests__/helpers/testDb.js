@@ -122,6 +122,15 @@ const TABLE_SQL = [
     FOREIGN KEY (user_id) REFERENCES users(id),
     UNIQUE(user_id, endpoint)
   )`,
+  `CREATE TABLE IF NOT EXISTS user_onboarding (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    user_type TEXT NOT NULL,
+    goal TEXT NOT NULL,
+    daily_time TEXT NOT NULL,
+    completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`,
 ];
 
 const INDEX_SQL = [
@@ -410,7 +419,7 @@ async function clearTables(db) {
   const tables = [
     'skills', 'content', 'users', 'user_streaks', 'user_interactions',
     'user_courses', 'push_subscriptions', 'subscribers', 'learning_plans',
-    'user_plan_progress', 'scrape_log',
+    'user_plan_progress', 'scrape_log', 'user_onboarding',
   ];
   for (const t of tables) {
     await db.insert(`DELETE FROM ${t}`);
