@@ -4,11 +4,12 @@ if (require.main === module) require('dotenv').config();
 const db = require('../models/database');
 const scraper = require('../services/scraperService');
 
-const MAX_SKILLS_PER_RUN = parseInt(process.env.MAX_SKILLS_PER_RUN || '75');
+const MAX_SKILLS_PER_RUN = parseInt(process.env.MAX_SKILLS_PER_RUN || '30');
 const SCRAPE_DELAY_MS = parseInt(process.env.SCRAPE_DELAY_MS || '30000');
 const STALE_THRESHOLD_DAYS = parseInt(process.env.STALE_THRESHOLD_DAYS || '7');
 const STALE_THRESHOLD_MS = process.env.FORCE_SCRAPE_ALL === 'true' ? 0 : STALE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000; // default 7 days (or 0 to force all)
 const LOW_CONTENT_THRESHOLD = parseInt(process.env.LOW_CONTENT_THRESHOLD || '20');
+const NIGHTLY_QUOTA_BUDGET = parseInt(process.env.NIGHTLY_QUOTA_BUDGET || '5000'); // reserve ~5K for user searches
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -113,32 +114,37 @@ async function run() {
   const queue = [...staleQueue, ...backfillQueue];
 
   // Track which skills should use expanded YouTube search (low-content skills)
-  // Cap expanded searches to avoid blowing YouTube quota (each uses 2x the units)
-  const MAX_EXPANDED_PER_RUN = parseInt(process.env.MAX_EXPANDED_PER_RUN || '15');
+  // Budget-based expanded search: figure out how many expanded slots we can afford
+  // Normal scrape ~120 units, expanded ~240 units
+  const UNITS_NORMAL = 120;
+  const UNITS_EXPANDED = 240;
+  // Start by allocating all queue as normal, then upgrade some to expanded within budget
+  let budgetRemaining = NIGHTLY_QUOTA_BUDGET - (queue.length * UNITS_NORMAL);
+  const extraCostPerExpand = UNITS_EXPANDED - UNITS_NORMAL; // 120 extra units per expanded skill
+
   const lowContentIds = new Set();
-  let expandedCount = 0;
 
   // Prioritize backfill queue for expanded search
   for (const skill of backfillQueue) {
-    if (expandedCount >= MAX_EXPANDED_PER_RUN) break;
+    if (budgetRemaining < extraCostPerExpand) break;
     lowContentIds.add(skill.id);
-    expandedCount++;
+    budgetRemaining -= extraCostPerExpand;
   }
   // Then stale skills with low content if there's still room
   for (const skill of staleQueue) {
-    if (expandedCount >= MAX_EXPANDED_PER_RUN) break;
+    if (budgetRemaining < extraCostPerExpand) break;
     if ((contentCountMap[skill.id] || 0) < LOW_CONTENT_THRESHOLD) {
       lowContentIds.add(skill.id);
-      expandedCount++;
+      budgetRemaining -= extraCostPerExpand;
     }
   }
 
   const normalCount = queue.length - lowContentIds.size;
-  const estimatedQuota = (normalCount * 120) + (lowContentIds.size * 240); // ~120 units normal, ~240 expanded
+  const estimatedQuota = (normalCount * UNITS_NORMAL) + (lowContentIds.size * UNITS_EXPANDED);
   console.log(
     `📋 ${allSkills.length} total skills | ${stale.length} stale | ${lowContent.length} low-content (<${LOW_CONTENT_THRESHOLD}) | ${queue.length} queued (${staleQueue.length} stale + ${backfillQueue.length} backfill) | ${lowContentIds.size} expanded search | ${stats.skipped} fresh (skipped)`
   );
-  console.log(`   Est. YouTube quota: ~${estimatedQuota} units (limit: 10,000)\n`);
+  console.log(`   Est. YouTube quota: ~${estimatedQuota} / ${NIGHTLY_QUOTA_BUDGET} budget (10K daily limit, rest reserved for user searches)\n`);
 
   const scrapedSkillIds = [];
   let youtubeAborted = false;
