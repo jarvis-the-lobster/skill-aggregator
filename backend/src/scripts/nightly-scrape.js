@@ -113,17 +113,32 @@ async function run() {
   const queue = [...staleQueue, ...backfillQueue];
 
   // Track which skills should use expanded YouTube search (low-content skills)
-  const lowContentIds = new Set(lowContent.map((s) => s.id));
-  // Also flag stale skills that have low content
+  // Cap expanded searches to avoid blowing YouTube quota (each uses 2x the units)
+  const MAX_EXPANDED_PER_RUN = parseInt(process.env.MAX_EXPANDED_PER_RUN || '15');
+  const lowContentIds = new Set();
+  let expandedCount = 0;
+
+  // Prioritize backfill queue for expanded search
+  for (const skill of backfillQueue) {
+    if (expandedCount >= MAX_EXPANDED_PER_RUN) break;
+    lowContentIds.add(skill.id);
+    expandedCount++;
+  }
+  // Then stale skills with low content if there's still room
   for (const skill of staleQueue) {
+    if (expandedCount >= MAX_EXPANDED_PER_RUN) break;
     if ((contentCountMap[skill.id] || 0) < LOW_CONTENT_THRESHOLD) {
       lowContentIds.add(skill.id);
+      expandedCount++;
     }
   }
 
+  const normalCount = queue.length - lowContentIds.size;
+  const estimatedQuota = (normalCount * 120) + (lowContentIds.size * 240); // ~120 units normal, ~240 expanded
   console.log(
-    `📋 ${allSkills.length} total skills | ${stale.length} stale | ${lowContent.length} low-content (<${LOW_CONTENT_THRESHOLD}) | ${queue.length} queued (${staleQueue.length} stale + ${backfillQueue.length} backfill) | ${stats.skipped} fresh (skipped)\n`
+    `📋 ${allSkills.length} total skills | ${stale.length} stale | ${lowContent.length} low-content (<${LOW_CONTENT_THRESHOLD}) | ${queue.length} queued (${staleQueue.length} stale + ${backfillQueue.length} backfill) | ${lowContentIds.size} expanded search | ${stats.skipped} fresh (skipped)`
   );
+  console.log(`   Est. YouTube quota: ~${estimatedQuota} units (limit: 10,000)\n`);
 
   const scrapedSkillIds = [];
   let youtubeAborted = false;
