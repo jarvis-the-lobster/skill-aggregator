@@ -50,13 +50,19 @@ async function run() {
 
   // Load all skills, scrape_log statuses, and content counts
   const allSkills = await db.query('SELECT * FROM skills');
+  // Check the most recent scrape_log entry PER skill PER source.
+  // A skill needs retry if ANY source's last entry is error/quota_exceeded.
   const lastScrapeStatuses = await db.query(
-    `SELECT skill_id, status FROM scrape_log
-     WHERE id IN (SELECT MAX(id) FROM scrape_log GROUP BY skill_id)`
+    `SELECT skill_id, source, status FROM scrape_log
+     WHERE id IN (SELECT MAX(id) FROM scrape_log GROUP BY skill_id, source)`
   );
-  const scrapeStatusMap = Object.fromEntries(
-    lastScrapeStatuses.map((r) => [r.skill_id, r.status])
-  );
+  // Build a map: skill_id -> true if any source failed
+  const scrapeFailedMap = {};
+  for (const row of lastScrapeStatuses) {
+    if (row.status === 'error' || row.status === 'quota_exceeded') {
+      scrapeFailedMap[row.skill_id] = true;
+    }
+  }
   const contentCounts = await db.query(
     `SELECT skill_id, COUNT(*) as cnt FROM content GROUP BY skill_id`
   );
@@ -69,9 +75,8 @@ async function run() {
   const lowContent = [];
 
   for (const skill of allSkills) {
-    // Always retry skills whose last scrape_log entry was an error or quota_exceeded
-    const lastLogStatus = scrapeStatusMap[skill.id];
-    if (lastLogStatus === 'error' || lastLogStatus === 'quota_exceeded') {
+    // Always retry skills where any source's last scrape_log entry was error/quota_exceeded
+    if (scrapeFailedMap[skill.id]) {
       stale.push(skill);
       continue;
     }
