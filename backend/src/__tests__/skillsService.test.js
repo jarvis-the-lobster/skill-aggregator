@@ -82,6 +82,22 @@ describe('searchSkill', () => {
     expect(result.message).toBeTruthy();
   });
 
+  test('blocks inappropriate search terms', async () => {
+    const result = await skillsService.searchSkill('porn');
+    expect(result.status).toBe('blocked');
+    expect(result.skill).toBeNull();
+  });
+
+  test('blocks profanity in search terms', async () => {
+    const result = await skillsService.searchSkill('how to fuck');
+    expect(result.status).toBe('blocked');
+  });
+
+  test('allows legitimate searches', async () => {
+    const result = await skillsService.searchSkill('cocktail mixing');
+    expect(result.status).not.toBe('blocked');
+  });
+
   test('rate limits after 10 new skills per 6 hours', async () => {
     for (let i = 0; i < 10; i++) {
       await skillsService.searchSkill(`newskill${i}`);
