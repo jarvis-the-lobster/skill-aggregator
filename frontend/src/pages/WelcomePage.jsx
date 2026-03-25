@@ -147,7 +147,7 @@ export function WelcomePage() {
         featured.map((s) =>
           apiService.getSkillContent(s.id).then((d) => ({
             id: s.id,
-            count: (d.videos?.length || 0) + (d.articles?.length || 0),
+            count: d.content?.totalCount || (d.content?.videos?.length || 0) + (d.content?.articles?.length || 0),
           })).catch(() => ({ id: s.id, count: 0 }))
         )
       ).then((results) => {
