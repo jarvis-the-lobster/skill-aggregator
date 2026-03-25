@@ -76,6 +76,7 @@ if (!isServer) {
         capture_pageview: false, // we track page views manually
         persistence: 'localStorage+cookie',
         autocapture: false,
+        person_profiles: 'always', // create profiles for anonymous visitors (needed for DAU/WAU)
       });
       initialized = true;
       // Capture UTM params from the landing URL before any navigation occurs
