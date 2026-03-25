@@ -585,6 +585,17 @@ function mapSkillRow(row) {
 }
 
 class SkillsService {
+  // Block inappropriate/NSFW search terms
+  // Uses word boundary matching to avoid false positives (e.g. "cocktail", "assassination")
+  BLOCKED_PATTERNS = [
+    /\bporn\b/, /\bxxx\b/, /\bsex\b/, /\bnude[s]?\b/, /\bnaked\b/, /\bhentai\b/, /\bnsfw\b/, /\bonlyfans\b/,
+    /\bfuck/, /\bshit\b/, /\bdick\b/, /\bcock\b/, /\bpussy\b/, /\bbitch\b/, /\bslut\b/, /\bwhore\b/,
+    /\bnigger/, /\bnigga/, /\bfaggot/, /\bretard\b/,
+    /\bcocaine\b/, /\bheroin\b/, /\bmeth\b/,
+    /\bddos\b/, /\bphishing\b/,
+    /\bmurder\b/, /\bsuicide method/, /\bbomb making/,
+  ];
+
   // Seed the 5 MVP skills into DB on startup (idempotent)
   async seedMVPSkills() {
     for (const skill of MVP_SKILLS) {
@@ -617,18 +628,8 @@ class SkillsService {
 
   // Search for a skill by arbitrary query; creates + scrapes if not found
   async searchSkill(query) {
-    // Block inappropriate/NSFW search terms
-    // Uses word boundary matching to avoid false positives (e.g. "cocktail", "assassination creed")
-    const BLOCKED_PATTERNS = [
-      /\bporn\b/, /\bxxx\b/, /\bsex\b/, /\bnude[s]?\b/, /\bnaked\b/, /\bhentai\b/, /\bnsfw\b/, /\bonlyfans\b/,
-      /\bfuck/, /\bshit\b/, /\bdick\b/, /\bcock\b/, /\bpussy\b/, /\bbitch\b/, /\bslut\b/, /\bwhore\b/,
-      /\bnigger/, /\bnigga/, /\bfaggot/, /\bretard\b/,
-      /\bcocaine\b/, /\bheroin\b/, /\bmeth\b/,
-      /\bddos\b/, /\bphishing\b/,
-      /\bmurder\b/, /\bsuicide method/, /\bbomb making/,
-    ];
     const lowerQuery = query.toLowerCase().trim();
-    if (BLOCKED_PATTERNS.some(pattern => pattern.test(lowerQuery))) {
+    if (this.BLOCKED_PATTERNS.some(pattern => pattern.test(lowerQuery))) {
       return { skill: null, status: 'blocked', message: 'This search term is not allowed.' };
     }
 
@@ -680,8 +681,11 @@ class SkillsService {
       const skillRow = await db.getSkillById(skillId);
 
       if (!skillRow) {
+        // Block inappropriate skill IDs from being auto-created via URL
+        if (this.BLOCKED_PATTERNS.some(pattern => pattern.test(skillId))) {
+          return { skill: null, status: 'blocked', content: { videos: [], articles: [], courses: [] } };
+        }
         // Auto-create with skillId as name (handles direct URL navigation)
-        // DON'T auto-scrape — nightly will handle it
         const skillName = skillId
           .split('-')
           .map(w => w.charAt(0).toUpperCase() + w.slice(1))

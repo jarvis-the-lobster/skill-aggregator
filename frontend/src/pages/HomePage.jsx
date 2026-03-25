@@ -82,12 +82,18 @@ export function HomePage() {
     analytics.track('search_query_typed', { query: query.trim(), resultCount: filteredSkills.length });
     try {
       const result = await apiService.searchSkill(query.trim());
+      if (result.status === 'blocked' || result.status === 'rate_limited') {
+        setError(result.message || 'This search is not allowed.');
+        return;
+      }
+      if (!result.skill?.id) {
+        setError('Could not find that skill. Try a different search.');
+        return;
+      }
       navigate(`/skills/${result.skill.id}`);
     } catch (err) {
       console.error('Search error:', err);
-      // Fallback: navigate with a best-guess slug
-      const slug = query.trim().toLowerCase().replace(/\s+/g, '-');
-      navigate(`/skills/${slug}`);
+      setError('Search failed. Please try again.');
     }
   };
 
