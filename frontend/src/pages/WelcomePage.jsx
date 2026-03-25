@@ -130,7 +130,10 @@ export function WelcomePage() {
     if (!user) { navigate('/login', { replace: true }); return; }
     apiService.getOnboardingStatus().then(({ completed }) => {
       if (completed) navigate('/', { replace: true });
-      else setChecking(false);
+      else {
+        setChecking(false);
+        analytics.track('onboarding_started');
+      }
     }).catch(() => setChecking(false));
   }, [user, authLoading]);
 
