@@ -276,4 +276,46 @@ router.post('/skills/reset-stale', async (req, res) => {
   }
 });
 
+// POST /api/admin/scrape/skills — scrape specific skills by ID (Bearer CRON_SECRET)
+// Body: { "skillIds": ["linux", "supply-chain", "music-production"] }
+router.post('/scrape/skills', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+  const { skillIds } = req.body;
+  if (!Array.isArray(skillIds) || skillIds.length === 0) {
+    return res.status(400).json({ error: 'skillIds array required' });
+  }
+  if (skillIds.length > 20) {
+    return res.status(400).json({ error: 'Max 20 skills per request' });
+  }
+
+  // Validate all skills exist
+  const placeholders = skillIds.map(() => '?').join(',');
+  const existing = await db.query(`SELECT id FROM skills WHERE id IN (${placeholders})`, skillIds);
+  const existingIds = new Set(existing.map(s => s.id));
+  const missing = skillIds.filter(id => !existingIds.has(id));
+  if (missing.length > 0) {
+    return res.status(404).json({ error: `Skills not found: ${missing.join(', ')}` });
+  }
+
+  res.json({ ok: true, message: `Scraping ${skillIds.length} skill(s)`, skillIds });
+
+  // Fire and forget
+  const scraper = require('../services/scraperService');
+  (async () => {
+    for (const skillId of skillIds) {
+      console.log(`[admin/scrape] Scraping: ${skillId}`);
+      try {
+        await db.updateSkillStatus(skillId, 'scraping');
+        await scraper.scrapeSkill(skillId);
+        await db.updateSkillStatus(skillId, 'ready');
+        console.log(`[admin/scrape] ✅ ${skillId} done`);
+      } catch (err) {
+        await db.updateSkillStatus(skillId, 'error');
+        console.error(`[admin/scrape] ❌ ${skillId}: ${err.message}`);
+      }
+    }
+    console.log(`[admin/scrape] Finished all ${skillIds.length} skill(s)`);
+  })().catch(err => console.error('[admin/scrape] Fatal:', err.message));
+});
+
 module.exports = router;
