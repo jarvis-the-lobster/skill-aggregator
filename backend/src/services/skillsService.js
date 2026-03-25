@@ -617,6 +617,21 @@ class SkillsService {
 
   // Search for a skill by arbitrary query; creates + scrapes if not found
   async searchSkill(query) {
+    // Block inappropriate/NSFW search terms
+    // Uses word boundary matching to avoid false positives (e.g. "cocktail", "assassination creed")
+    const BLOCKED_PATTERNS = [
+      /\bporn\b/, /\bxxx\b/, /\bsex\b/, /\bnude[s]?\b/, /\bnaked\b/, /\bhentai\b/, /\bnsfw\b/, /\bonlyfans\b/,
+      /\bfuck/, /\bshit\b/, /\bdick\b/, /\bcock\b/, /\bpussy\b/, /\bbitch\b/, /\bslut\b/, /\bwhore\b/,
+      /\bnigger/, /\bnigga/, /\bfaggot/, /\bretard\b/,
+      /\bcocaine\b/, /\bheroin\b/, /\bmeth\b/,
+      /\bddos\b/, /\bphishing\b/,
+      /\bmurder\b/, /\bsuicide method/, /\bbomb making/,
+    ];
+    const lowerQuery = query.toLowerCase().trim();
+    if (BLOCKED_PATTERNS.some(pattern => pattern.test(lowerQuery))) {
+      return { skill: null, status: 'blocked', message: 'This search term is not allowed.' };
+    }
+
     const rawId = normalizeSkillId(query);
     const skillId = SLUG_ALIASES[rawId] || rawId;
     const skillName = normalizeSkillName(query);
