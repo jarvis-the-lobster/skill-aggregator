@@ -189,8 +189,8 @@ export function WelcomePage() {
       // Save answers then advance to step 4
       setSaving(true);
       const payload = { userType: answers.userType, goal: answers.goal, dailyTime: value };
+      analytics.track('onboarding_completed');
       apiService.saveOnboarding(payload).then(() => {
-        analytics.track('onboarding_completed');
         setTransitioning(true);
         setTimeout(() => {
           setStep(3);
