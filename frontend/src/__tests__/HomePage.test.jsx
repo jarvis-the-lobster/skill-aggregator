@@ -104,4 +104,26 @@ describe('HomePage', () => {
     expect(analytics.track).toHaveBeenCalledWith('search_query_typed', expect.objectContaining({ query: 'python' }));
     expect(mockNavigate).toHaveBeenCalledWith('/skills/python');
   });
+
+  it('shows error for blocked search terms', async () => {
+    apiService.searchSkill.mockResolvedValue({ skill: null, status: 'blocked', message: 'This search term is not allowed.' });
+    renderWithRouter(<HomePage />);
+    await screen.findByText('Python');
+    const searchInput = screen.getByPlaceholderText(/Search Python/);
+    const user = userEvent.setup();
+    await user.type(searchInput, 'badterm{Enter}');
+    expect(await screen.findByText('This search term is not allowed.')).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('shows error for rate-limited search', async () => {
+    apiService.searchSkill.mockResolvedValue({ skill: null, status: 'rate_limited', message: 'Too many new skill requests.' });
+    renderWithRouter(<HomePage />);
+    await screen.findByText('Python');
+    const searchInput = screen.getByPlaceholderText(/Search Python/);
+    const user = userEvent.setup();
+    await user.type(searchInput, 'newskill{Enter}');
+    expect(await screen.findByText('Too many new skill requests.')).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });
