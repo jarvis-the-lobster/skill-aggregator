@@ -46,12 +46,22 @@ async function run() {
     quota_exceeded: 0,
   };
 
-  // Load all skills and filter to stale ones
+  // Load all skills and check scrape_log for last status per skill
   const allSkills = await db.query('SELECT * FROM skills');
+  const lastScrapeStatuses = await db.query(
+    `SELECT skill_id, status FROM scrape_log
+     WHERE id IN (SELECT MAX(id) FROM scrape_log GROUP BY skill_id)`
+  );
+  const scrapeStatusMap = Object.fromEntries(
+    lastScrapeStatuses.map((r) => [r.skill_id, r.status])
+  );
   const now = Date.now();
 
   const stale = allSkills.filter((skill) => {
-    // Always retry skills that errored or hit quota on last scrape
+    // Always retry skills whose last scrape_log entry was an error or quota_exceeded
+    const lastLogStatus = scrapeStatusMap[skill.id];
+    if (lastLogStatus === 'error' || lastLogStatus === 'quota_exceeded') return true;
+    // Always retry skills stuck in error/scraping status
     if (skill.status === 'error' || skill.status === 'scraping') return true;
     if (!skill.last_scraped_at) return true;
     const age = now - new Date(skill.last_scraped_at).getTime();
