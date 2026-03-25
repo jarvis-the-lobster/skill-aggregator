@@ -8,6 +8,7 @@ const MAX_SKILLS_PER_RUN = parseInt(process.env.MAX_SKILLS_PER_RUN || '75');
 const SCRAPE_DELAY_MS = parseInt(process.env.SCRAPE_DELAY_MS || '30000');
 const STALE_THRESHOLD_DAYS = parseInt(process.env.STALE_THRESHOLD_DAYS || '7');
 const STALE_THRESHOLD_MS = process.env.FORCE_SCRAPE_ALL === 'true' ? 0 : STALE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000; // default 7 days (or 0 to force all)
+const LOW_CONTENT_THRESHOLD = parseInt(process.env.LOW_CONTENT_THRESHOLD || '20');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -46,7 +47,7 @@ async function run() {
     quota_exceeded: 0,
   };
 
-  // Load all skills and check scrape_log for last status per skill
+  // Load all skills, scrape_log statuses, and content counts
   const allSkills = await db.query('SELECT * FROM skills');
   const lastScrapeStatuses = await db.query(
     `SELECT skill_id, status FROM scrape_log
@@ -55,31 +56,73 @@ async function run() {
   const scrapeStatusMap = Object.fromEntries(
     lastScrapeStatuses.map((r) => [r.skill_id, r.status])
   );
+  const contentCounts = await db.query(
+    `SELECT skill_id, COUNT(*) as cnt FROM content GROUP BY skill_id`
+  );
+  const contentCountMap = Object.fromEntries(
+    contentCounts.map((r) => [r.skill_id, r.cnt])
+  );
   const now = Date.now();
 
-  const stale = allSkills.filter((skill) => {
+  const stale = [];
+  const lowContent = [];
+
+  for (const skill of allSkills) {
     // Always retry skills whose last scrape_log entry was an error or quota_exceeded
     const lastLogStatus = scrapeStatusMap[skill.id];
-    if (lastLogStatus === 'error' || lastLogStatus === 'quota_exceeded') return true;
+    if (lastLogStatus === 'error' || lastLogStatus === 'quota_exceeded') {
+      stale.push(skill);
+      continue;
+    }
     // Always retry skills stuck in error/scraping status
-    if (skill.status === 'error' || skill.status === 'scraping') return true;
-    if (!skill.last_scraped_at) return true;
+    if (skill.status === 'error' || skill.status === 'scraping') {
+      stale.push(skill);
+      continue;
+    }
+    if (!skill.last_scraped_at) {
+      stale.push(skill);
+      continue;
+    }
     const age = now - new Date(skill.last_scraped_at).getTime();
-    return age > STALE_THRESHOLD_MS;
-  });
+    if (age > STALE_THRESHOLD_MS) {
+      stale.push(skill);
+      continue;
+    }
+    // Track low-content skills separately for backfill
+    const count = contentCountMap[skill.id] || 0;
+    if (count < LOW_CONTENT_THRESHOLD) {
+      lowContent.push(skill);
+    }
+  }
 
-  stats.skipped = allSkills.length - stale.length;
+  stats.skipped = allSkills.length - stale.length - lowContent.length;
 
-  if (stale.length === 0) {
-    console.log('✅ All skills are fresh — nothing to scrape.');
+  if (stale.length === 0 && lowContent.length === 0) {
+    console.log('✅ All skills are fresh and well-stocked — nothing to scrape.');
     // Only close DB if running as a standalone script (not inline via server)
     if (require.main === module) await db.close();
     return;
   }
 
-  const queue = shuffle(stale).slice(0, MAX_SKILLS_PER_RUN);
+  // Stale skills get priority; backfill low-content skills with remaining capacity
+  const staleQueue = shuffle(stale).slice(0, MAX_SKILLS_PER_RUN);
+  const remainingSlots = MAX_SKILLS_PER_RUN - staleQueue.length;
+  const backfillQueue = remainingSlots > 0
+    ? shuffle(lowContent).slice(0, remainingSlots)
+    : [];
+  const queue = [...staleQueue, ...backfillQueue];
+
+  // Track which skills should use expanded YouTube search (low-content skills)
+  const lowContentIds = new Set(lowContent.map((s) => s.id));
+  // Also flag stale skills that have low content
+  for (const skill of staleQueue) {
+    if ((contentCountMap[skill.id] || 0) < LOW_CONTENT_THRESHOLD) {
+      lowContentIds.add(skill.id);
+    }
+  }
+
   console.log(
-    `📋 ${allSkills.length} total skills | ${stale.length} stale | ${queue.length} queued | ${stats.skipped} fresh (skipped)\n`
+    `📋 ${allSkills.length} total skills | ${stale.length} stale | ${lowContent.length} low-content (<${LOW_CONTENT_THRESHOLD}) | ${queue.length} queued (${staleQueue.length} stale + ${backfillQueue.length} backfill) | ${stats.skipped} fresh (skipped)\n`
   );
 
   const scrapedSkillIds = [];
@@ -97,7 +140,8 @@ async function run() {
       }
     }
 
-    console.log(`[${i + 1}/${queue.length}] Scraping: ${skill.id}`);
+    const isLowContent = lowContentIds.has(skill.id);
+    console.log(`[${i + 1}/${queue.length}] Scraping: ${skill.id}${isLowContent ? ' (low content — expanded search)' : ''}`);
     stats.attempted++;
 
     // Guard: skip if already mid-scrape (shouldn't happen in nightly but be safe)
@@ -131,7 +175,7 @@ async function run() {
         });
         await db.updateSkillStatus(skill.id, 'ready');
       } else {
-        await scraper.scrapeSkill(skill.id);
+        await scraper.scrapeSkill(skill.id, { expandSearch: isLowContent });
         await db.updateSkillStatus(skill.id, 'ready');
       }
 

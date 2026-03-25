@@ -17,7 +17,10 @@ const SKILL_SEARCH_TERMS = {
   // Ambiguous or underperforming skills — add context to search query
   'mandarin': 'learn Mandarin Chinese language',
   'greek': 'learn Greek language',
+  'arabic': 'learn Arabic language',
   'drawing': 'drawing tutorial for beginners',
+  'sketch': 'sketching techniques drawing tutorial',
+  'digital-art': 'digital art tutorial procreate photoshop',
   'gardening': 'gardening tips for beginners',
   'creative-writing': 'creative writing course',
   'documentary-making': 'how to make a documentary film',
@@ -26,6 +29,7 @@ const SKILL_SEARCH_TERMS = {
   'podcast-production': 'how to start a podcast',
   'saas-business': 'how to build a SaaS business',
   'twitter-marketing': 'Twitter marketing strategy',
+  'tiktok-marketing': 'TikTok marketing strategy for business',
   'youtube-content': 'YouTube content creation tutorial',
   'icon-design': 'icon design tutorial',
   'print-design': 'print design tutorial',
@@ -35,6 +39,25 @@ const SKILL_SEARCH_TERMS = {
   'business-analysis': 'business analysis tutorial',
   'local-seo': 'local SEO tutorial',
   'laravel': 'Laravel PHP framework tutorial',
+  'piano': 'learn piano tutorial lessons',
+  'guitar': 'learn guitar tutorial lessons beginner',
+  'guitar-improvisation': 'guitar improvisation soloing techniques',
+  'running-a-farm': 'farming business how to start a farm',
+  'english-writing': 'English writing skills grammar course',
+  'color-theory': 'color theory design fundamentals',
+  'sleep-optimization': 'sleep optimization tips better sleep',
+  'stress-management': 'stress management techniques anxiety relief',
+  'sports-performance': 'athletic performance training sports science',
+  'strength-training': 'strength training workout program',
+  'dividend-investing': 'dividend investing strategy passive income',
+  'forex-trading': 'forex trading for beginners strategy',
+  'stock-trading': 'stock trading for beginners technical analysis',
+  'excel-finance': 'Excel for finance financial modeling',
+  'wireframing': 'wireframing UI design prototyping',
+  'customer-success': 'customer success management strategy',
+  'video-marketing': 'video marketing strategy YouTube ads',
+  'logo-design': 'logo design tutorial brand identity',
+  'business-writing': 'business writing professional emails reports',
 };
 
 const ALL_SKILLS = Object.keys(SKILL_SEARCH_TERMS);
@@ -50,9 +73,9 @@ class ScraperService {
 
   // ─── Main orchestration ───────────────────────────────────────────────────
 
-  async scrapeSkill(skillId) {
+  async scrapeSkill(skillId, options = {}) {
     const [youtubeResult, articleResult] = await Promise.allSettled([
-      this.scrapeYouTube(skillId),
+      this.scrapeYouTube(skillId, options),
       this.scrapeArticles(skillId)
     ]);
 
@@ -134,16 +157,18 @@ class ScraperService {
 
   // ─── YouTube Data API v3 ─────────────────────────────────────────────────
 
-  async scrapeYouTube(skillId) {
+  async scrapeYouTube(skillId, options = {}) {
     if (!this.youtubeApiKey) {
       console.log('  ⚠️  YOUTUBE_API_KEY not set, skipping YouTube');
       return [];
     }
 
     const searchTerm = this.getSearchTerm(skillId);
-    const queries = [
-      `${searchTerm} tutorial`
-    ];
+    // Use multiple queries for skills that need more content (passed via options)
+    const queries = [`${searchTerm} tutorial`];
+    if (options?.expandSearch) {
+      queries.push(`learn ${searchTerm} beginner to advanced`);
+    }
 
     const seen = new Set();
     const allVideos = [];
