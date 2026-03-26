@@ -167,6 +167,21 @@ class Database {
         daily_time TEXT,
         completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+
+      // Per-user learning plans (personal copy of shared plan)
+      `CREATE TABLE IF NOT EXISTS user_learning_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        skill_id TEXT NOT NULL,
+        day_number INTEGER NOT NULL,
+        content_id TEXT,
+        content_type TEXT,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (skill_id) REFERENCES skills(id),
+        UNIQUE(user_id, skill_id, day_number)
       )`
     ];
 
@@ -218,6 +233,8 @@ class Database {
         // Skills by status (nightly scrape filtering)
         'CREATE INDEX IF NOT EXISTS idx_skills_status ON skills(status)',
         'CREATE INDEX IF NOT EXISTS idx_skills_last_scraped ON skills(last_scraped_at)',
+        // User learning plans by user+skill (plan fetch)
+        'CREATE INDEX IF NOT EXISTS idx_user_plans_user_skill ON user_learning_plans(user_id, skill_id)',
       ];
       indexes.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -585,6 +602,59 @@ class Database {
         `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason)
          VALUES (?, ?, ?, ?, ?)`,
         [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+      );
+    }
+  }
+
+  // --- User learning plan methods ---
+
+  async getUserLearningPlan(userId, skillId) {
+    return this.query(
+      `SELECT ulp.day_number, ulp.content_id, ulp.content_type, ulp.reason, ulp.created_at,
+              c.title, c.url, c.thumbnail, c.duration, c.author, c.source
+       FROM user_learning_plans ulp
+       LEFT JOIN content c ON c.id = ulp.content_id
+       WHERE ulp.user_id = ? AND ulp.skill_id = ?
+       ORDER BY ulp.day_number ASC`,
+      [userId, skillId]
+    );
+  }
+
+  async saveUserLearningPlan(userId, skillId, days) {
+    await this.insert(
+      'DELETE FROM user_learning_plans WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+    for (const entry of days) {
+      await this.insert(
+        `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+      );
+    }
+  }
+
+  async deleteUserLearningPlan(userId, skillId) {
+    return this.insert(
+      'DELETE FROM user_learning_plans WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+  }
+
+  async getUserPlanMaxCreatedAt(userId, skillId) {
+    const rows = await this.query(
+      'SELECT MAX(created_at) as max_created_at FROM user_learning_plans WHERE user_id = ? AND skill_id = ?',
+      [userId, skillId]
+    );
+    return rows[0]?.max_created_at || null;
+  }
+
+  async refreshUserPlanDays(userId, skillId, days) {
+    for (const entry of days) {
+      await this.insert(
+        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
       );
     }
   }

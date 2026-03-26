@@ -34,6 +34,13 @@ router.post('/:skillId/enroll', requireAuth, async (req, res) => {
     const skill = await db.getSkillById(skillId);
     if (!skill) return res.status(404).json({ error: 'Skill not found' });
     const progress = await db.enrollPlan(req.user.id, skillId);
+    // Also enroll in the course so it shows in my-courses
+    await db.enrollCourse(req.user.id, skillId);
+    // Copy shared plan into user's personal learning plan (only if they don't have one already)
+    const existingPlan = await db.getUserLearningPlan(req.user.id, skillId);
+    if (existingPlan.length === 0) {
+      await learningPlanService.copyPlanForUser(req.user.id, skillId);
+    }
     res.json({ enrolled: true, progress });
   } catch (err) {
     console.error('Plan enroll error:', err);
@@ -41,15 +48,32 @@ router.post('/:skillId/enroll', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/learning-plans/:skillId/my-progress — get user's progress for this plan
+// GET /api/learning-plans/:skillId/my-progress — get user's personal plan + progress
 router.get('/:skillId/my-progress', requireAuth, async (req, res) => {
   try {
-    const progress = await db.getPlanProgress(req.user.id, req.params.skillId);
-    if (!progress) return res.json({ enrolled: false, progress: null });
-    res.json({ enrolled: true, progress });
+    const { skillId } = req.params;
+    const progress = await db.getPlanProgress(req.user.id, skillId);
+    if (!progress) return res.json({ enrolled: false, progress: null, plan: null, refreshAvailable: false });
+    // Serve from user_learning_plans, flag if refresh is available
+    const { plan, refreshAvailable } = await learningPlanService.getUserPlanWithRefresh(req.user.id, skillId);
+    res.json({ enrolled: true, progress, plan, refreshAvailable });
   } catch (err) {
     console.error('Plan progress error:', err);
     res.status(500).json({ error: 'Failed to fetch progress' });
+  }
+});
+
+// POST /api/learning-plans/:skillId/refresh — refresh incomplete days with new content
+router.post('/:skillId/refresh', requireAuth, async (req, res) => {
+  try {
+    const { skillId } = req.params;
+    const progress = await db.getPlanProgress(req.user.id, skillId);
+    if (!progress) return res.status(404).json({ error: 'Not enrolled in this plan' });
+    const plan = await learningPlanService.refreshUserPlan(req.user.id, skillId);
+    res.json({ refreshed: true, plan });
+  } catch (err) {
+    console.error('Plan refresh error:', err);
+    res.status(500).json({ error: 'Failed to refresh plan' });
   }
 });
 

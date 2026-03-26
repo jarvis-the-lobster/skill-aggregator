@@ -91,6 +91,62 @@ class LearningPlanService {
     if (allContent.length === 0) return [];
     return this.generatePlan(skillId);
   }
+
+  // Get or generate the shared plan, then copy it into user_learning_plans
+  async copyPlanForUser(userId, skillId) {
+    // Ensure shared plan exists
+    const sharedPlan = await this.getPlan(skillId);
+
+    // Copy into user_learning_plans (replaces any existing entries)
+    await db.saveUserLearningPlan(userId, skillId, sharedPlan.map(day => ({
+      day_number: day.day_number,
+      content_id: day.content_id,
+      content_type: day.content_type,
+      reason: day.reason,
+    })));
+
+    return db.getUserLearningPlan(userId, skillId);
+  }
+
+  // Get user's personal plan, flagging if a refresh is available
+  async getUserPlanWithRefresh(userId, skillId) {
+    const userPlan = await db.getUserLearningPlan(userId, skillId);
+    if (userPlan.length === 0) return { plan: [], refreshAvailable: false };
+
+    // Check if content has been refreshed since user plan was created
+    const skill = await db.getSkillById(skillId);
+    if (!skill || !skill.last_scraped_at) return { plan: userPlan, refreshAvailable: false };
+
+    const maxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
+    const hasNewContent = maxCreatedAt && new Date(skill.last_scraped_at) > new Date(maxCreatedAt);
+
+    return { plan: userPlan, refreshAvailable: hasNewContent };
+  }
+
+  // Actually apply the refresh — called when user opts in
+  async refreshUserPlan(userId, skillId) {
+    const progress = await db.getPlanProgress(userId, skillId);
+    const completedDays = new Set(JSON.parse(progress?.completed_days || '[]'));
+
+    // Regenerate a fresh shared plan to get updated content assignments
+    const freshPlan = await this.generatePlan(skillId);
+
+    // Only refresh days the user hasn't completed
+    const daysToRefresh = freshPlan
+      .filter(day => !completedDays.has(day.day_number))
+      .map(day => ({
+        day_number: day.day_number,
+        content_id: day.content_id,
+        content_type: day.content_type,
+        reason: day.reason,
+      }));
+
+    if (daysToRefresh.length > 0) {
+      await db.refreshUserPlanDays(userId, skillId, daysToRefresh);
+    }
+
+    return db.getUserLearningPlan(userId, skillId);
+  }
 }
 
 module.exports = new LearningPlanService();

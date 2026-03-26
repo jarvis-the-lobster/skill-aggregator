@@ -131,12 +131,26 @@ const TABLE_SQL = [
     completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`,
+  `CREATE TABLE IF NOT EXISTS user_learning_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    skill_id TEXT NOT NULL,
+    day_number INTEGER NOT NULL,
+    content_id TEXT,
+    content_type TEXT,
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (skill_id) REFERENCES skills(id),
+    UNIQUE(user_id, skill_id, day_number)
+  )`,
 ];
 
 const INDEX_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_content_skill_id ON content(skill_id)',
   'CREATE INDEX IF NOT EXISTS idx_interactions_content_id ON user_interactions(content_id)',
   'CREATE INDEX IF NOT EXISTS idx_interactions_user_id ON user_interactions(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_user_plans_user_skill ON user_learning_plans(user_id, skill_id)',
 ];
 
 function createTestDb() {
@@ -396,6 +410,57 @@ function createTestDb() {
           );
         },
 
+        async getUserLearningPlan(userId, skillId) {
+          return query(
+            `SELECT ulp.day_number, ulp.content_id, ulp.content_type, ulp.reason, ulp.created_at,
+                    c.title, c.url, c.thumbnail, c.duration, c.author, c.source
+             FROM user_learning_plans ulp
+             LEFT JOIN content c ON c.id = ulp.content_id
+             WHERE ulp.user_id = ? AND ulp.skill_id = ?
+             ORDER BY ulp.day_number ASC`,
+            [userId, skillId]
+          );
+        },
+
+        async saveUserLearningPlan(userId, skillId, days) {
+          await insert(
+            'DELETE FROM user_learning_plans WHERE user_id = ? AND skill_id = ?',
+            [userId, skillId]
+          );
+          for (const entry of days) {
+            await insert(
+              `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+            );
+          }
+        },
+
+        async deleteUserLearningPlan(userId, skillId) {
+          return insert(
+            'DELETE FROM user_learning_plans WHERE user_id = ? AND skill_id = ?',
+            [userId, skillId]
+          );
+        },
+
+        async getUserPlanMaxCreatedAt(userId, skillId) {
+          const rows = await query(
+            'SELECT MAX(created_at) as max_created_at FROM user_learning_plans WHERE user_id = ? AND skill_id = ?',
+            [userId, skillId]
+          );
+          return rows[0]?.max_created_at || null;
+        },
+
+        async refreshUserPlanDays(userId, skillId, days) {
+          for (const entry of days) {
+            await insert(
+              `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+            );
+          }
+        },
+
         async getMetrics() {
           return { scrapeStats: [], skillHealth: [], youtubeQuota: { used: 0, limit: 10000, percentUsed: 0 }, recentErrors: [], contentCounts: [] };
         },
@@ -419,7 +484,7 @@ async function clearTables(db) {
   const tables = [
     'skills', 'content', 'users', 'user_streaks', 'user_interactions',
     'user_courses', 'push_subscriptions', 'subscribers', 'learning_plans',
-    'user_plan_progress', 'scrape_log', 'user_onboarding',
+    'user_plan_progress', 'scrape_log', 'user_onboarding', 'user_learning_plans',
   ];
   for (const t of tables) {
     await db.insert(`DELETE FROM ${t}`);

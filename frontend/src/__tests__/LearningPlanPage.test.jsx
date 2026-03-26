@@ -1,0 +1,232 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock api service
+const mockGetLearningPlan = vi.fn();
+const mockGetSkillContent = vi.fn();
+const mockGetPlanProgress = vi.fn();
+const mockGetRatings = vi.fn();
+const mockEnrollLearningPlan = vi.fn();
+const mockRefreshPlan = vi.fn();
+const mockCompletePlanDay = vi.fn();
+
+vi.mock('../services/api', () => ({
+  apiService: {
+    getLearningPlan: (...args) => mockGetLearningPlan(...args),
+    getSkillContent: (...args) => mockGetSkillContent(...args),
+    getPlanProgress: (...args) => mockGetPlanProgress(...args),
+    getRatings: (...args) => mockGetRatings(...args),
+    enrollLearningPlan: (...args) => mockEnrollLearningPlan(...args),
+    refreshPlan: (...args) => mockRefreshPlan(...args),
+    completePlanDay: (...args) => mockCompletePlanDay(...args),
+  },
+}));
+
+vi.mock('../services/analytics', () => ({
+  default: { track: vi.fn() },
+}));
+
+// Default: logged-in user with auth loaded
+const mockUseAuth = vi.fn(() => ({ user: { id: 1, email: 'test@test.com' }, loading: false }));
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: (...args) => mockUseAuth(...args),
+}));
+
+import { LearningPlanPage } from '../pages/LearningPlanPage';
+
+// --- Test data ---
+
+const SHARED_PLAN = Array.from({ length: 30 }, (_, i) => ({
+  day_number: i + 1,
+  content_id: `shared_content_${i + 1}`,
+  content_type: i < 7 ? 'video' : 'article',
+  title: `Shared Resource ${i + 1}`,
+  url: `https://example.com/shared/${i + 1}`,
+  source: i < 7 ? 'YouTube' : 'Dev.to',
+  reason: 'Curated content',
+}));
+
+const PERSONAL_PLAN = Array.from({ length: 30 }, (_, i) => ({
+  day_number: i + 1,
+  content_id: `personal_content_${i + 1}`,
+  content_type: i < 7 ? 'video' : 'article',
+  title: `My Resource ${i + 1}`,
+  url: `https://example.com/personal/${i + 1}`,
+  source: i < 7 ? 'YouTube' : 'Dev.to',
+  reason: 'Your curated content',
+}));
+
+const REFRESHED_PLAN = PERSONAL_PLAN.map((day, i) => {
+  // Days 1, 2, 8 stay the same (completed), others get new content
+  if ([1, 2, 8].includes(day.day_number)) return day;
+  return {
+    ...day,
+    content_id: `refreshed_content_${i + 1}`,
+    title: `Updated Resource ${i + 1}`,
+  };
+});
+
+const SKILL_RESPONSE = {
+  skill: { id: 'python', name: 'Python' },
+  content: { videos: [], articles: [] },
+};
+
+function renderPlanPage(skillId = 'python') {
+  return render(
+    <HelmetProvider>
+      <MemoryRouter initialEntries={[`/skills/${skillId}/plan`]}>
+        <Routes>
+          <Route path="/skills/:skillId/plan" element={<LearningPlanPage />} />
+        </Routes>
+      </MemoryRouter>
+    </HelmetProvider>
+  );
+}
+
+describe('LearningPlanPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseAuth.mockReturnValue({ user: { id: 1, email: 'test@test.com' }, loading: false });
+    mockGetSkillContent.mockResolvedValue(SKILL_RESPONSE);
+    mockGetRatings.mockResolvedValue({ counts: {}, userRatings: {} });
+  });
+
+  describe('enrolled user sees personal plan', () => {
+    it('displays personal plan content instead of shared plan', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[]' },
+        plan: PERSONAL_PLAN,
+        refreshAvailable: false,
+      });
+
+      renderPlanPage();
+
+      // Should show personal plan titles, not shared
+      expect(await screen.findByText('My Resource 1')).toBeInTheDocument();
+      expect(screen.queryByText('Shared Resource 1')).not.toBeInTheDocument();
+    });
+
+    it('shows completed days from progress', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[1, 2, 8]' },
+        plan: PERSONAL_PLAN,
+        refreshAvailable: false,
+      });
+
+      renderPlanPage();
+
+      await screen.findByText('My Resource 1');
+
+      // Completed days should not show "Mark complete" button
+      // Day 3 (incomplete) should show it
+      const markCompleteButtons = screen.getAllByText('Mark complete');
+      // 30 days - 3 completed = 27 mark complete buttons
+      expect(markCompleteButtons).toHaveLength(27);
+    });
+  });
+
+  describe('non-enrolled user sees shared plan', () => {
+    it('displays shared plan when not enrolled', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: false,
+        progress: null,
+        plan: null,
+        refreshAvailable: false,
+      });
+
+      renderPlanPage();
+
+      // Should show shared plan (only first 7 days for free preview)
+      expect(await screen.findByText('Shared Resource 1')).toBeInTheDocument();
+      expect(screen.queryByText('My Resource 1')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('refresh banner', () => {
+    it('shows refresh banner when new content is available', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[1, 2, 8]' },
+        plan: PERSONAL_PLAN,
+        refreshAvailable: true,
+      });
+
+      renderPlanPage();
+
+      expect(await screen.findByText('New resources available!')).toBeInTheDocument();
+      expect(screen.getByText('Update Plan')).toBeInTheDocument();
+    });
+
+    it('does not show refresh banner when no new content', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[1, 2, 8]' },
+        plan: PERSONAL_PLAN,
+        refreshAvailable: false,
+      });
+
+      renderPlanPage();
+
+      await screen.findByText('My Resource 1');
+      expect(screen.queryByText('New resources available!')).not.toBeInTheDocument();
+    });
+
+    it('clicking Update Plan refreshes with preserved completed content', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[1, 2, 8]' },
+        plan: PERSONAL_PLAN,
+        refreshAvailable: true,
+      });
+      mockRefreshPlan.mockResolvedValue({
+        refreshed: true,
+        plan: REFRESHED_PLAN,
+      });
+
+      renderPlanPage();
+
+      const updateBtn = await screen.findByText('Update Plan');
+      const user = userEvent.setup();
+      await user.click(updateBtn);
+
+      await waitFor(() => {
+        expect(mockRefreshPlan).toHaveBeenCalledWith('python');
+      });
+
+      // After refresh: completed days (1, 2, 8) should keep personal content
+      expect(await screen.findByText('My Resource 1')).toBeInTheDocument();   // day 1 preserved
+      expect(screen.getByText('My Resource 2')).toBeInTheDocument();          // day 2 preserved
+      expect(screen.getByText('My Resource 8')).toBeInTheDocument();          // day 8 preserved
+
+      // Incomplete days should show updated content
+      expect(screen.getByText('Updated Resource 3')).toBeInTheDocument();     // day 3 refreshed
+
+      // Banner should be gone
+      expect(screen.queryByText('New resources available!')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('auth loading race condition', () => {
+    it('waits for auth before fetching plan data', async () => {
+      // Auth still loading
+      mockUseAuth.mockReturnValue({ user: null, loading: true });
+
+      renderPlanPage();
+
+      // Should not have fetched anything yet
+      expect(mockGetLearningPlan).not.toHaveBeenCalled();
+      expect(mockGetPlanProgress).not.toHaveBeenCalled();
+    });
+  });
+});
