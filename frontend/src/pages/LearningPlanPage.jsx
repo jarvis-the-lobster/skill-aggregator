@@ -11,7 +11,7 @@ const FREE_DAYS = 7;
 
 export function LearningPlanPage() {
   const { skillId } = useParams();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [plan, setPlan] = useState([]);
   const [skillName, setSkillName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -23,9 +23,12 @@ export function LearningPlanPage() {
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
 
   useEffect(() => {
+    // Wait for auth to resolve before loading — otherwise user is null
+    // on hard refresh and we skip the personal plan fetch
+    if (authLoading) return;
     analytics.track('plan_viewed', { skillId });
     loadPlan();
-  }, [skillId]);
+  }, [skillId, authLoading]);
 
   const loadPlan = async () => {
     setLoading(true);
