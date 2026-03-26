@@ -34,6 +34,8 @@ router.post('/:skillId/enroll', requireAuth, async (req, res) => {
     const skill = await db.getSkillById(skillId);
     if (!skill) return res.status(404).json({ error: 'Skill not found' });
     const progress = await db.enrollPlan(req.user.id, skillId);
+    // Copy shared plan into user's personal learning plan
+    await learningPlanService.copyPlanForUser(req.user.id, skillId);
     res.json({ enrolled: true, progress });
   } catch (err) {
     console.error('Plan enroll error:', err);
@@ -41,12 +43,15 @@ router.post('/:skillId/enroll', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/learning-plans/:skillId/my-progress — get user's progress for this plan
+// GET /api/learning-plans/:skillId/my-progress — get user's personal plan + progress
 router.get('/:skillId/my-progress', requireAuth, async (req, res) => {
   try {
-    const progress = await db.getPlanProgress(req.user.id, req.params.skillId);
-    if (!progress) return res.json({ enrolled: false, progress: null });
-    res.json({ enrolled: true, progress });
+    const { skillId } = req.params;
+    const progress = await db.getPlanProgress(req.user.id, skillId);
+    if (!progress) return res.json({ enrolled: false, progress: null, plan: null });
+    // Serve from user_learning_plans with smart refresh
+    const plan = await learningPlanService.getUserPlanWithRefresh(req.user.id, skillId);
+    res.json({ enrolled: true, progress, plan });
   } catch (err) {
     console.error('Plan progress error:', err);
     res.status(500).json({ error: 'Failed to fetch progress' });

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
+const learningPlanService = require('../services/learningPlanService');
 const { requireAuth } = require('../middleware/auth');
 
 const VALID_STATUSES = ['active', 'completed'];
@@ -15,6 +16,8 @@ router.post('/enroll/:skillId', requireAuth, async (req, res) => {
     const course = await db.enrollCourse(req.user.id, skillId);
     // Also enroll in the 30-day plan automatically
     await db.enrollPlan(req.user.id, skillId);
+    // Copy shared plan into user's personal learning plan
+    await learningPlanService.copyPlanForUser(req.user.id, skillId);
     res.json({ enrolled: true, course });
   } catch (err) {
     console.error('Enroll error:', err);
@@ -26,6 +29,7 @@ router.post('/enroll/:skillId', requireAuth, async (req, res) => {
 router.delete('/enroll/:skillId', requireAuth, async (req, res) => {
   try {
     await db.unenrollCourse(req.user.id, req.params.skillId);
+    await db.deleteUserLearningPlan(req.user.id, req.params.skillId);
     res.json({ enrolled: false });
   } catch (err) {
     console.error('Unenroll error:', err);
