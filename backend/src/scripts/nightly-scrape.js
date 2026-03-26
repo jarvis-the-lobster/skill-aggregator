@@ -116,14 +116,21 @@ async function run() {
   const backfillQueue = remainingSlots > 0
     ? shuffle(lowContent).slice(0, remainingSlots)
     : [];
-  const queue = [...staleQueue, ...backfillQueue];
 
-  // Track which skills should use expanded YouTube search (low-content skills)
-  // Budget-based expanded search: figure out how many expanded slots we can afford
+  // Budget-based queue sizing: cap total skills to what the quota budget can afford
   // Normal scrape ~120 units, expanded ~240 units
   const UNITS_NORMAL = 120;
   const UNITS_EXPANDED = 240;
-  // Start by allocating all queue as normal, then upgrade some to expanded within budget
+  const maxAffordable = Math.floor(NIGHTLY_QUOTA_BUDGET / UNITS_NORMAL);
+  const uncappedQueue = [...staleQueue, ...backfillQueue];
+  const queue = uncappedQueue.slice(0, Math.min(uncappedQueue.length, maxAffordable));
+
+  if (queue.length < uncappedQueue.length) {
+    console.log(`   ⚠️  Budget cap: ${uncappedQueue.length} skills queued but only ${queue.length} fit within ${NIGHTLY_QUOTA_BUDGET} unit budget`);
+  }
+
+  // Track which skills should use expanded YouTube search (low-content skills)
+  // Allocate all queue as normal first, then upgrade some to expanded within remaining budget
   let budgetRemaining = NIGHTLY_QUOTA_BUDGET - (queue.length * UNITS_NORMAL);
   const extraCostPerExpand = UNITS_EXPANDED - UNITS_NORMAL; // 120 extra units per expanded skill
 
@@ -131,6 +138,7 @@ async function run() {
 
   // Prioritize backfill queue for expanded search
   for (const skill of backfillQueue) {
+    if (!queue.includes(skill)) continue; // may have been trimmed by budget cap
     if (budgetRemaining < extraCostPerExpand) break;
     lowContentIds.add(skill.id);
     budgetRemaining -= extraCostPerExpand;
