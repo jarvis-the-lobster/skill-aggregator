@@ -73,7 +73,7 @@ if (!isServer) {
     if (key) {
       posthogInstance.init(key, {
         api_host: host,
-        capture_pageview: false, // we track page views manually
+        capture_pageview: true, // auto-track $pageview for PostHog built-in dashboards
         persistence: 'localStorage+cookie',
         autocapture: false,
         person_profiles: 'always', // create profiles for anonymous visitors (needed for DAU/WAU)
