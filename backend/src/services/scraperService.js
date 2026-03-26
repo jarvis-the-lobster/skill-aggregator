@@ -295,12 +295,13 @@ class ScraperService {
   // ─── Article scrapers ────────────────────────────────────────────────────
 
   async scrapeArticles(skillId) {
-    const startTimes = { devto: Date.now(), medium: Date.now(), freecodecamp: Date.now() };
+    const startTimes = { devto: Date.now(), medium: Date.now(), freecodecamp: Date.now(), ted: Date.now() };
 
-    const [devtoResult, mediumResult, fccResult] = await Promise.allSettled([
+    const [devtoResult, mediumResult, fccResult, tedResult] = await Promise.allSettled([
       this.scrapeDevTo(skillId),
       this.scrapeMediumRSS(skillId),
-      this.scrapeFreeCodeCamp(skillId)
+      this.scrapeFreeCodeCamp(skillId),
+      this.scrapeTedTalks(skillId)
     ]);
 
     const articles = [];
@@ -327,6 +328,14 @@ class ScraperService {
     } else {
       console.error(`    ❌ freeCodeCamp: ${fccResult.reason?.message}`);
       await db.logScrape({ skill_id: skillId, source: 'freecodecamp', status: 'error', error_message: fccResult.reason?.message, duration_ms: Date.now() - startTimes.freecodecamp });
+    }
+
+    if (tedResult.status === 'fulfilled') {
+      articles.push(...tedResult.value);
+      await db.logScrape({ skill_id: skillId, source: 'ted', status: 'success', items_fetched: tedResult.value.length, duration_ms: Date.now() - startTimes.ted });
+    } else {
+      console.error(`    ❌ TED: ${tedResult.reason?.message}`);
+      await db.logScrape({ skill_id: skillId, source: 'ted', status: 'error', error_message: tedResult.reason?.message, duration_ms: Date.now() - startTimes.ted });
     }
 
     return articles;
@@ -469,6 +478,62 @@ class ScraperService {
         excerpt,
         tags: [skillId]
       });
+    });
+
+    return articles;
+  }
+
+  async scrapeTedTalks(skillId) {
+    // Use simple skill name for TED search — verbose queries return 0 results
+    const searchTerm = skillId.replace(/-/g, ' ');
+    const url = `https://www.ted.com/search?q=${encodeURIComponent(searchTerm)}&type=talks`;
+
+    const res = await axios.get(url, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'LearnStack/1.0' }
+    });
+
+    const $ = cheerio.load(res.data);
+    const articles = [];
+    const seen = new Set();
+
+    $('.search__result').each((i, el) => {
+      if (articles.length >= Math.ceil(MAX_RESULTS / 2)) return false;
+
+      const $el = $(el);
+      const titleLink = $el.find('a[href^="/talks/"]').first();
+      const href = titleLink.attr('href');
+      if (!href || seen.has(href)) return;
+      seen.add(href);
+
+      const title = titleLink.text().trim();
+      if (!title || title.length < 5) return;
+
+      const talkUrl = `https://www.ted.com${href.split('?')[0]}`;
+      const slug = href.replace('/talks/', '').split('?')[0];
+
+      // Extract speaker from "Speaker: Title" pattern
+      let author = '';
+      const colonIdx = title.indexOf(':');
+      if (colonIdx > 0) {
+        author = title.slice(0, colonIdx).trim();
+      }
+
+      const excerpt = $el.find('.search__result__description').text().trim().slice(0, 300);
+      const thumbnail = $el.find('img').attr('src') || null;
+
+      articles.push(this.sanitizeItem({
+        id: `ted_${slug}`,
+        type: 'article',
+        title,
+        url: talkUrl,
+        source: 'TED',
+        author,
+        thumbnail,
+        publishedDate: null,
+        excerpt,
+        tags: [skillId]
+      }));
     });
 
     return articles;
