@@ -1,11 +1,6 @@
 {
   "rewrites": [
     { "source": "/sitemap.xml", "destination": "https://api.learnstack.dev/api/sitemap.xml" },
-    { "source": "/login", "destination": "/index.html" },
-    { "source": "/signup", "destination": "/index.html" },
-    { "source": "/auth/callback", "destination": "/index.html" },
-    { "source": "/my-courses", "destination": "/index.html" },
-    { "source": "/admin", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/$1" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
