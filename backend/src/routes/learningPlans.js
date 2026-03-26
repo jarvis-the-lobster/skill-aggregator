@@ -34,8 +34,13 @@ router.post('/:skillId/enroll', requireAuth, async (req, res) => {
     const skill = await db.getSkillById(skillId);
     if (!skill) return res.status(404).json({ error: 'Skill not found' });
     const progress = await db.enrollPlan(req.user.id, skillId);
-    // Copy shared plan into user's personal learning plan
-    await learningPlanService.copyPlanForUser(req.user.id, skillId);
+    // Also enroll in the course so it shows in my-courses
+    await db.enrollCourse(req.user.id, skillId);
+    // Copy shared plan into user's personal learning plan (only if they don't have one already)
+    const existingPlan = await db.getUserLearningPlan(req.user.id, skillId);
+    if (existingPlan.length === 0) {
+      await learningPlanService.copyPlanForUser(req.user.id, skillId);
+    }
     res.json({ enrolled: true, progress });
   } catch (err) {
     console.error('Plan enroll error:', err);

@@ -16,8 +16,11 @@ router.post('/enroll/:skillId', requireAuth, async (req, res) => {
     const course = await db.enrollCourse(req.user.id, skillId);
     // Also enroll in the 30-day plan automatically
     await db.enrollPlan(req.user.id, skillId);
-    // Copy shared plan into user's personal learning plan
-    await learningPlanService.copyPlanForUser(req.user.id, skillId);
+    // Copy shared plan into user's personal learning plan (only if they don't have one already)
+    const existingPlan = await db.getUserLearningPlan(req.user.id, skillId);
+    if (existingPlan.length === 0) {
+      await learningPlanService.copyPlanForUser(req.user.id, skillId);
+    }
     res.json({ enrolled: true, course });
   } catch (err) {
     console.error('Enroll error:', err);
