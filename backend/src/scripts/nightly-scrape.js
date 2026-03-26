@@ -71,37 +71,35 @@ async function run() {
   );
   const now = Date.now();
 
-  const stale = [];
+  // Priority tiers:
+  // 1. Never scraped / error / quota_exceeded — always run first
+  // 2. Stale (past threshold) — shuffled after priority skills
+  // 3. Low content (<threshold) — backfill with remaining capacity
+  const priority = [];  // never-scraped, error, quota_exceeded
+  const stale = [];     // past staleness threshold
   const lowContent = [];
 
   for (const skill of allSkills) {
-    // Always retry skills where any source's last scrape_log entry was error/quota_exceeded
-    if (scrapeFailedMap[skill.id]) {
-      stale.push(skill);
+    // Tier 1: never scraped, failed scrape_log, or stuck in error/scraping
+    if (!skill.last_scraped_at || scrapeFailedMap[skill.id] ||
+        skill.status === 'error' || skill.status === 'scraping') {
+      priority.push(skill);
       continue;
     }
-    // Always retry skills stuck in error/scraping status
-    if (skill.status === 'error' || skill.status === 'scraping') {
-      stale.push(skill);
-      continue;
-    }
-    if (!skill.last_scraped_at) {
-      stale.push(skill);
-      continue;
-    }
+    // Tier 2: stale
     const age = now - new Date(skill.last_scraped_at).getTime();
     if (age > STALE_THRESHOLD_MS) {
       stale.push(skill);
       continue;
     }
-    // Track low-content skills separately for backfill
+    // Tier 3: low content backfill
     const count = contentCountMap[skill.id] || 0;
     if (count < LOW_CONTENT_THRESHOLD) {
       lowContent.push(skill);
     }
   }
 
-  stats.skipped = allSkills.length - stale.length - lowContent.length;
+  stats.skipped = allSkills.length - priority.length - stale.length - lowContent.length;
 
   if (stale.length === 0 && lowContent.length === 0) {
     console.log('✅ All skills are fresh and well-stocked — nothing to scrape.');
@@ -110,9 +108,11 @@ async function run() {
     return;
   }
 
-  // Stale skills get priority; backfill low-content skills with remaining capacity
-  const staleQueue = shuffle(stale).slice(0, MAX_SKILLS_PER_RUN);
-  const remainingSlots = MAX_SKILLS_PER_RUN - staleQueue.length;
+  // Priority skills always go first (never-scraped, error, quota_exceeded),
+  // then stale, then low-content backfill with remaining capacity
+  const priorityQueue = shuffle(priority);
+  const staleQueue = shuffle(stale).slice(0, Math.max(0, MAX_SKILLS_PER_RUN - priorityQueue.length));
+  const remainingSlots = MAX_SKILLS_PER_RUN - priorityQueue.length - staleQueue.length;
   const backfillQueue = remainingSlots > 0
     ? shuffle(lowContent).slice(0, remainingSlots)
     : [];
@@ -122,7 +122,7 @@ async function run() {
   const UNITS_NORMAL = 120;
   const UNITS_EXPANDED = 240;
   const maxAffordable = Math.floor(NIGHTLY_QUOTA_BUDGET / UNITS_NORMAL);
-  const uncappedQueue = [...staleQueue, ...backfillQueue];
+  const uncappedQueue = [...priorityQueue, ...staleQueue, ...backfillQueue];
   const queue = uncappedQueue.slice(0, Math.min(uncappedQueue.length, maxAffordable));
 
   if (queue.length < uncappedQueue.length) {
@@ -155,7 +155,7 @@ async function run() {
   const normalCount = queue.length - lowContentIds.size;
   const estimatedQuota = (normalCount * UNITS_NORMAL) + (lowContentIds.size * UNITS_EXPANDED);
   console.log(
-    `📋 ${allSkills.length} total skills | ${stale.length} stale | ${lowContent.length} low-content (<${LOW_CONTENT_THRESHOLD}) | ${queue.length} queued (${staleQueue.length} stale + ${backfillQueue.length} backfill) | ${lowContentIds.size} expanded search | ${stats.skipped} fresh (skipped)`
+    `📋 ${allSkills.length} total skills | ${priority.length} priority (never-scraped/error) | ${stale.length} stale | ${lowContent.length} low-content (<${LOW_CONTENT_THRESHOLD}) | ${queue.length} queued (${priorityQueue.length} priority + ${staleQueue.length} stale + ${backfillQueue.length} backfill) | ${lowContentIds.size} expanded search | ${stats.skipped} fresh (skipped)`
   );
   console.log(`   Est. YouTube quota: ~${estimatedQuota} / ${NIGHTLY_QUOTA_BUDGET} budget (10K daily limit, rest reserved for user searches)\n`);
 
