@@ -86,7 +86,18 @@ class LearningPlanService {
 
   async getPlan(skillId) {
     const existing = await db.getLearningPlan(skillId);
-    if (existing.length > 0) return existing;
+    if (existing.length > 0) {
+      // Check if days 1-7 have content — if not and content exists, regenerate
+      const firstWeek = existing.filter(d => d.day_number <= 7);
+      const emptyFirstWeek = firstWeek.every(d => !d.content_id);
+      if (emptyFirstWeek) {
+        const allContent = await db.getSkillContent(skillId);
+        if (allContent.length > 0) {
+          return this.generatePlan(skillId);
+        }
+      }
+      return existing;
+    }
     const allContent = await db.getSkillContent(skillId);
     if (allContent.length === 0) return [];
     return this.generatePlan(skillId);
