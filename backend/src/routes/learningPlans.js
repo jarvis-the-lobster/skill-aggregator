@@ -53,13 +53,27 @@ router.get('/:skillId/my-progress', requireAuth, async (req, res) => {
   try {
     const { skillId } = req.params;
     const progress = await db.getPlanProgress(req.user.id, skillId);
-    if (!progress) return res.json({ enrolled: false, progress: null, plan: null });
-    // Serve from user_learning_plans with smart refresh
-    const plan = await learningPlanService.getUserPlanWithRefresh(req.user.id, skillId);
-    res.json({ enrolled: true, progress, plan });
+    if (!progress) return res.json({ enrolled: false, progress: null, plan: null, refreshAvailable: false });
+    // Serve from user_learning_plans, flag if refresh is available
+    const { plan, refreshAvailable } = await learningPlanService.getUserPlanWithRefresh(req.user.id, skillId);
+    res.json({ enrolled: true, progress, plan, refreshAvailable });
   } catch (err) {
     console.error('Plan progress error:', err);
     res.status(500).json({ error: 'Failed to fetch progress' });
+  }
+});
+
+// POST /api/learning-plans/:skillId/refresh — refresh incomplete days with new content
+router.post('/:skillId/refresh', requireAuth, async (req, res) => {
+  try {
+    const { skillId } = req.params;
+    const progress = await db.getPlanProgress(req.user.id, skillId);
+    if (!progress) return res.status(404).json({ error: 'Not enrolled in this plan' });
+    const plan = await learningPlanService.refreshUserPlan(req.user.id, skillId);
+    res.json({ refreshed: true, plan });
+  } catch (err) {
+    console.error('Plan refresh error:', err);
+    res.status(500).json({ error: 'Failed to refresh plan' });
   }
 });
 

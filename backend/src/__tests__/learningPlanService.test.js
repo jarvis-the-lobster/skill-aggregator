@@ -99,67 +99,68 @@ describe('copyPlanForUser', () => {
 });
 
 describe('getUserPlanWithRefresh', () => {
-  test('returns plan without refresh when content has not changed', async () => {
+  test('returns plan without refresh flag when content has not changed', async () => {
     await seedSkillWithPlan();
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
 
-    const plan = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
 
-    expect(plan).toHaveLength(30);
-    expect(plan[0].day_number).toBe(1);
+    expect(result.plan).toHaveLength(30);
+    expect(result.plan[0].day_number).toBe(1);
+    expect(result.refreshAvailable).toBe(false);
   });
 
-  test('refreshes only incomplete days when new content exists', async () => {
+  test('flags refresh available when new content exists', async () => {
     await seedSkillWithPlan();
-    const originalPlan = await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
-
-    // Record original content IDs for comparison
-    const originalDay1Content = originalPlan[0].content_id;
-
-    // Enroll in plan progress so completed_days is tracked
+    await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
     await db.enrollPlan(USER_ID, SKILL_ID);
 
-    // Simulate new content arriving: update last_scraped_at to be newer
-    // Small delay to ensure timestamp difference
     await new Promise(r => setTimeout(r, 50));
     await db.insert(
       "UPDATE skills SET last_scraped_at = datetime('now', '+1 hour') WHERE id = ?",
       [SKILL_ID]
     );
 
-    const refreshedPlan = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
 
-    expect(refreshedPlan).toHaveLength(30);
-    // All days should be present
-    expect(refreshedPlan[0].day_number).toBe(1);
-    expect(refreshedPlan[29].day_number).toBe(30);
+    expect(result.plan).toHaveLength(30);
+    expect(result.refreshAvailable).toBe(true);
   });
 
-  test('completed days are preserved during refresh', async () => {
+  test('returns empty plan when no user plan exists', async () => {
     await seedSkillWithPlan();
-    const originalPlan = await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
-    const originalDay1 = originalPlan[0].content_id;
 
-    // Enroll and mark days 1 and 2 as completed
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+
+    expect(result.plan).toEqual([]);
+    expect(result.refreshAvailable).toBe(false);
+  });
+});
+
+describe('refreshUserPlan', () => {
+  test('refreshes only incomplete days', async () => {
+    await seedSkillWithPlan();
+    await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
     await db.enrollPlan(USER_ID, SKILL_ID);
+
+    // Mark days 1 and 2 as completed
     await db.insert(
       "UPDATE user_plan_progress SET completed_days = ? WHERE user_id = ? AND skill_id = ?",
       [JSON.stringify([1, 2]), USER_ID, SKILL_ID]
     );
 
-    // Record created_at of original day 1 for comparison
     const beforeRows = await db.getUserLearningPlan(USER_ID, SKILL_ID);
     const day1CreatedBefore = beforeRows[0].created_at;
     const day3CreatedBefore = beforeRows[2].created_at;
 
-    // Simulate new content scraped
+    // Simulate new content
     await new Promise(r => setTimeout(r, 50));
     await db.insert(
       "UPDATE skills SET last_scraped_at = datetime('now', '+1 hour') WHERE id = ?",
       [SKILL_ID]
     );
 
-    const refreshedPlan = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+    const refreshedPlan = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
 
     expect(refreshedPlan).toHaveLength(30);
 
@@ -172,14 +173,6 @@ describe('getUserPlanWithRefresh', () => {
     expect(new Date(day3After.created_at).getTime()).toBeGreaterThanOrEqual(
       new Date(day3CreatedBefore).getTime()
     );
-  });
-
-  test('returns empty array when no user plan exists', async () => {
-    await seedSkillWithPlan();
-
-    const plan = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
-
-    expect(plan).toEqual([]);
   });
 });
 

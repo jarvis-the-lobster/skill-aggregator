@@ -119,6 +119,11 @@ export const apiService = {
     return response.data;
   },
 
+  async refreshPlan(skillId) {
+    const response = await api.post(`/learning-plans/${skillId}/refresh`);
+    return response.data;
+  },
+
   // Ratings endpoints
   async rateContent(contentId, rating) {
     const response = await api.post(`/ratings/${contentId}`, { rating });

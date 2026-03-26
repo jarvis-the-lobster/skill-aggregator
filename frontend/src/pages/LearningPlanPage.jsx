@@ -18,6 +18,8 @@ export function LearningPlanPage() {
   const [enrolled, setEnrolled] = useState(false);
   const [completedDays, setCompletedDays] = useState(new Set());
   const [enrolling, setEnrolling] = useState(false);
+  const [refreshAvailable, setRefreshAvailable] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
 
   useEffect(() => {
@@ -35,14 +37,19 @@ export function LearningPlanPage() {
       if (user) fetches.push(apiService.getPlanProgress(skillId).catch(() => null));
       const [planData, skillData, progressData] = await Promise.all(fetches);
 
+      // Use personal plan if enrolled, otherwise fall back to shared plan
+      const displayPlan = (progressData?.enrolled && progressData?.plan?.length > 0)
+        ? progressData.plan
+        : (planData.plan || []);
+
       // Fetch ratings in parallel with nothing — we have the IDs now, before any setState
-      const ids = (planData.plan || []).map(e => e.content_id).filter(Boolean);
+      const ids = displayPlan.map(e => e.content_id).filter(Boolean);
       const ratingsData = ids.length
         ? await apiService.getRatings(ids).catch(() => ({ counts: {}, userRatings: {} }))
         : { counts: {}, userRatings: {} };
 
       // Set all state together so RatingButtons mounts with correct initial props
-      setPlan(planData.plan || []);
+      setPlan(displayPlan);
       setSkillName(skillData.skill?.name || skillId);
       setRatings(ratingsData);
 
@@ -50,6 +57,7 @@ export function LearningPlanPage() {
         setEnrolled(true);
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
         setCompletedDays(new Set(days));
+        setRefreshAvailable(progressData.refreshAvailable || false);
       }
     } catch (error) {
       console.error('Error loading learning plan:', error);
@@ -78,6 +86,27 @@ export function LearningPlanPage() {
       analytics.track('plan_day_completed', { skillId, day, totalCompleted: days.length });
     } catch (err) {
       console.error('Complete day error:', err);
+    }
+  };
+
+  const handleRefreshPlan = async () => {
+    setRefreshing(true);
+    try {
+      const data = await apiService.refreshPlan(skillId);
+      if (data.refreshed && data.plan) {
+        setPlan(data.plan);
+        setRefreshAvailable(false);
+        // Re-fetch ratings for any new content IDs
+        const ids = data.plan.map(e => e.content_id).filter(Boolean);
+        if (ids.length) {
+          const ratingsData = await apiService.getRatings(ids).catch(() => ({ counts: {}, userRatings: {} }));
+          setRatings(ratingsData);
+        }
+      }
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -133,6 +162,22 @@ export function LearningPlanPage() {
           )}
         </p>
 
+
+        {refreshAvailable && enrolled && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-900">New resources available!</p>
+              <p className="text-xs text-blue-700">We found better content for your incomplete days. Your completed days won't change.</p>
+            </div>
+            <button
+              onClick={handleRefreshPlan}
+              disabled={refreshing}
+              className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+            >
+              {refreshing ? 'Updating…' : 'Update Plan'}
+            </button>
+          </div>
+        )}
 
         {plan.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border border-gray-200">

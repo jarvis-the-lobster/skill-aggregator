@@ -108,21 +108,23 @@ class LearningPlanService {
     return db.getUserLearningPlan(userId, skillId);
   }
 
-  // Get user's personal plan with smart refresh if new content was scraped
+  // Get user's personal plan, flagging if a refresh is available
   async getUserPlanWithRefresh(userId, skillId) {
     const userPlan = await db.getUserLearningPlan(userId, skillId);
-    if (userPlan.length === 0) return [];
+    if (userPlan.length === 0) return { plan: [], refreshAvailable: false };
 
     // Check if content has been refreshed since user plan was created
     const skill = await db.getSkillById(skillId);
-    if (!skill || !skill.last_scraped_at) return userPlan;
+    if (!skill || !skill.last_scraped_at) return { plan: userPlan, refreshAvailable: false };
 
     const maxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
-    if (!maxCreatedAt || new Date(skill.last_scraped_at) <= new Date(maxCreatedAt)) {
-      return userPlan;
-    }
+    const hasNewContent = maxCreatedAt && new Date(skill.last_scraped_at) > new Date(maxCreatedAt);
 
-    // New content exists — refresh only incomplete days
+    return { plan: userPlan, refreshAvailable: hasNewContent };
+  }
+
+  // Actually apply the refresh — called when user opts in
+  async refreshUserPlan(userId, skillId) {
     const progress = await db.getPlanProgress(userId, skillId);
     const completedDays = new Set(JSON.parse(progress?.completed_days || '[]'));
 
