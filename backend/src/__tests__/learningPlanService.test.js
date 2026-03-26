@@ -138,22 +138,39 @@ describe('getUserPlanWithRefresh', () => {
 });
 
 describe('refreshUserPlan', () => {
-  test('refreshes only incomplete days', async () => {
+  test('preserves completed days content and refreshes incomplete days', async () => {
     await seedSkillWithPlan();
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
     await db.enrollPlan(USER_ID, SKILL_ID);
 
-    // Mark days 1 and 2 as completed
+    // Mark days 1, 2, and 8 (first article day) as completed
     await db.insert(
       "UPDATE user_plan_progress SET completed_days = ? WHERE user_id = ? AND skill_id = ?",
-      [JSON.stringify([1, 2]), USER_ID, SKILL_ID]
+      [JSON.stringify([1, 2, 8]), USER_ID, SKILL_ID]
     );
 
+    // Record original state for completed days
     const beforeRows = await db.getUserLearningPlan(USER_ID, SKILL_ID);
-    const day1CreatedBefore = beforeRows[0].created_at;
-    const day3CreatedBefore = beforeRows[2].created_at;
+    const day1Before = beforeRows.find(d => d.day_number === 1);
+    const day2Before = beforeRows.find(d => d.day_number === 2);
+    const day8Before = beforeRows.find(d => d.day_number === 8);
+    const day3Before = beforeRows.find(d => d.day_number === 3);
 
-    // Simulate new content
+    // Add new content that could change the plan ordering
+    for (let i = 100; i < 115; i++) {
+      await db.saveContent([{
+        id: `devto_new${i}`,
+        type: 'article',
+        title: `New Article ${i}`,
+        url: `https://dev.to/new${i}`,
+        source: 'Dev.to',
+        author: 'Author',
+        views: 50000 + i * 100, // high views to change sort order
+        tags: [],
+      }], SKILL_ID);
+    }
+
+    // Simulate new content scraped
     await new Promise(r => setTimeout(r, 50));
     await db.insert(
       "UPDATE skills SET last_scraped_at = datetime('now', '+1 hour') WHERE id = ?",
@@ -161,17 +178,25 @@ describe('refreshUserPlan', () => {
     );
 
     const refreshedPlan = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
-
     expect(refreshedPlan).toHaveLength(30);
 
-    // Completed days (1, 2) should keep their original created_at
+    // Completed days should keep EXACT same content_id
     const day1After = refreshedPlan.find(d => d.day_number === 1);
-    expect(day1After.created_at).toBe(day1CreatedBefore);
+    const day2After = refreshedPlan.find(d => d.day_number === 2);
+    const day8After = refreshedPlan.find(d => d.day_number === 8);
+
+    expect(day1After.content_id).toBe(day1Before.content_id);
+    expect(day2After.content_id).toBe(day2Before.content_id);
+    expect(day8After.content_id).toBe(day8Before.content_id);
+
+    // Completed days should keep original created_at
+    expect(day1After.created_at).toBe(day1Before.created_at);
+    expect(day8After.created_at).toBe(day8Before.created_at);
 
     // Incomplete day (3) should have a newer created_at (was refreshed)
     const day3After = refreshedPlan.find(d => d.day_number === 3);
     expect(new Date(day3After.created_at).getTime()).toBeGreaterThanOrEqual(
-      new Date(day3CreatedBefore).getTime()
+      new Date(day3Before.created_at).getTime()
     );
   });
 });
