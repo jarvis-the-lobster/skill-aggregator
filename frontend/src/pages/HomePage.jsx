@@ -4,7 +4,6 @@ import { Helmet } from 'react-helmet-async';
 import { Search, ArrowRight, Check, Star, Zap } from 'lucide-react';
 import { apiService } from '../services/api';
 import { SearchBar } from '../components/SearchBar';
-import { useAuth } from '../contexts/AuthContext';
 import analytics from '../services/analytics';
 
 const SITE_URL = typeof window !== 'undefined' ? window.location.origin : '';
@@ -52,7 +51,6 @@ export function HomePage() {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const revealRef = useScrollReveal();
-  const { user } = useAuth();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -472,21 +470,12 @@ export function HomePage() {
           <p className="text-lg text-slate-400 mb-12 fade-up delay-1">
             No credit card. No commitment. Just learning.
           </p>
-          {user ? (
-            <a
-              href="#skills"
-              className="inline-flex items-center gap-2 bg-teal text-dark-bg font-semibold text-base px-8 py-4 rounded-xl hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-250 hover:-translate-y-px hover:scale-[1.02] btn-cta-glow fade-up delay-2"
-            >
-              Browse Skills <ArrowRight className="w-[18px] h-[18px]" />
-            </a>
-          ) : (
-            <Link
-              to="/signup"
-              className="inline-flex items-center gap-2 bg-teal text-dark-bg font-semibold text-base px-8 py-4 rounded-xl hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-250 hover:-translate-y-px hover:scale-[1.02] btn-cta-glow fade-up delay-2"
-            >
-              Get Started Free <ArrowRight className="w-[18px] h-[18px]" />
-            </Link>
-          )}
+          <a
+            href="#skills"
+            className="inline-flex items-center gap-2 bg-teal text-dark-bg font-semibold text-base px-8 py-4 rounded-xl hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-250 hover:-translate-y-px hover:scale-[1.02] btn-cta-glow fade-up delay-2"
+          >
+            Start Learning <ArrowRight className="w-[18px] h-[18px]" />
+          </a>
         </div>
       </section>
 
