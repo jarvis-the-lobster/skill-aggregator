@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Search, ArrowRight, Check, Star, Zap } from 'lucide-react';
+import { ArrowRight, Check, Star } from 'lucide-react';
 import { apiService } from '../services/api';
 import { SearchBar } from '../components/SearchBar';
 import analytics from '../services/analytics';
