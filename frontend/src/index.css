@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -14,19 +14,19 @@
   .btn-primary {
     @apply bg-primary-500 hover:bg-primary-600 text-white font-medium px-6 py-2 rounded-lg transition-colors duration-200;
   }
-  
+
   .btn-secondary {
     @apply bg-white hover:bg-gray-50 text-gray-700 font-medium px-6 py-2 rounded-lg border border-gray-300 transition-colors duration-200;
   }
-  
+
   .card {
     @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
   }
-  
+
   .skill-card {
     @apply card hover:shadow-md transition-shadow duration-200 cursor-pointer;
   }
-  
+
   .content-card {
     @apply bg-white rounded-lg shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow duration-200;
   }
@@ -82,4 +82,175 @@
 
 .streak-day-frozen {
   background: linear-gradient(135deg, #38bdf8, #06b6d4);
+}
+
+/* ======= PREMIUM HOMEPAGE ANIMATIONS ======= */
+@keyframes premium-fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes premium-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes premium-pulse-glow {
+  0%, 100% { box-shadow: 0 0 24px rgba(0,191,166,0.3), 0 0 48px rgba(0,191,166,0.1); }
+  50% { box-shadow: 0 0 32px rgba(0,191,166,0.5), 0 0 64px rgba(0,191,166,0.2); }
+}
+
+@keyframes premium-gradient-shift {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+}
+
+@keyframes premium-gradient-shift-2 {
+  0% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.4; }
+  50% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.4; }
+}
+
+@keyframes premium-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Fade-up scroll reveal classes */
+.fade-up {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.fade-up.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.fade-up.delay-1 { transition-delay: 0.1s; }
+.fade-up.delay-2 { transition-delay: 0.2s; }
+.fade-up.delay-3 { transition-delay: 0.3s; }
+.fade-up.delay-4 { transition-delay: 0.4s; }
+.fade-up.delay-5 { transition-delay: 0.5s; }
+
+/* Hero entry animations */
+.hero-animate {
+  animation: premium-fadeUp 0.8s ease forwards;
+  opacity: 0;
+}
+.hero-animate-delay-1 { animation-delay: 0.1s; }
+.hero-animate-delay-2 { animation-delay: 0.25s; }
+.hero-animate-delay-3 { animation-delay: 0.35s; }
+.hero-animate-delay-4 { animation-delay: 0.45s; }
+
+/* Pulsing glow for CTA */
+.btn-cta-glow {
+  animation: premium-pulse-glow 3s ease-in-out infinite;
+}
+
+/* Hero glow orbs */
+.hero-glow-1 {
+  animation: premium-gradient-shift 8s ease-in-out infinite;
+}
+.hero-glow-2 {
+  animation: premium-gradient-shift-2 10s ease-in-out infinite;
+}
+
+/* Floating mockup */
+.mockup-float {
+  animation: premium-float 6s ease-in-out infinite;
+}
+
+/* Steps connector line */
+.steps-connector::before {
+  content: '';
+  position: absolute;
+  top: 24px;
+  left: calc(16.66% + 24px);
+  right: calc(16.66% + 24px);
+  height: 2px;
+  background: linear-gradient(90deg, #00BFA6, rgba(0,191,166,0.2));
+  z-index: 0;
+}
+
+/* Skill card hover glow */
+.premium-skill-card {
+  transition: all 0.3s ease;
+}
+.premium-skill-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0 0 1px rgba(0,191,166,0.3), 0 24px 48px rgba(0,0,0,0.4);
+  border-color: rgba(0,191,166,0.2);
+}
+.premium-skill-card .skill-card-link-text {
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: all 0.3s ease;
+}
+.premium-skill-card:hover .skill-card-link-text {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Nav link underline effect */
+.nav-link-premium::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: #00BFA6;
+  border-radius: 1px;
+  transition: width 0.3s ease;
+}
+.nav-link-premium:hover::after {
+  width: 100%;
+}
+
+/* Stat divider */
+.stat-divider::after {
+  content: '';
+  position: absolute;
+  right: -24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 48px;
+  background: rgba(255,255,255,0.08);
+}
+
+/* Feature visual card */
+.feature-visual-card {
+  background: #141929;
+  border-radius: 16px;
+  padding: 32px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+}
+
+/* Gradient text */
+.gradient-text-teal {
+  background: linear-gradient(135deg, #00BFA6, #00d4b8, #4ade80);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Stat number gradient */
+.stat-number-gradient {
+  background: linear-gradient(135deg, #00BFA6, #00d4b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Responsive overrides for premium homepage */
+@media (max-width: 768px) {
+  .steps-connector::before {
+    display: none;
+  }
+  .stat-divider::after {
+    display: none;
+  }
 }

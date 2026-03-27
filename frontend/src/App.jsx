@@ -41,32 +41,43 @@ function ScrollToTop() {
   return null;
 }
 
+function LayoutShell({ children }) {
+  const location = useLocation();
+  const isHome = location.pathname === '/';
+
+  if (isHome) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Header />
+      <main className="flex-grow">{children}</main>
+      <Footer />
+    </div>
+  );
+}
+
 export function AppContent() {
   return (
     <AuthProvider>
       <RouteTracker />
       <ScrollToTop />
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        <Header />
-
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/skills/:id" element={<SkillPage />} />
-            <Route path="/skills/:skillId/plan" element={<LearningPlanPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
-            <Route path="/my-courses" element={<MyCoursesPage />} />
-            <Route path="/early-access" element={<EarlyAccessPage />} />
-            <Route path="/welcome" element={<WelcomePage />} />
-          </Routes>
-        </main>
-
-        <Footer />
-      </div>
+      <LayoutShell>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/skills/:id" element={<SkillPage />} />
+          <Route path="/skills/:skillId/plan" element={<LearningPlanPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
+          <Route path="/my-courses" element={<MyCoursesPage />} />
+          <Route path="/early-access" element={<EarlyAccessPage />} />
+          <Route path="/welcome" element={<WelcomePage />} />
+        </Routes>
+      </LayoutShell>
     </AuthProvider>
   );
 }
