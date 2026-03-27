@@ -31,9 +31,9 @@ export function Footer() {
                   {link.label}
                 </Link>
               ))}
-              <Link to="/" className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
+              <a href="/#skills" className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
                 Browse All &rarr;
-              </Link>
+              </a>
             </div>
           </div>
           {/* Company */}
