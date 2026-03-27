@@ -179,6 +179,9 @@ export function HomePage() {
                     {(user.name || user.email).charAt(0).toUpperCase()}
                   </div>
                 )}
+                <span className="hidden sm:block text-sm font-medium text-slate-300">
+                  {user.name || user.email}
+                </span>
                 <Link to="/my-courses" className="hidden md:inline-block text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors">
                   My Courses
                 </Link>
@@ -188,12 +191,20 @@ export function HomePage() {
                 </button>
               </div>
             ) : (
-              <Link
-                to="/signup"
-                className="inline-flex items-center gap-2 bg-teal text-dark-bg font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-250 hover:-translate-y-px hover:scale-[1.02]"
-              >
-                Get Started Free
-              </Link>
+              <div className="flex items-center gap-4">
+                <Link
+                  to="/login"
+                  className="text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/signup"
+                  className="inline-flex items-center gap-2 bg-teal text-dark-bg font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-250 hover:-translate-y-px hover:scale-[1.02]"
+                >
+                  Get Started Free
+                </Link>
+              </div>
             )}
           </div>
         </div>

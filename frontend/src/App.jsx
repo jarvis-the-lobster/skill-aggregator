@@ -50,9 +50,9 @@ function LayoutShell({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-dark-bg text-slate-100 flex flex-col">
       <Header />
-      <main className="flex-grow">{children}</main>
+      <main className="flex-grow pt-[72px]">{children}</main>
       <Footer />
     </div>
   );
