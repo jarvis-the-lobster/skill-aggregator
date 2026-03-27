@@ -115,14 +115,14 @@ export function LearningPlanPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-dark-bg p-8">
         <div className="max-w-6xl mx-auto animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/3 mb-8"></div>
+          <div className="h-6 bg-dark-surface rounded w-1/4 mb-6"></div>
+          <div className="h-8 bg-dark-surface rounded w-1/2 mb-2"></div>
+          <div className="h-4 bg-dark-surface rounded w-1/3 mb-8"></div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {[...Array(30)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
+              <div key={i} className="h-32 bg-dark-surface rounded-lg"></div>
             ))}
           </div>
         </div>
@@ -131,7 +131,7 @@ export function LearningPlanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-dark-bg">
       <Helmet>
         <title>{`30-Day ${skillName} Learning Plan | LearnStack`}</title>
         <meta name="description" content={`A structured 30-day day-by-day learning plan for ${skillName}. Follow a curated sequence of videos and articles.`} />
@@ -143,21 +143,21 @@ export function LearningPlanPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link
           to={`/skills/${skillId}`}
-          className="inline-flex items-center text-primary-600 hover:text-primary-700 mb-6"
+          className="inline-flex items-center text-teal hover:text-teal-light mb-6"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to {skillName}
         </Link>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-3xl font-bold text-slate-100 mb-2">
           30-Day {skillName} Learning Plan
         </h1>
-        <p className="text-gray-600 mb-4">
+        <p className="text-slate-400 mb-4">
           A structured day-by-day roadmap through the best curated content.
           {!user && (
             <span className="ml-1">
               Days 1–7 are free.{' '}
-              <Link to="/signup" className="text-primary-600 underline">
+              <Link to="/signup" className="text-teal underline">
                 Sign up
               </Link>{' '}
               to unlock all 30 days.
@@ -167,15 +167,15 @@ export function LearningPlanPage() {
 
 
         {refreshAvailable && enrolled && (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="mb-6 bg-teal/10 border border-teal/20 rounded-lg p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-900">New resources available!</p>
-              <p className="text-xs text-blue-700">We found better content for your incomplete days. Your completed days won't change.</p>
+              <p className="text-sm font-medium text-teal-light">New resources available!</p>
+              <p className="text-xs text-teal/70">We found better content for your incomplete days. Your completed days won't change.</p>
             </div>
             <button
               onClick={handleRefreshPlan}
               disabled={refreshing}
-              className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+              className="ml-4 px-4 py-2 bg-teal text-dark-bg text-sm rounded-lg hover:bg-teal-light disabled:opacity-50 whitespace-nowrap font-semibold"
             >
               {refreshing ? 'Updating…' : 'Update Plan'}
             </button>
@@ -183,10 +183,10 @@ export function LearningPlanPage() {
         )}
 
         {plan.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-            <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h2 className="text-lg font-medium text-gray-900 mb-2">No plan generated yet</h2>
-            <p className="text-gray-500">
+          <div className="text-center py-16 bg-dark-card rounded-xl border border-white/[0.08]">
+            <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+            <h2 className="text-lg font-medium text-slate-100 mb-2">No plan generated yet</h2>
+            <p className="text-slate-400">
               A learning plan will be available once content has been scraped for this skill.
             </p>
           </div>
@@ -202,24 +202,24 @@ export function LearningPlanPage() {
                   key={entry.day_number}
                   className={`relative rounded-lg border p-3 flex flex-col min-h-[8rem] ${
                     isCompleted
-                      ? 'bg-green-50 border-green-400'
+                      ? 'bg-green-500/10 border-green-500/30'
                       : unlocked
-                      ? 'bg-white border-gray-200 hover:border-primary-300 hover:shadow-sm transition-all'
-                      : 'bg-gray-50 border-gray-100'
+                      ? 'bg-dark-card border-white/[0.08] hover:border-teal/30 hover:shadow-sm transition-all'
+                      : 'bg-dark-surface/50 border-white/[0.05]'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span
                       className={`text-xs font-semibold ${
-                        isCompleted ? 'text-green-600' : unlocked ? 'text-primary-600' : 'text-gray-400'
+                        isCompleted ? 'text-green-400' : unlocked ? 'text-teal' : 'text-slate-500'
                       }`}
                     >
                       Day {entry.day_number}
                     </span>
                     {isCompleted ? (
-                      <CheckCircle className="w-3 h-3 text-green-500" />
+                      <CheckCircle className="w-3 h-3 text-green-400" />
                     ) : !unlocked ? (
-                      <Lock className="w-3 h-3 text-gray-300" />
+                      <Lock className="w-3 h-3 text-slate-600" />
                     ) : null}
                   </div>
 
@@ -227,15 +227,11 @@ export function LearningPlanPage() {
                     <>
                       <div className="flex items-center space-x-1 mb-1">
                         {entry.content_type === 'video' ? (
-                          <Play className="w-3 h-3 text-purple-500 flex-shrink-0" />
+                          <Play className="w-3 h-3 text-teal flex-shrink-0" />
                         ) : (
-                          <BookOpen className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                          <BookOpen className="w-3 h-3 text-teal-light flex-shrink-0" />
                         )}
-                        <span
-                          className={`text-xs ${
-                            entry.content_type === 'video' ? 'text-purple-600' : 'text-blue-600'
-                          }`}
-                        >
+                        <span className="text-xs text-teal">
                           {entry.content_type}
                         </span>
                       </div>
@@ -243,7 +239,7 @@ export function LearningPlanPage() {
                         href={entry.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm font-medium text-gray-800 hover:text-primary-600 line-clamp-3 flex-grow"
+                        className="text-sm font-medium text-slate-200 hover:text-teal line-clamp-3 flex-grow"
                         title={entry.title}
                       >
                         {entry.title || 'Untitled'}
@@ -257,7 +253,7 @@ export function LearningPlanPage() {
                       {enrolled && !isCompleted && (
                         <button
                           onClick={() => handleCompleteDay(entry.day_number)}
-                          className="mt-2 text-xs text-green-600 hover:text-green-700 text-left"
+                          className="mt-2 text-xs text-green-400 hover:text-green-300 text-left"
                         >
                           Mark complete
                         </button>
@@ -265,13 +261,13 @@ export function LearningPlanPage() {
                     </>
                   ) : unlocked && !hasContent ? (
                     <div className="flex flex-col flex-grow">
-                      <p className="text-xs text-gray-400 flex-grow flex items-center">
+                      <p className="text-xs text-slate-500 flex-grow flex items-center">
                         📝 Review & practice day
                       </p>
                       {enrolled && !isCompleted && (
                         <button
                           onClick={() => handleCompleteDay(entry.day_number)}
-                          className="mt-2 text-xs text-green-600 hover:text-green-700 text-left"
+                          className="mt-2 text-xs text-green-400 hover:text-green-300 text-left"
                         >
                           Mark complete
                         </button>
@@ -279,8 +275,8 @@ export function LearningPlanPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center flex-grow py-2">
-                      <Lock className="w-5 h-5 text-gray-300 mb-1" />
-                      <p className="text-xs text-gray-400 text-center">Upgrade to unlock</p>
+                      <Lock className="w-5 h-5 text-slate-600 mb-1" />
+                      <p className="text-xs text-slate-500 text-center">Upgrade to unlock</p>
                     </div>
                   )}
                 </div>
@@ -290,11 +286,11 @@ export function LearningPlanPage() {
         )}
 
         {!enrolled && plan.length > 0 && (
-          <div className="mt-8 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-6 text-center border border-purple-200">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
+          <div className="mt-8 bg-gradient-to-r from-teal/10 to-teal-deep/10 rounded-xl p-6 text-center border border-teal/20">
+            <h2 className="text-xl font-bold text-slate-100 mb-2">
               Unlock the full 30-day plan
             </h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-slate-400 mb-4">
               {user
                 ? 'Enroll to unlock all 30 days and track your progress.'
                 : 'Create a free account to access all 30 days of curated content.'}

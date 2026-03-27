@@ -46,25 +46,25 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-dark-bg flex items-center justify-center px-4">
       <Helmet>
         <title>Sign In — LearnStack</title>
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/login`} />
       </Helmet>
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
+      <div className="bg-dark-card rounded-2xl border border-white/[0.08] w-full max-w-md p-8">
         {/* Logo */}
         <div className="flex items-center justify-center space-x-2 mb-8">
-          <div className="p-2 bg-primary-500 rounded-lg">
-            <Zap className="w-6 h-6 text-white" />
+          <div className="p-2 bg-teal rounded-lg">
+            <Zap className="w-6 h-6 text-dark-bg" />
           </div>
-          <span className="text-xl font-bold text-gray-900">LearnStack</span>
+          <span className="text-xl font-bold text-slate-100">LearnStack</span>
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">Welcome back</h1>
-        <p className="text-gray-500 text-center mb-6">Sign in to your account</p>
+        <h1 className="text-2xl font-bold text-slate-100 text-center mb-2">Welcome back</h1>
+        <p className="text-slate-400 text-center mb-6">Sign in to your account</p>
 
         {oauthError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
             Google sign-in failed. Please try again.
           </div>
         )}
@@ -72,44 +72,44 @@ export function LoginPage() {
         {/* Google OAuth */}
         <button
           onClick={loginWithGoogle}
-          className="w-full flex items-center justify-center space-x-3 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 font-medium hover:bg-gray-50 transition-colors mb-4"
+          className="w-full flex items-center justify-center space-x-3 border border-white/[0.08] rounded-lg px-4 py-2.5 text-slate-200 font-medium hover:bg-white/[0.06] transition-colors mb-4"
         >
           <GoogleIcon />
           <span>Continue with Google</span>
         </button>
 
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-gray-400 text-sm">or</span>
-          <div className="flex-1 h-px bg-gray-200" />
+          <div className="flex-1 h-px bg-white/[0.08]" />
+          <span className="text-slate-500 text-sm">or</span>
+          <div className="flex-1 h-px bg-white/[0.08]" />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Email</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full bg-dark-surface border border-white/[0.08] rounded-lg px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal focus:border-transparent"
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Password</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full bg-dark-surface border border-white/[0.08] rounded-lg px-3 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal focus:border-transparent"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <p className="text-red-600 text-sm">{error}</p>
+            <p className="text-red-400 text-sm">{error}</p>
           )}
 
           <button
@@ -121,9 +121,9 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-gray-500 text-sm mt-6">
+        <p className="text-center text-slate-400 text-sm mt-6">
           Don't have an account?{' '}
-          <Link to="/signup" className="text-primary-600 font-medium hover:underline">
+          <Link to="/signup" className="text-teal font-medium hover:underline">
             Sign up
           </Link>
         </p>

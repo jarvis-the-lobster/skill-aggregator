@@ -9,8 +9,8 @@ import { PushOptIn } from '../components/PushOptIn';
 import { useStreak } from '../hooks/useStreak';
 
 const STATUS_STYLES = {
-  active: 'bg-green-100 text-green-800',
-  completed: 'bg-blue-100 text-blue-800',
+  active: 'bg-green-500/15 text-green-400',
+  completed: 'bg-teal/15 text-teal',
 };
 
 export function MyCoursesPage() {
@@ -38,12 +38,12 @@ export function MyCoursesPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-dark-bg p-8">
         <div className="max-w-4xl mx-auto">
           <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+            <div className="h-8 bg-dark-surface rounded w-1/3"></div>
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              <div key={i} className="h-32 bg-dark-surface rounded"></div>
             ))}
           </div>
         </div>
@@ -52,7 +52,7 @@ export function MyCoursesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-dark-bg">
       <Helmet>
         <title>My Courses — LearnStack</title>
         <link rel="canonical" href={`${typeof window !== 'undefined' ? window.location.origin : ''}/my-courses`} />
@@ -65,14 +65,14 @@ export function MyCoursesPage() {
           <StreakWidget />
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">My Courses</h1>
-        <p className="text-gray-500 mb-8">Track your learning journey</p>
+        <h1 className="text-3xl font-bold text-slate-100 mb-2">My Courses</h1>
+        <p className="text-slate-400 mb-8">Track your learning journey</p>
 
         {courses.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
-            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">No courses yet</h2>
-            <p className="text-gray-500 mb-6">
+          <div className="bg-dark-card rounded-xl border border-white/[0.08] p-12 text-center">
+            <BookOpen className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-slate-100 mb-2">No courses yet</h2>
+            <p className="text-slate-400 mb-6">
               Browse skills to get started on your learning journey.
             </p>
             <Link to="/" className="btn-primary">
@@ -84,13 +84,13 @@ export function MyCoursesPage() {
             {courses.map(course => (
               <div
                 key={course.skill_id}
-                className="bg-white rounded-xl shadow-sm border p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                className="bg-dark-card rounded-xl border border-white/[0.08] p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
               >
                 <div className="flex-grow">
                   <div className="flex items-center gap-3 mb-1">
                     <Link
                       to={`/skills/${course.skill_id}`}
-                      className="text-lg font-semibold text-gray-900 hover:text-primary-600 transition-colors"
+                      className="text-lg font-semibold text-slate-100 hover:text-teal transition-colors"
                     >
                       {course.name}
                     </Link>
@@ -99,9 +99,9 @@ export function MyCoursesPage() {
                     </span>
                   </div>
 
-                  <p className="text-sm text-gray-500 capitalize mb-3">{course.category}</p>
+                  <p className="text-sm text-slate-400 capitalize mb-3">{course.category}</p>
 
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
                     <div className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
                       <span>Enrolled {new Date(course.enrolled_at).toLocaleDateString()}</span>
