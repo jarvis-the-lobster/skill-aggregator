@@ -211,7 +211,7 @@ export function LearningPlanPage() {
                   <div className="flex items-center justify-between mb-2">
                     <span
                       className={`text-xs font-semibold ${
-                        isCompleted ? 'text-green-400' : unlocked ? 'text-sky-400' : 'text-slate-500'
+                        isCompleted ? 'text-sky-400' : unlocked ? 'text-sky-400' : 'text-slate-500'
                       }`}
                     >
                       Day {entry.day_number}
