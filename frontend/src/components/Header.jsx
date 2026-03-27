@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { StreakBadge } from './StreakBadge';
+import { Logo } from './Logo';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -30,12 +31,7 @@ export function Header() {
     >
       <div className="max-w-[1200px] mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 text-[22px] font-extrabold tracking-tight">
-          <div className="w-8 h-8 bg-teal rounded-lg flex items-center justify-center text-white text-base font-extrabold">
-            L
-          </div>
-          <span className="text-slate-100">Learn<span className="text-teal">Stack</span></span>
-        </Link>
+        <Logo />
 
         {/* Navigation */}
         <div className="flex items-center gap-8">

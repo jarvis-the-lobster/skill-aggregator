@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Search, BookOpen } from 'lucide-react';
+import { Search, BookOpen } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { Logo } from '../components/Logo';
 
 const FEATURED_SKILL_IDS = [
   'python', 'web-development', 'javascript', 'data-science', 'digital-marketing',
@@ -232,11 +233,8 @@ export function WelcomePage() {
     <div className="min-h-screen bg-[#0a0f1e]">
       <div className="max-w-2xl mx-auto px-4 py-12">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-10">
-          <div className="w-8 h-8 bg-teal rounded-lg flex items-center justify-center text-white text-base font-extrabold">
-            L
-          </div>
-          <span className="text-xl font-bold text-slate-100">Learn<span className="text-teal">Stack</span></span>
+        <div className="flex justify-center mb-10">
+          <Logo link={false} />
         </div>
 
         <ProgressBar step={step} />

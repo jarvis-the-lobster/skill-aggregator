@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Logo } from './Logo';
 
 export function Footer() {
   return (
@@ -7,12 +8,9 @@ export function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr] gap-12 mb-12">
           {/* Brand */}
           <div>
-            <Link to="/" className="flex items-center gap-2 text-[22px] font-extrabold tracking-tight mb-4">
-              <div className="w-8 h-8 bg-teal rounded-lg flex items-center justify-center text-white text-base font-extrabold">
-                L
-              </div>
-              <span className="text-slate-100">Learn<span className="text-teal">Stack</span></span>
-            </Link>
+            <div className="mb-4">
+              <Logo />
+            </div>
             <p className="text-sm text-slate-400 leading-relaxed max-w-[280px]">
               The free skill-learning aggregator. Curated videos and articles for 200+ skills, structured into 30-day learning plans.
             </p>
