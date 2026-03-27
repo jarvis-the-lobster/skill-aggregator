@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 
-export function SearchBar({ value, onChange, onSearch, skills = [], placeholder }) {
+export function SearchBar({ value, onChange, onSearch, onSuggestionSelect, skills = [], placeholder }) {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const trimmed = value.trim();
@@ -24,9 +24,13 @@ export function SearchBar({ value, onChange, onSearch, skills = [], placeholder 
   };
 
   const handleSuggestionClick = (skill) => {
-    onChange(skill.name);
-    if (onSearch) onSearch(skill.name);
     setShowDropdown(false);
+    if (onSuggestionSelect) {
+      onSuggestionSelect(skill);
+    } else {
+      onChange(skill.name);
+      if (onSearch) onSearch(skill.name);
+    }
   };
 
   const handleSearchForQuery = () => {
@@ -38,8 +42,8 @@ export function SearchBar({ value, onChange, onSearch, skills = [], placeholder 
 
   return (
     <div className="relative">
-      <div className="flex items-center bg-white rounded-full shadow-lg px-2 py-2">
-        <Search className="w-5 h-5 text-gray-400 ml-3 flex-shrink-0" />
+      <div className="flex items-center bg-[#141929] border border-white/[0.08] rounded-full shadow-lg px-2 py-2">
+        <Search className="w-5 h-5 text-slate-500 ml-3 flex-shrink-0" />
         <input
           type="text"
           placeholder={placeholder || 'Search skills...'}
@@ -47,13 +51,13 @@ export function SearchBar({ value, onChange, onSearch, skills = [], placeholder 
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowDropdown(true)}
-          onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-          className="flex-grow px-4 py-2 text-gray-700 text-lg focus:outline-none bg-transparent"
+          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+          className="flex-grow px-4 py-2 text-slate-100 text-lg focus:outline-none bg-transparent placeholder-slate-500"
         />
         {value && (
           <button
             onClick={() => onChange('')}
-            className="mr-2 text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="mr-2 text-slate-500 hover:text-slate-300 text-xl leading-none"
             aria-label="Clear search"
           >
             ×
@@ -62,13 +66,13 @@ export function SearchBar({ value, onChange, onSearch, skills = [], placeholder 
       </div>
 
       {showDropdown && (filteredSuggestions.length > 0 || showSearchOption) && (
-        <div className="absolute top-full left-0 right-0 bg-white shadow-xl rounded-2xl mt-2 z-50 overflow-hidden border border-gray-100">
+        <div className="absolute top-full left-0 right-0 bg-[#141929] shadow-xl rounded-2xl mt-2 z-[100] overflow-hidden border border-white/[0.08]">
           {filteredSuggestions.map((skill) => (
             <button
               key={skill.id}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => handleSuggestionClick(skill)}
-              className="w-full text-left px-5 py-3 hover:bg-gray-50 text-gray-800 flex items-center justify-between"
+              className="w-full text-left px-5 py-3 hover:bg-white/[0.06] text-slate-200 flex items-center justify-between"
             >
               <span>{skill.name}</span>
               {skill.status === 'scraping' && (
@@ -81,7 +85,7 @@ export function SearchBar({ value, onChange, onSearch, skills = [], placeholder 
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleSearchForQuery}
-              className="w-full text-left px-5 py-3 hover:bg-purple-50 text-purple-700 font-medium border-t border-gray-100 flex items-center space-x-2"
+              className="w-full text-left px-5 py-3 hover:bg-teal/10 text-teal font-medium border-t border-white/[0.08] flex items-center space-x-2"
             >
               <Search className="w-4 h-4 flex-shrink-0" />
               <span>Search for &ldquo;{trimmed}&rdquo;</span>

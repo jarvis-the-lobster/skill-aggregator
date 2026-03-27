@@ -151,11 +151,12 @@ export function HomePage() {
             </p>
 
             {/* Search bar */}
-            <div className="max-w-md mb-6 hero-animate hero-animate-delay-2">
+            <div className="max-w-md mb-6 hero-animate hero-animate-delay-2 relative z-[60]">
               <SearchBar
                 value={searchQuery}
                 onChange={setSearchQuery}
                 onSearch={handleSearch}
+                onSuggestionSelect={(skill) => navigate(`/skills/${skill.id}`)}
                 skills={skills}
                 placeholder="Search Python, Kubernetes, Design…"
               />
