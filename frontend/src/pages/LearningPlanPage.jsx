@@ -211,7 +211,7 @@ export function LearningPlanPage() {
                   <div className="flex items-center justify-between mb-2">
                     <span
                       className={`text-xs font-semibold ${
-                        isCompleted ? 'text-green-400' : unlocked ? 'text-teal' : 'text-slate-500'
+                        isCompleted ? 'text-green-400' : unlocked ? 'text-sky-400' : 'text-slate-500'
                       }`}
                     >
                       Day {entry.day_number}
@@ -229,9 +229,9 @@ export function LearningPlanPage() {
                         {entry.content_type === 'video' ? (
                           <Play className="w-3 h-3 text-teal flex-shrink-0" />
                         ) : (
-                          <BookOpen className="w-3 h-3 text-teal-light flex-shrink-0" />
+                          <BookOpen className="w-3 h-3 text-blue-400 flex-shrink-0" />
                         )}
-                        <span className="text-xs text-teal">
+                        <span className={`text-xs ${entry.content_type === 'video' ? 'text-teal' : 'text-blue-400'}`}>
                           {entry.content_type}
                         </span>
                       </div>
