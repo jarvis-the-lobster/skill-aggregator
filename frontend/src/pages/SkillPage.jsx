@@ -302,7 +302,7 @@ export function SkillPage() {
                       : 'bg-red-500/15 text-red-400'
                   }`}
                 >
-                  {skillData.difficulty}
+                  {skillData.difficulty?.charAt(0).toUpperCase() + skillData.difficulty?.slice(1)}
                 </span>
                 {skillData.estimatedHours > 0 && (
                   <div className="flex items-center space-x-1">
@@ -326,7 +326,7 @@ export function SkillPage() {
                       if (window.confirm('Unenroll from this course?')) await unenroll();
                     }}
                     disabled={enrollLoading}
-                    className="flex items-center space-x-1 px-4 py-2 rounded-lg bg-green-500/15 text-green-400 font-medium text-sm hover:bg-green-500/25 transition-colors disabled:opacity-50"
+                    className="flex items-center space-x-1 px-6 py-2 rounded-lg bg-green-500/15 text-green-400 font-medium text-sm hover:bg-green-500/25 transition-colors disabled:opacity-50"
                   >
                     <span>✓ Enrolled</span>
                   </button>
@@ -342,7 +342,7 @@ export function SkillPage() {
                 <button
                   onClick={handleRefreshContent}
                   disabled={isRefreshing || refreshMessage === 'already-up-to-date'}
-                  className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed leading-[1.25rem]"
                 >
                   <span className={isRefreshing ? 'animate-spin inline-block' : ''}>↻</span>{' '}
                   {isRefreshing ? 'Refreshing...' : refreshMessage === 'already-up-to-date' ? 'Up to date' : 'Refresh'}
@@ -419,7 +419,7 @@ export function SkillPage() {
                 {content.videos?.length > 0 ? (
                   content.videos.map((video) => (
                     <div key={video.id} className="content-card overflow-hidden">
-                      <div className="flex flex-col sm:flex-row sm:space-x-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4">
                         <img
                           src={video.thumbnail || 'https://via.placeholder.com/320x180'}
                           alt={video.title}

@@ -28,7 +28,7 @@
   }
 
   .content-card {
-    @apply bg-dark-card rounded-lg border border-white/[0.08] p-4 hover:border-teal/20 transition-all duration-200;
+    @apply bg-dark-card rounded-lg border-2 border-white/[0.08] p-4 hover:border-teal/30 transition-all duration-200;
   }
 }
 
