@@ -1,11 +1,20 @@
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Zap, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { StreakBadge } from './StreakBadge';
+import { Logo } from './Logo';
 
 export function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 32);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   function handleLogout() {
     logout();
@@ -13,97 +22,73 @@ export function Header() {
   }
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="p-2 bg-primary-500 rounded-lg">
-              <Zap className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gray-900">LearnStack</span>
-          </Link>
+    <header
+      className={`fixed top-0 left-0 right-0 z-[1000] py-4 backdrop-blur-[20px] transition-all duration-300 ${
+        scrolled
+          ? 'bg-[rgba(10,15,30,0.9)] border-b border-white/[0.08]'
+          : 'bg-[rgba(10,15,30,0.7)] border-b border-transparent'
+      }`}
+    >
+      <div className="max-w-[1200px] mx-auto px-6 flex items-center justify-between">
+        {/* Logo */}
+        <Logo />
 
-          {/* Navigation */}
-          <nav className="hidden md:flex space-x-8">
-            <Link
-              to="/"
-              className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
-            >
-              Home
-            </Link>
-            <Link
-              to="/about"
-              className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
-            >
-              About
-            </Link>
-            {user && (
-              <Link
-                to="/my-courses"
-                className="text-gray-700 hover:text-primary-600 font-medium transition-colors"
-              >
-                My Courses
-              </Link>
-            )}
-          </nav>
-
-          {/* Early access CTA */}
+        {/* Navigation */}
+        <div className="flex items-center gap-8">
           <Link
-            to="/early-access"
-            className="hidden md:inline-flex items-center gap-1.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-medium px-3 py-1.5 rounded-full transition-colors"
+            to="/"
+            className="hidden md:inline-block relative text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors py-1 nav-link-premium"
           >
-            <Zap className="w-3.5 h-3.5" />
-            Early Access
+            Home
           </Link>
+          <Link
+            to="/about"
+            className="hidden md:inline-block relative text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors py-1 nav-link-premium"
+          >
+            About
+          </Link>
+          {user && (
+            <Link
+              to="/my-courses"
+              className="hidden md:inline-block relative text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors py-1 nav-link-premium"
+            >
+              My Courses
+            </Link>
+          )}
 
           {/* Auth area */}
-          <div className="flex items-center space-x-3">
-            {user ? (
-              <>
-                {/* Avatar + name */}
-                <div className="flex items-center space-x-2">
-                  {user.avatar_url ? (
-                    <img
-                      src={user.avatar_url}
-                      alt={user.name || user.email}
-                      className="w-8 h-8 rounded-full object-cover"
-                      onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                    />
-                  ) : null}
-                  <div
-                    className="w-8 h-8 rounded-full bg-primary-500 items-center justify-center text-white text-sm font-semibold"
-                    style={{ display: user.avatar_url ? 'none' : 'flex' }}
-                  >
-                    {(user.name || user.email).charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 hidden sm:block">
-                    {user.name || user.email}
-                  </span>
-                </div>
-
-                <StreakBadge />
-
+          {user ? (
+            <div className="flex items-center gap-3">
+              <StreakBadge />
+              <div className="flex items-center gap-2 bg-white/[0.08] border border-white/[0.1] rounded-full pl-4 pr-2 py-1.5">
+                <span className="text-sm font-medium text-slate-200">
+                  {user.name || user.email}
+                </span>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center space-x-1 text-gray-500 hover:text-gray-700 transition-colors text-sm"
+                  className="text-slate-400 hover:text-slate-100 transition-colors p-1 rounded-full hover:bg-white/[0.08]"
                   title="Sign out"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span className="hidden sm:block">Sign out</span>
                 </button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="text-gray-600 hover:text-gray-900 font-medium text-sm transition-colors">
-                  Sign in
-                </Link>
-                <Link to="/signup" className="btn-primary text-sm">
-                  Get started
-                </Link>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <Link
+                to="/login"
+                className="text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors"
+              >
+                Sign in
+              </Link>
+              <Link
+                to="/signup"
+                className="inline-flex items-center gap-2 bg-teal text-dark-bg font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-250 hover:-translate-y-px hover:scale-[1.02]"
+              >
+                Get Started Free
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </header>

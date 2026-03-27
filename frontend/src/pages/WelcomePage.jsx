@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Search, BookOpen } from 'lucide-react';
+import { Search, BookOpen } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { Logo } from '../components/Logo';
 
 const FEATURED_SKILL_IDS = [
   'python', 'web-development', 'javascript', 'data-science', 'digital-marketing',
@@ -37,9 +38,9 @@ const DAILY_TIMES = [
 ];
 
 const CATEGORY_COLORS = {
-  programming: 'bg-blue-100 text-blue-700',
-  business: 'bg-emerald-100 text-emerald-700',
-  design: 'bg-purple-100 text-purple-700',
+  programming: 'bg-teal/15 text-teal-light',
+  business: 'bg-emerald-400/15 text-emerald-400',
+  design: 'bg-pink-400/15 text-pink-400',
 };
 
 const STEP_TITLES = [
@@ -56,7 +57,7 @@ function ProgressBar({ step }) {
         <div
           key={i}
           className={`h-2 rounded-full transition-all duration-300 ${
-            i <= step ? 'bg-primary-500 w-10' : 'bg-gray-200 w-6'
+            i <= step ? 'bg-teal w-10' : 'bg-white/10 w-6'
           }`}
         />
       ))}
@@ -70,15 +71,15 @@ function OptionCard({ emoji, label, sub, selected, onClick }) {
       onClick={onClick}
       className={`w-full text-left p-5 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
         selected
-          ? 'border-primary-500 bg-primary-50 shadow-sm'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+          ? 'border-teal bg-teal/10 shadow-sm'
+          : 'border-white/[0.08] bg-[#141929] hover:border-white/20 hover:shadow-sm'
       }`}
     >
       <div className="flex items-center gap-4">
         <span className="text-3xl flex-shrink-0">{emoji}</span>
         <div>
-          <span className="text-base font-medium text-gray-900">{label}</span>
-          {sub && <p className="text-sm text-gray-500 mt-0.5">{sub}</p>}
+          <span className="text-base font-medium text-slate-100">{label}</span>
+          {sub && <p className="text-sm text-slate-400 mt-0.5">{sub}</p>}
         </div>
       </div>
     </button>
@@ -86,19 +87,19 @@ function OptionCard({ emoji, label, sub, selected, onClick }) {
 }
 
 function SkillPickerCard({ skill, contentCount, onClick }) {
-  const categoryColor = CATEGORY_COLORS[skill.category] || 'bg-gray-100 text-gray-700';
+  const categoryColor = CATEGORY_COLORS[skill.category] || 'bg-white/10 text-slate-400';
   return (
     <button
       onClick={onClick}
-      className="text-left p-4 rounded-xl border-2 border-gray-200 bg-white hover:border-primary-400 hover:shadow-sm transition-all duration-200 cursor-pointer"
+      className="text-left p-4 rounded-xl border-2 border-white/[0.08] bg-[#141929] hover:border-teal/40 hover:shadow-sm transition-all duration-200 cursor-pointer"
     >
-      <h4 className="font-semibold text-gray-900 text-sm leading-tight mb-2">{skill.name}</h4>
+      <h4 className="font-semibold text-slate-100 text-sm leading-tight mb-2">{skill.name}</h4>
       <div className="flex items-center justify-between">
         <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${categoryColor}`}>
           {skill.category}
         </span>
         {contentCount !== undefined && (
-          <span className="text-xs text-gray-400 flex items-center gap-1">
+          <span className="text-xs text-slate-500 flex items-center gap-1">
             <BookOpen className="w-3 h-3" />
             {contentCount}
           </span>
@@ -222,26 +223,23 @@ export function WelcomePage() {
 
   if (authLoading || checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0f1e] flex items-center justify-center">
         <LoadingSpinner />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0a0f1e]">
       <div className="max-w-2xl mx-auto px-4 py-12">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-10">
-          <div className="p-2 bg-primary-500 rounded-lg">
-            <Zap className="w-6 h-6 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900">LearnStack</span>
+        <div className="flex justify-center mb-10">
+          <Logo link={false} />
         </div>
 
         <ProgressBar step={step} />
 
-        <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">
+        <h2 className="text-2xl font-bold text-slate-100 text-center mb-8">
           {STEP_TITLES[step]}
         </h2>
 
@@ -296,13 +294,13 @@ export function WelcomePage() {
           {step === 3 && (
             <div>
               <div className="relative mb-6">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
                 <input
                   type="text"
                   value={skillSearch}
                   onChange={(e) => setSkillSearch(e.target.value)}
                   placeholder="Search skills..."
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-white/[0.08] rounded-xl bg-[#141929] text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal focus:border-transparent"
                 />
               </div>
 
@@ -324,7 +322,7 @@ export function WelcomePage() {
               )}
 
               {enrolling && (
-                <div className="flex items-center justify-center gap-2 mt-6 text-gray-500">
+                <div className="flex items-center justify-center gap-2 mt-6 text-slate-400">
                   <LoadingSpinner />
                   <span className="text-sm">Enrolling...</span>
                 </div>
@@ -333,7 +331,7 @@ export function WelcomePage() {
               <div className="text-center mt-8">
                 <button
                   onClick={handleSkip}
-                  className="text-gray-500 hover:text-gray-700 text-sm font-medium underline underline-offset-2"
+                  className="text-slate-500 hover:text-slate-300 text-sm font-medium underline underline-offset-2"
                 >
                   Browse on my own
                 </button>

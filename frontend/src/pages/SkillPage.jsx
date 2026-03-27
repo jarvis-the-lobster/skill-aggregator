@@ -167,14 +167,14 @@ export function SkillPage() {
   // --- Loading skeleton ---
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-dark-bg p-8">
         <div className="max-w-6xl mx-auto">
           <div className="animate-pulse space-y-8">
-            <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-            <div className="h-64 bg-gray-200 rounded"></div>
+            <div className="h-8 bg-dark-surface rounded w-1/3"></div>
+            <div className="h-64 bg-dark-surface rounded"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-48 bg-gray-200 rounded"></div>
+                <div key={i} className="h-48 bg-dark-surface rounded"></div>
               ))}
             </div>
           </div>
@@ -191,26 +191,26 @@ export function SkillPage() {
   // --- Scraping in progress (only show if truly zero content) ---
   if ((status === 'scraping' || status === 'pending') && !hasAnyContent) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
         <div className="text-center max-w-md px-4">
           <div className="text-6xl mb-6 animate-bounce">🔍</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+          <h1 className="text-2xl font-bold text-slate-100 mb-3">
             Gathering the best resources for{' '}
-            <span className="text-purple-600">{skillData?.name || skillId}</span>…
+            <span className="text-teal">{skillData?.name || skillId}</span>…
           </h1>
-          <p className="text-gray-500 mb-6">
+          <p className="text-slate-400 mb-6">
             We&apos;re scraping YouTube and top articles. This usually takes 15–30 seconds.
           </p>
           <div className="flex justify-center space-x-2">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="w-3 h-3 bg-purple-500 rounded-full animate-bounce"
+                className="w-3 h-3 bg-teal rounded-full animate-bounce"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}
           </div>
-          <p className="text-xs text-gray-400 mt-6">Checking every 3 seconds…</p>
+          <p className="text-xs text-slate-500 mt-6">Checking every 3 seconds…</p>
         </div>
       </div>
     );
@@ -219,11 +219,11 @@ export function SkillPage() {
   // --- Timeout (only show if truly zero content) ---
   if (status === 'timeout' && !hasAnyContent) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
         <div className="text-center max-w-md px-4">
           <p className="text-5xl mb-4">⏱️</p>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">Taking longer than expected</h1>
-          <p className="text-gray-500 mb-6">
+          <h1 className="text-2xl font-bold text-slate-100 mb-3">Taking longer than expected</h1>
+          <p className="text-slate-400 mb-6">
             Content gathering is still in progress. Check back in a moment.
           </p>
           <div className="flex justify-center space-x-3">
@@ -242,9 +242,9 @@ export function SkillPage() {
   // --- Skill not found / error ---
   if (!skillData || status === 'error') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Could not load skill</h1>
+          <h1 className="text-2xl font-bold text-slate-100 mb-4">Could not load skill</h1>
           <Link to="/" className="btn-primary">
             Back to Home
           </Link>
@@ -255,7 +255,7 @@ export function SkillPage() {
 
   // --- Ready state ---
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-dark-bg">
       <Helmet>
         <title>{`Learn ${skillData.name} — Best Videos & Articles | LearnStack`}</title>
         <meta name="description" content={skillData.description || `Discover the best curated YouTube videos and articles to learn ${skillData.name}. Quality-ranked content so you get straight to learning.`} />
@@ -278,11 +278,11 @@ export function SkillPage() {
       </Helmet>
 
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="bg-dark-card border-b border-white/[0.08]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Link
             to="/"
-            className="inline-flex items-center text-primary-600 hover:text-primary-700 mb-4"
+            className="inline-flex items-center text-teal hover:text-teal-light mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Skills
@@ -290,19 +290,19 @@ export function SkillPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{skillData.name}</h1>
-              <p className="text-lg sm:text-xl text-gray-600 mb-4">{skillData.description}</p>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-2">{skillData.name}</h1>
+              <p className="text-lg sm:text-xl text-slate-400 mb-4">{skillData.description}</p>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span
                   className={`px-3 py-1 rounded-full ${
                     skillData.difficulty === 'beginner'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-green-500/15 text-green-400'
                       : skillData.difficulty === 'intermediate'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-red-100 text-red-800'
+                      ? 'bg-yellow-500/15 text-yellow-400'
+                      : 'bg-red-500/15 text-red-400'
                   }`}
                 >
-                  {skillData.difficulty}
+                  {skillData.difficulty?.charAt(0).toUpperCase() + skillData.difficulty?.slice(1)}
                 </span>
                 {skillData.estimatedHours > 0 && (
                   <div className="flex items-center space-x-1">
@@ -326,7 +326,7 @@ export function SkillPage() {
                       if (window.confirm('Unenroll from this course?')) await unenroll();
                     }}
                     disabled={enrollLoading}
-                    className="flex items-center space-x-1 px-4 py-2 rounded-lg bg-green-100 text-green-800 font-medium text-sm hover:bg-green-200 transition-colors disabled:opacity-50"
+                    className="flex items-center space-x-1 px-6 py-2 rounded-lg bg-green-500/15 text-green-400 font-medium text-sm hover:bg-green-500/25 transition-colors disabled:opacity-50"
                   >
                     <span>✓ Enrolled</span>
                   </button>
@@ -342,7 +342,7 @@ export function SkillPage() {
                 <button
                   onClick={handleRefreshContent}
                   disabled={isRefreshing || refreshMessage === 'already-up-to-date'}
-                  className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed leading-[1.25rem]"
                 >
                   <span className={isRefreshing ? 'animate-spin inline-block' : ''}>↻</span>{' '}
                   {isRefreshing ? 'Refreshing...' : refreshMessage === 'already-up-to-date' ? 'Up to date' : 'Refresh'}
@@ -350,8 +350,8 @@ export function SkillPage() {
               </div>
               <span className="text-xs transition-all">
                 {refreshMessage && refreshMessage !== 'already-up-to-date'
-                  ? <span className="text-blue-500">{refreshMessage}</span>
-                  : <span className="text-gray-400">{lastScrapedAt ? `Updated: ${new Date(lastScrapedAt).toLocaleDateString()}` : 'Never updated'}</span>
+                  ? <span className="text-teal">{refreshMessage}</span>
+                  : <span className="text-slate-500">{lastScrapedAt ? `Updated: ${new Date(lastScrapedAt).toLocaleDateString()}` : 'Never updated'}</span>
                 }
               </span>
             </div>
@@ -361,16 +361,16 @@ export function SkillPage() {
 
       {/* Content Tabs */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-sm border">
+        <div className="bg-dark-card rounded-xl border border-white/[0.08]">
           {/* Tab Headers */}
-          <div className="border-b border-gray-200">
+          <div className="border-b border-white/[0.08]">
             <nav className="flex space-x-8 px-6">
               <button
                 onClick={() => handleTabChange('videos')}
                 className={`py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'videos'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-teal text-teal'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <div className="flex items-center space-x-2">
@@ -383,8 +383,8 @@ export function SkillPage() {
                 onClick={() => handleTabChange('articles')}
                 className={`py-4 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === 'articles'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'border-teal text-teal'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
                 }`}
               >
                 <div className="flex items-center space-x-2">
@@ -395,7 +395,7 @@ export function SkillPage() {
 
               <Link
                 to={`/skills/${skillId}/plan`}
-                className="py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors"
+                className="py-4 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors"
               >
                 <div className="flex items-center space-x-2">
                   <CalendarDays className="w-4 h-4" />
@@ -411,27 +411,27 @@ export function SkillPage() {
               <div className="space-y-6">
                 {/* Banner: videos coming soon when we have articles but no videos */}
                 {!content.videos?.length && content.articles?.length > 0 && (
-                  <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                  <div className="flex items-center gap-3 px-4 py-3 bg-teal/10 border border-teal/20 rounded-lg text-sm text-teal-light">
                     <span className="text-lg">🎬</span>
-                    <p>Video content for this skill is being gathered and will be available within 24 hours. Check out the <button onClick={() => handleTabChange('articles')} className="underline font-medium hover:text-blue-900">articles</button> in the meantime!</p>
+                    <p>Video content for this skill is being gathered and will be available within 24 hours. Check out the <button onClick={() => handleTabChange('articles')} className="underline font-medium hover:text-teal">articles</button> in the meantime!</p>
                   </div>
                 )}
                 {content.videos?.length > 0 ? (
                   content.videos.map((video) => (
                     <div key={video.id} className="content-card overflow-hidden">
-                      <div className="flex flex-col sm:flex-row sm:space-x-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4">
                         <img
                           src={video.thumbnail || 'https://via.placeholder.com/320x180'}
                           alt={video.title}
                           className="w-full sm:w-32 h-44 sm:h-20 object-cover rounded-lg flex-shrink-0 mb-3 sm:mb-0"
                         />
                         <div className="min-w-0 flex-grow">
-                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 break-words">
+                          <h3 className="text-base sm:text-lg font-semibold text-slate-100 mb-2 break-words">
                             {video.title}
                           </h3>
-                          <p className="text-gray-600 text-sm mb-3 line-clamp-2">{video.description}</p>
+                          <p className="text-slate-400 text-sm mb-3 line-clamp-2">{video.description}</p>
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
                               <span>{video.channel || video.source}</span>
                               <div className="flex items-center space-x-1">
                                 <Clock className="w-3 h-3" />
@@ -474,9 +474,9 @@ export function SkillPage() {
                   ))
                 ) : (
                   <div className="text-center py-12">
-                    <Play className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No videos yet</h3>
-                    <p className="text-gray-500 mb-4">
+                    <Play className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-slate-100 mb-2">No videos yet</h3>
+                    <p className="text-slate-400 mb-4">
                       Content is being gathered. Try refreshing in a few minutes.
                     </p>
                     <button onClick={handleRefreshContent} className="btn-primary">
@@ -492,12 +492,12 @@ export function SkillPage() {
                 {content.articles?.length > 0 ? (
                   content.articles.map((article) => (
                     <div key={article.id} className="content-card overflow-hidden">
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 break-words">
+                      <h3 className="text-base sm:text-lg font-semibold text-slate-100 mb-2 break-words">
                         {article.title}
                       </h3>
-                      <p className="text-gray-600 mb-4 text-sm sm:text-base line-clamp-3">{article.excerpt || article.description}</p>
+                      <p className="text-slate-400 mb-4 text-sm sm:text-base line-clamp-3">{article.excerpt || article.description}</p>
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
                           <span>{article.source}</span>
                           <span>by {article.author}</span>
                           {article.readTime && (
@@ -532,9 +532,9 @@ export function SkillPage() {
                   ))
                 ) : (
                   <div className="text-center py-12">
-                    <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No articles yet</h3>
-                    <p className="text-gray-500 mb-4">
+                    <BookOpen className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-slate-100 mb-2">No articles yet</h3>
+                    <p className="text-slate-400 mb-4">
                       Content is being gathered. Try refreshing in a few minutes.
                     </p>
                     <button onClick={handleRefreshContent} className="btn-primary">
