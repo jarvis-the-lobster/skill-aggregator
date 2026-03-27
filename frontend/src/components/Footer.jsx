@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { Twitter, Github, Mail } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -51,33 +50,18 @@ export function Footer() {
               ))}
             </div>
           </div>
-          {/* Connect */}
+          {/* Contact */}
           <div>
-            <h4 className="text-[13px] font-semibold uppercase tracking-wider mb-4 text-slate-100">Connect</h4>
+            <h4 className="text-[13px] font-semibold uppercase tracking-wider mb-4 text-slate-100">Contact</h4>
             <div className="flex flex-col">
-              <Link to="/early-access" className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
-                Newsletter
-              </Link>
+              <a href="mailto:hello@learnstack.dev" className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
+                hello@learnstack.dev
+              </a>
             </div>
           </div>
         </div>
         <div className="pt-8 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-[13px] text-slate-400">&copy; 2026 LearnStack. All rights reserved.</span>
-          <div className="flex gap-4">
-            {[
-              { icon: <Twitter className="w-4 h-4" />, label: 'Twitter' },
-              { icon: <Github className="w-4 h-4" />, label: 'GitHub' },
-              { icon: <Mail className="w-4 h-4" />, label: 'Email' },
-            ].map((social) => (
-              <span
-                key={social.label}
-                className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:bg-teal/10 hover:text-teal transition-all cursor-default"
-                title={social.label}
-              >
-                {social.icon}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
     </footer>
