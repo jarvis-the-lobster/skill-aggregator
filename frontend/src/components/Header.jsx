@@ -63,28 +63,19 @@ export function Header() {
           {/* Auth area */}
           {user ? (
             <div className="flex items-center gap-3">
-              {user.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt={user.name || user.email}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-teal flex items-center justify-center text-white text-sm font-semibold">
-                  {(user.name || user.email).charAt(0).toUpperCase()}
-                </div>
-              )}
-              <span className="hidden sm:block text-sm font-medium text-slate-300">
-                {user.name || user.email}
-              </span>
               <StreakBadge />
-              <button
-                onClick={handleLogout}
-                className="text-slate-400 hover:text-slate-100 transition-colors"
-                title="Sign out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 bg-white/[0.08] border border-white/[0.1] rounded-full pl-4 pr-2 py-1.5">
+                <span className="text-sm font-medium text-slate-200">
+                  {user.name || user.email}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="text-slate-400 hover:text-slate-100 transition-colors p-1 rounded-full hover:bg-white/[0.08]"
+                  title="Sign out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-4">
