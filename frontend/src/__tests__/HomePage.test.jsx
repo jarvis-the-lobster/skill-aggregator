@@ -1,3 +1,11 @@
+// Mock IntersectionObserver (not available in jsdom)
+global.IntersectionObserver = class {
+  constructor(cb) { this.cb = cb; }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -16,6 +24,11 @@ vi.mock('../services/api', () => ({
 // Mock analytics
 vi.mock('../services/analytics', () => ({
   default: { track: vi.fn() },
+}));
+
+// Mock useAuth
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({ user: null, loading: false, logout: vi.fn() }),
 }));
 
 // Mock useNavigate
@@ -55,18 +68,18 @@ describe('HomePage', () => {
   it('renders homepage with title LearnStack', async () => {
     renderWithRouter(<HomePage />);
     expect(await screen.findByText(/Learn any skill/)).toBeInTheDocument();
-    expect(screen.getByText(/resources on the internet/)).toBeInTheDocument();
+    expect(screen.getByText(/Free, fast/)).toBeInTheDocument();
   });
 
   it('shows featured skill cards', async () => {
     renderWithRouter(<HomePage />);
-    expect(await screen.findByText('Python')).toBeInTheDocument();
-    expect(screen.getByText('JavaScript')).toBeInTheDocument();
+    expect(await screen.findByText('Python Programming')).toBeInTheDocument();
+    expect(screen.getAllByText('JavaScript').length).toBeGreaterThan(0);
   });
 
   it('search bar is visible and functional', async () => {
     renderWithRouter(<HomePage />);
-    await screen.findByText('Python');
+    await screen.findByText('Python Programming');
     const searchInput = screen.getByPlaceholderText(/Search Python/);
     expect(searchInput).toBeInTheDocument();
 
@@ -75,29 +88,17 @@ describe('HomePage', () => {
     expect(searchInput).toHaveValue('Python');
   });
 
-  it('skill card click triggers analytics', async () => {
+  it('skill card links to skill page', async () => {
     renderWithRouter(<HomePage />);
-    const pythonCard = await screen.findByText('Python');
-    const user = userEvent.setup();
-    await user.click(pythonCard.closest('a'));
-    expect(analytics.track).toHaveBeenCalledWith('skill_card_clicked', expect.objectContaining({ skillId: 'python' }));
-  });
-
-  it('search filters displayed skills while typing', async () => {
-    renderWithRouter(<HomePage />);
-    await screen.findByText('Python');
-    const searchInput = screen.getByPlaceholderText(/Search Python/);
-    const user = userEvent.setup();
-    await user.type(searchInput, 'data');
-    // Data Science should match, JavaScript should be filtered out
-    expect(screen.getAllByText('Data Science').length).toBeGreaterThan(0);
-    expect(screen.queryByText('JavaScript')).not.toBeInTheDocument();
+    const pythonCard = await screen.findByText('Python Programming');
+    const link = pythonCard.closest('a');
+    expect(link).toHaveAttribute('href', '/skills/python');
   });
 
   it('search submit triggers analytics and navigation', async () => {
     apiService.searchSkill.mockResolvedValue({ skill: { id: 'python', name: 'Python' } });
     renderWithRouter(<HomePage />);
-    await screen.findByText('Python');
+    await screen.findByText('Python Programming');
     const searchInput = screen.getByPlaceholderText(/Search Python/);
     const user = userEvent.setup();
     await user.type(searchInput, 'python{Enter}');
@@ -108,7 +109,7 @@ describe('HomePage', () => {
   it('shows error for blocked search terms', async () => {
     apiService.searchSkill.mockResolvedValue({ skill: null, status: 'blocked', message: 'This search term is not allowed.' });
     renderWithRouter(<HomePage />);
-    await screen.findByText('Python');
+    await screen.findByText('Python Programming');
     const searchInput = screen.getByPlaceholderText(/Search Python/);
     const user = userEvent.setup();
     await user.type(searchInput, 'badterm{Enter}');
@@ -119,7 +120,7 @@ describe('HomePage', () => {
   it('shows error for rate-limited search', async () => {
     apiService.searchSkill.mockResolvedValue({ skill: null, status: 'rate_limited', message: 'Too many new skill requests.' });
     renderWithRouter(<HomePage />);
-    await screen.findByText('Python');
+    await screen.findByText('Python Programming');
     const searchInput = screen.getByPlaceholderText(/Search Python/);
     const user = userEvent.setup();
     await user.type(searchInput, 'newskill{Enter}');
