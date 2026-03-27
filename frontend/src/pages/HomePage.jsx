@@ -1,11 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Search, ArrowRight, Check, Star, Zap, LogOut, Twitter, Github, Mail } from 'lucide-react';
+import { Search, ArrowRight, Check, Star, Zap } from 'lucide-react';
 import { apiService } from '../services/api';
 import { SearchBar } from '../components/SearchBar';
-import { useAuth } from '../contexts/AuthContext';
-import { StreakBadge } from '../components/StreakBadge';
 import analytics from '../services/analytics';
 
 const SITE_URL = typeof window !== 'undefined' ? window.location.origin : '';
@@ -51,10 +49,8 @@ export function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [skills, setSkills] = useState([]);
   const [error, setError] = useState(null);
-  const [navScrolled, setNavScrolled] = useState(false);
   const navigate = useNavigate();
   const revealRef = useScrollReveal();
-  const { user, logout } = useAuth();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -73,12 +69,6 @@ export function HomePage() {
     loadSkills();
   }, []);
 
-  // Scroll listener for nav
-  useEffect(() => {
-    const onScroll = () => setNavScrolled(window.scrollY > 32);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   const loadSkills = async () => {
     try {
@@ -108,11 +98,6 @@ export function HomePage() {
       setError('Search failed. Please try again.');
     }
   };
-
-  const handleLogout = useCallback(() => {
-    logout();
-    navigate('/');
-  }, [logout, navigate]);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -144,66 +129,6 @@ export function HomePage() {
         <link rel="canonical" href={SITE_URL + '/'} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
-
-      {/* ===== STICKY NAV ===== */}
-      <nav
-        className={`fixed top-0 left-0 right-0 z-[1000] py-4 backdrop-blur-[20px] transition-all duration-300 ${
-          navScrolled
-            ? 'bg-[rgba(10,15,30,0.9)] border-b border-white/[0.08]'
-            : 'bg-[rgba(10,15,30,0.7)] border-b border-transparent'
-        }`}
-      >
-        <div className="max-w-[1200px] mx-auto px-6 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 text-[22px] font-extrabold tracking-tight">
-            <div className="w-8 h-8 bg-teal rounded-lg flex items-center justify-center text-white text-base font-extrabold">
-              L
-            </div>
-            <span>Learn<span className="text-teal">Stack</span></span>
-          </Link>
-          <div className="flex items-center gap-8">
-            <a href="#skills" className="hidden md:inline-block relative text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors py-1 nav-link-premium">
-              Skills
-            </a>
-            <a href="#how-it-works" className="hidden md:inline-block relative text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors py-1 nav-link-premium">
-              How it Works
-            </a>
-            <Link to="/about" className="hidden md:inline-block relative text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors py-1 nav-link-premium">
-              About
-            </Link>
-            {user ? (
-              <div className="flex items-center gap-3">
-                <Link to="/my-courses" className="hidden md:inline-block text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors">
-                  My Courses
-                </Link>
-                <StreakBadge />
-                <div className="flex items-center gap-2 bg-white/[0.08] border border-white/[0.1] rounded-full pl-4 pr-2 py-1.5">
-                  <span className="text-sm font-medium text-slate-200">
-                    {user.name || user.email}
-                  </span>
-                  <button onClick={handleLogout} className="text-slate-400 hover:text-slate-100 transition-colors p-1 rounded-full hover:bg-white/[0.08]" title="Sign out">
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <Link
-                  to="/login"
-                  className="text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  to="/signup"
-                  className="inline-flex items-center gap-2 bg-teal text-dark-bg font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-250 hover:-translate-y-px hover:scale-[1.02]"
-                >
-                  Get Started Free
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
 
       {/* ===== HERO ===== */}
       <section className="relative min-h-screen flex items-center pt-32 pb-24 overflow-hidden">
@@ -553,85 +478,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ===== FOOTER ===== */}
-      <footer className="pt-16 pb-8 bg-dark-footer border-t border-white/[0.08]">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr] gap-12 mb-12">
-            {/* Brand */}
-            <div>
-              <Link to="/" className="flex items-center gap-2 text-[22px] font-extrabold tracking-tight mb-4">
-                <div className="w-8 h-8 bg-teal rounded-lg flex items-center justify-center text-white text-base font-extrabold">
-                  L
-                </div>
-                <span>Learn<span className="text-teal">Stack</span></span>
-              </Link>
-              <p className="text-sm text-slate-400 leading-relaxed max-w-[280px]">
-                The free skill-learning aggregator. Curated videos and articles for 200+ skills, structured into 30-day learning plans.
-              </p>
-            </div>
-            {/* Skills */}
-            <div>
-              <h4 className="text-[13px] font-semibold uppercase tracking-wider mb-4">Skills</h4>
-              <div className="flex flex-col">
-                {[
-                  { to: '/skills/python', label: 'Python' },
-                  { to: '/skills/javascript', label: 'JavaScript' },
-                  { to: '/skills/ui-ux-design', label: 'UI/UX Design' },
-                  { to: '/skills/machine-learning', label: 'Machine Learning' },
-                ].map((link) => (
-                  <Link key={link.to} to={link.to} className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
-                    {link.label}
-                  </Link>
-                ))}
-                <Link to="/" className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
-                  Browse All →
-                </Link>
-              </div>
-            </div>
-            {/* Company */}
-            <div>
-              <h4 className="text-[13px] font-semibold uppercase tracking-wider mb-4">Company</h4>
-              <div className="flex flex-col">
-                {[
-                  { to: '/about', label: 'About' },
-                  { to: '/early-access', label: 'Newsletter' },
-                ].map((link) => (
-                  <Link key={link.to} to={link.to} className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-            {/* Connect */}
-            <div>
-              <h4 className="text-[13px] font-semibold uppercase tracking-wider mb-4">Connect</h4>
-              <div className="flex flex-col">
-                <Link to="/early-access" className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
-                  Newsletter
-                </Link>
-              </div>
-            </div>
-          </div>
-          <div className="pt-8 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
-            <span className="text-[13px] text-slate-400">© 2026 LearnStack. All rights reserved.</span>
-            <div className="flex gap-4">
-              {[
-                { icon: <Twitter className="w-4 h-4" />, label: 'Twitter' },
-                { icon: <Github className="w-4 h-4" />, label: 'GitHub' },
-                { icon: <Mail className="w-4 h-4" />, label: 'Email' },
-              ].map((social) => (
-                <span
-                  key={social.label}
-                  className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:bg-teal/10 hover:text-teal transition-all cursor-default"
-                  title={social.label}
-                >
-                  {social.icon}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </footer>
+      {/* Footer provided by shared LayoutShell */}
     </div>
   );
 }

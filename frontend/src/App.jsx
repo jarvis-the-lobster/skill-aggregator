@@ -42,13 +42,6 @@ function ScrollToTop() {
 }
 
 function LayoutShell({ children }) {
-  const location = useLocation();
-  const isHome = location.pathname === '/';
-
-  if (isHome) {
-    return <>{children}</>;
-  }
-
   return (
     <div className="min-h-screen bg-dark-bg text-slate-100 flex flex-col">
       <Header />
