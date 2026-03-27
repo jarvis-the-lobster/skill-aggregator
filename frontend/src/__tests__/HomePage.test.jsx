@@ -1,11 +1,3 @@
-// Mock IntersectionObserver (not available in jsdom)
-global.IntersectionObserver = class {
-  constructor(cb) { this.cb = cb; }
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
