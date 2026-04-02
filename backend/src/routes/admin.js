@@ -21,8 +21,26 @@ function requireCronSecretMiddleware(req, res, next) {
   next();
 }
 
-// GET /api/admin/metrics — ops dashboard (CRON_SECRET required)
-router.get('/metrics', requireCronSecretMiddleware, async (req, res) => {
+// Accepts either CRON_SECRET or authenticated admin user
+function requireCronSecretOrAdmin(req, res, next) {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers['authorization'];
+  // Allow CRON_SECRET bearer token
+  if (secret && auth === `Bearer ${secret}`) {
+    return next();
+  }
+  // Fall back to JWT + admin email check
+  requireAuth(req, res, (err) => {
+    if (err) return; // requireAuth already sent response
+    if (!ADMIN_EMAILS.includes(req.user.email)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+  });
+}
+
+// GET /api/admin/metrics — ops dashboard (CRON_SECRET or admin user)
+router.get('/metrics', requireCronSecretOrAdmin, async (req, res) => {
   try {
     const metrics = await db.getMetrics();
     res.json(metrics);
