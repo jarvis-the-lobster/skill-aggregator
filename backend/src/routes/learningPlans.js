@@ -5,6 +5,28 @@ const learningPlanService = require('../services/learningPlanService');
 const streakService = require('../services/streakService');
 const { requireAuth } = require('../middleware/auth');
 
+// GET /api/learning-plans/bulk — public, returns ALL learning plans grouped by skill
+router.get('/bulk', async (req, res) => {
+  try {
+    const rows = await db.getAllLearningPlans();
+    const plans = {};
+    for (const row of rows) {
+      if (!plans[row.skill_id]) plans[row.skill_id] = [];
+      plans[row.skill_id].push({
+        day_number: row.day_number,
+        content_type: row.content_type,
+        reason: row.reason,
+        title: row.title,
+        url: row.url,
+        source: row.source,
+      });
+    }
+    res.json({ plans });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/learning-plans/:skillId — public, returns saved 30-day plan
 router.get('/:skillId', async (req, res) => {
   try {
