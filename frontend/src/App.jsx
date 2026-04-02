@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { InitialDataProvider } from './contexts/InitialDataContext';
 import analytics from './services/analytics';
 
 const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
@@ -51,8 +52,9 @@ function LayoutShell({ children }) {
   );
 }
 
-export function AppContent() {
+export function AppContent({ initialData }) {
   return (
+    <InitialDataProvider data={initialData}>
     <AuthProvider>
       <RouteTracker />
       <ScrollToTop />
@@ -72,5 +74,6 @@ export function AppContent() {
         </Routes>
       </LayoutShell>
     </AuthProvider>
+    </InitialDataProvider>
   );
 }

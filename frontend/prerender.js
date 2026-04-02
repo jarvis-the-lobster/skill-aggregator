@@ -42,7 +42,23 @@ async function prerender() {
 
   for (const route of routes) {
     try {
-      const { html: appHtml, helmet } = render(route);
+      // For skill pages (not /plan), fetch full skill data for SSR body rendering
+      let initialData = null;
+      const skillPageMatch = route.match(/^\/skills\/([^/]+)$/);
+      if (skillPageMatch) {
+        const skillId = skillPageMatch[1];
+        try {
+          const res = await fetch(`${API_BASE}/api/skills/${skillId}`);
+          if (res.ok) {
+            const data = await res.json();
+            initialData = { skillId, skill: data.skill, content: data.content, status: data.status || 'ready' };
+          }
+        } catch (err) {
+          console.warn(`  ⚠ Could not fetch data for skill ${skillId}: ${err.message}`);
+        }
+      }
+
+      const { html: appHtml, helmet } = render(route, { initialData });
 
       // Build head tags from helmet
       const headTags = [
@@ -148,6 +164,13 @@ async function prerender() {
           const ldScript = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
           page = page.replace('</head>', `    ${ldScript}\n  </head>`);
         }
+      }
+
+      // Inject initial data for SSR hydration
+      if (initialData) {
+        const serialized = JSON.stringify(initialData).replace(/</g, '\\u003c');
+        const dataScript = `<script>window.__INITIAL_DATA__=${serialized}</script>`;
+        page = page.replace('</body>', `${dataScript}\n</body>`);
       }
 
       // Remove empty Helmet title tag

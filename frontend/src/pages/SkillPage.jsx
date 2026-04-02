@@ -7,6 +7,7 @@ import analytics from '../services/analytics';
 import { useAuth } from '../contexts/AuthContext';
 import { useEnrollment } from '../hooks/useCourses';
 import { RatingButtons } from '../components/RatingButtons';
+import { useInitialData } from '../contexts/InitialDataContext';
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
@@ -22,12 +23,17 @@ export function SkillPage() {
   const { id: skillId } = useParams();
   const { user } = useAuth();
   const { isEnrolled, loading: enrollLoading, enroll, unenroll } = useEnrollment(skillId);
-  const [skillData, setSkillData] = useState(null);
-  const [content, setContent] = useState({ videos: [], articles: [] });
-  const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
+  const initialData = useInitialData();
+
+  // Check if we have SSR-injected data for this skill
+  const ssrData = initialData?.skillId === skillId ? initialData : null;
+
+  const [skillData, setSkillData] = useState(ssrData?.skill || null);
+  const [content, setContent] = useState(ssrData?.content || { videos: [], articles: [] });
+  const [status, setStatus] = useState(ssrData ? (ssrData.status || 'ready') : 'loading');
   const [activeTab, setActiveTab] = useState('videos');
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
-  const [lastScrapedAt, setLastScrapedAt] = useState(null);
+  const [lastScrapedAt, setLastScrapedAt] = useState(ssrData?.content?.lastScrapedAt || null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState(null);
 
@@ -40,7 +46,15 @@ export function SkillPage() {
     analytics.track('content_tab_switched', { skillId, tab });
   };
 
+  const ssrUsed = useRef(!!ssrData);
+
   useEffect(() => {
+    if (ssrUsed.current) {
+      // SSR data was used for initial render — skip the fetch, but clear the flag
+      // so subsequent skillId changes (client-side navigation) will fetch normally
+      ssrUsed.current = false;
+      return;
+    }
     loadSkillData();
     return () => clearTimers();
   }, [skillId]);
