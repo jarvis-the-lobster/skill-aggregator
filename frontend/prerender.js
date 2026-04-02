@@ -27,6 +27,18 @@ async function prerender() {
     console.warn('Continuing with static pages only...');
   }
 
+  // Fetch all learning plans in bulk (single API call)
+  let allPlans = {};
+  try {
+    const res = await fetch(`${API_BASE}/api/learning-plans/bulk`);
+    const data = await res.json();
+    allPlans = data.plans || {};
+    console.log(`Fetched learning plans for ${Object.keys(allPlans).length} skills`);
+  } catch (err) {
+    console.warn('Failed to fetch bulk learning plans:', err.message);
+    console.warn('Skill pages will render without plan data...');
+  }
+
   // Build route list
   const staticRoutes = ['/', '/about', '/early-access'];
   const skillRoutes = skills.flatMap(s => [
@@ -42,7 +54,21 @@ async function prerender() {
 
   for (const route of routes) {
     try {
-      const { html: appHtml, helmet } = render(route);
+      // Determine if this is a skill page and what plan data to inject
+      const skillMatch = route.match(/^\/skills\/([^/]+)(\/plan)?$/);
+      let initialData = {};
+      let planDataForSkill = null;
+
+      if (skillMatch && !skillMatch[2]) {
+        // Skill detail page (not /plan) — inject learning plan data
+        const skillId = skillMatch[1];
+        if (allPlans[skillId] && allPlans[skillId].length > 0) {
+          planDataForSkill = allPlans[skillId];
+          initialData = { plan: planDataForSkill, planSkillId: skillId };
+        }
+      }
+
+      const { html: appHtml, helmet } = render(route, initialData);
 
       // Build head tags from helmet
       const headTags = [
@@ -62,7 +88,6 @@ async function prerender() {
       const DEFAULT_TITLE = 'LearnStack — Learn Any Skill with Curated Resources';
       const DEFAULT_DESC = 'Discover the best YouTube videos and articles for any skill — curated and quality-ranked so you skip the noise and get straight to learning.';
 
-      const skillMatch = route.match(/^\/skills\/([^/]+)(\/plan)?$/);
       let pageTitle = DEFAULT_TITLE;
       let pageDesc = DEFAULT_DESC;
       let canonical = `${BASE_URL}${route === '/' ? '/' : route}`;
@@ -148,6 +173,14 @@ async function prerender() {
           const ldScript = `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`;
           page = page.replace('</head>', `    ${ldScript}\n  </head>`);
         }
+      }
+
+      // Inject __INITIAL_PLAN__ script for skill pages with plan data
+      if (planDataForSkill) {
+        const serialized = JSON.stringify(planDataForSkill).replace(/</g, '\\u003c');
+        const skillId = route.match(/^\/skills\/([^/]+)$/)[1];
+        const planScript = `<script>window.__INITIAL_PLAN__=${serialized};window.__INITIAL_PLAN_SKILL_ID__=${JSON.stringify(skillId).replace(/</g, '\\u003c')}</script>`;
+        page = page.replace('</body>', `    ${planScript}\n  </body>`);
       }
 
       // Remove empty Helmet title tag

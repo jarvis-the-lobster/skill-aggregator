@@ -583,6 +583,16 @@ class Database {
 
   // --- Learning plan methods ---
 
+  async getAllLearningPlans() {
+    return this.query(
+      `SELECT lp.skill_id, lp.day_number, lp.content_type, lp.reason,
+              c.title, c.url, c.source
+       FROM learning_plans lp
+       LEFT JOIN content c ON c.id = lp.content_id
+       ORDER BY lp.skill_id, lp.day_number ASC`
+    );
+  }
+
   async getLearningPlan(skillId) {
     return this.query(
       `SELECT lp.day_number, lp.content_id, lp.content_type, lp.reason,

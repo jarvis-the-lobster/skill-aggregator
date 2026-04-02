@@ -5,6 +5,7 @@ import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink, CalendarDays
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
 import { useAuth } from '../contexts/AuthContext';
+import { useInitialData } from '../contexts/InitialDataContext';
 import { useEnrollment } from '../hooks/useCourses';
 import { RatingButtons } from '../components/RatingButtons';
 
@@ -18,9 +19,50 @@ function formatViews(num) {
   return num.toLocaleString();
 }
 
+function SSRPlanSection({ plan }) {
+  if (!plan || !plan.length) return null;
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+      <div className="bg-dark-card rounded-xl border border-white/[0.08] p-6">
+        <h2 className="text-xl font-bold text-slate-100 mb-1">30-Day Learning Plan</h2>
+        <p className="text-sm text-slate-400 mb-6">A structured day-by-day curriculum with curated resources</p>
+        <div className="grid gap-3">
+          {plan.map((day) => (
+            <div
+              key={day.day_number}
+              className="flex items-start gap-4 px-4 py-3 rounded-lg bg-dark-surface/50 border border-white/[0.04]"
+            >
+              <span className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-teal/10 text-teal text-sm font-semibold">
+                {day.day_number}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-200 break-words">
+                  {day.title || `Day ${day.day_number}`}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-400">
+                  {day.content_type && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.06]">
+                      {day.content_type === 'video' ? '▶' : '📄'} {day.content_type}
+                    </span>
+                  )}
+                  {day.source && <span>{day.source}</span>}
+                </div>
+                {day.reason && (
+                  <p className="text-xs text-slate-500 mt-1">{day.reason}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SkillPage() {
   const { id: skillId } = useParams();
   const { user } = useAuth();
+  const { plan: initialPlan, planSkillId } = useInitialData();
   const { isEnrolled, loading: enrollLoading, enroll, unenroll } = useEnrollment(skillId);
   const [skillData, setSkillData] = useState(null);
   const [content, setContent] = useState({ videos: [], articles: [] });
@@ -547,6 +589,9 @@ export function SkillPage() {
           </div>
         </div>
       </div>
+
+      {/* SSR-injected learning plan outline for SEO */}
+      {planSkillId === skillId && <SSRPlanSection plan={initialPlan} />}
     </div>
   );
 }
