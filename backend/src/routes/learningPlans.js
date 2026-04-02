@@ -4,9 +4,10 @@ const db = require('../models/database');
 const learningPlanService = require('../services/learningPlanService');
 const streakService = require('../services/streakService');
 const { requireAuth } = require('../middleware/auth');
+const { bulkLimiter } = require('../middleware/rateLimit');
 
 // GET /api/learning-plans/bulk — public, returns ALL learning plans grouped by skill
-router.get('/bulk', async (req, res) => {
+router.get('/bulk', bulkLimiter, async (req, res) => {
   try {
     const rows = await db.getAllLearningPlans();
     const plans = {};

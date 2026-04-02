@@ -4,7 +4,10 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const passport = require('./config/passport');
 
+const { apiLimiter } = require('./middleware/rateLimit');
+
 const app = express();
+app.set('trust proxy', 1);
 
 // Middleware
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -39,6 +42,9 @@ app.use('/api/ratings', ratingsRoutes);
 app.use('/api/streaks', streakRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/onboarding', onboardingRoutes);
+
+// Global rate limit on /api (applied after specific route limiters)
+app.use('/api', apiLimiter);
 
 // Sitemap
 const sitemapDb = require('./models/database');

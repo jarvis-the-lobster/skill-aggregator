@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
+const { authLimiter } = require('../middleware/rateLimit');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // POST /api/newsletter/subscribe
-router.post('/subscribe', async (req, res) => {
+router.post('/subscribe', authLimiter, async (req, res) => {
   try {
     const { email, categories } = req.body;
 

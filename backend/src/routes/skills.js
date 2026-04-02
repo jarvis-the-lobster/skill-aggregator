@@ -3,6 +3,7 @@ const router = express.Router();
 const skillsService = require('../services/skillsService');
 const analytics = require('../services/analyticsService');
 const { optionalAuth } = require('../middleware/auth');
+const { searchLimiter } = require('../middleware/rateLimit');
 
 // GET /api/skills - List all skills from DB
 router.get('/', async (req, res) => {
@@ -16,7 +17,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/skills/search?q=kubernetes - On-demand skill search
 // IMPORTANT: must be defined before /:skill to avoid route shadowing
-router.get('/search', optionalAuth, async (req, res) => {
+router.get('/search', searchLimiter, optionalAuth, async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || !q.trim()) {
