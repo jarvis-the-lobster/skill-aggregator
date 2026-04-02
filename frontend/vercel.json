@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/:path(.*)",
+      "has": [{ "type": "host", "value": "skill-aggregator.vercel.app" }],
+      "destination": "https://learnstack.dev/:path",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/sitemap.xml", "destination": "https://api.learnstack.dev/api/sitemap.xml" },
     { "source": "/(.*)", "destination": "/index.html" }
