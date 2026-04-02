@@ -5,10 +5,12 @@ const { register, login, generateToken, safeUser } = require('../services/authSe
 const { requireAuth } = require('../middleware/auth');
 const analytics = require('../services/analyticsService');
 
+const { authLimiter } = require('../middleware/rateLimit');
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   try {
     let { email, password, name } = req.body;
     if (!email || !password) {
@@ -37,7 +39,7 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     let { email, password } = req.body;
     if (!email || !password) {

@@ -3,8 +3,26 @@ const router = express.Router();
 const db = require('../models/database');
 const { requireAuth } = require('../middleware/auth');
 
-// GET /api/admin/metrics — ops dashboard (no auth, internal use only)
-router.get('/metrics', async (req, res) => {
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+
+function requireAdmin(req, res, next) {
+  if (!ADMIN_EMAILS.includes(req.user.email)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  next();
+}
+
+function requireCronSecretMiddleware(req, res, next) {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers['authorization'];
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+// GET /api/admin/metrics — ops dashboard (CRON_SECRET required)
+router.get('/metrics', requireCronSecretMiddleware, async (req, res) => {
   try {
     const metrics = await db.getMetrics();
     res.json(metrics);
@@ -14,8 +32,8 @@ router.get('/metrics', async (req, res) => {
   }
 });
 
-// GET /api/admin/users — list all users
-router.get('/users', requireAuth, async (req, res) => {
+// GET /api/admin/users — list all users (admin only)
+router.get('/users', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await db.query(
       'SELECT id, email, name AS display_name, created_at, last_login AS last_login_at FROM users ORDER BY created_at DESC'
