@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../models/database');
 const { requireAuth } = require('../middleware/auth');
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
 function requireAdmin(req, res, next) {
   if (!ADMIN_EMAILS.includes(req.user.email)) {
