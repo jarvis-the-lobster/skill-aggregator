@@ -172,6 +172,11 @@ export const apiService = {
   async saveOnboarding(data) {
     const response = await api.post('/onboarding', data);
     return response.data;
+  },
+
+  async getSkillContentCounts(ids) {
+    const response = await api.get(`/skills/counts?ids=${ids.join(',')}`);
+    return response.data.counts;
   }
 };
 

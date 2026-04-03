@@ -5,6 +5,21 @@ const analytics = require('../services/analyticsService');
 const { optionalAuth } = require('../middleware/auth');
 const { searchLimiter } = require('../middleware/rateLimit');
 
+// GET /api/skills/counts?ids=python,javascript,react — content count per skill (lightweight)
+router.get('/counts', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return res.status(400).json({ error: 'ids query param required' });
+    if (ids.length > 50) return res.status(400).json({ error: 'max 50 ids per request' });
+    const db = require('../models/database');
+    const counts = await db.getContentCounts(ids);
+    res.json({ counts });
+  } catch (err) {
+    console.error('Error fetching content counts:', err);
+    res.status(500).json({ error: 'Failed to fetch counts' });
+  }
+});
+
 // GET /api/skills - List all skills from DB
 router.get('/', async (req, res) => {
   try {

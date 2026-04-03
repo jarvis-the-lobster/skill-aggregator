@@ -83,18 +83,7 @@ export function HomePage() {
 
   const loadFeaturedCounts = async () => {
     try {
-      const results = await Promise.allSettled(
-        FEATURED_SKILLS.map(s => apiService.getSkillContent(s.id))
-      );
-      const counts = {};
-      results.forEach((result, i) => {
-        if (result.status === 'fulfilled') {
-          const content = result.value?.content || {};
-          const videos = content.videos?.length || 0;
-          const articles = content.articles?.length || 0;
-          counts[FEATURED_SKILLS[i].id] = videos + articles;
-        }
-      });
+      const counts = await apiService.getSkillContentCounts(FEATURED_SKILLS.map(s => s.id));
       setFeaturedCounts(counts);
     } catch (err) {
       console.error('Error loading featured counts:', err);
