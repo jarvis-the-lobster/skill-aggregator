@@ -9,12 +9,12 @@ import analytics from '../services/analytics';
 const SITE_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
 const FEATURED_SKILLS = [
-  { id: 'python', name: 'Python Programming', icon: '🐍', category: 'Programming', catClass: 'bg-blue-400/15 text-blue-400', resources: 47 },
-  { id: 'javascript', name: 'JavaScript', icon: '⚡', category: 'Programming', catClass: 'bg-blue-400/15 text-blue-400', resources: 52 },
-  { id: 'ui-ux-design', name: 'UI/UX Design', icon: '🎨', category: 'Design', catClass: 'bg-pink-400/15 text-pink-400', resources: 38 },
-  { id: 'digital-marketing', name: 'Digital Marketing', icon: '📈', category: 'Marketing', catClass: 'bg-yellow-400/15 text-yellow-400', resources: 41 },
-  { id: 'machine-learning', name: 'Machine Learning', icon: '🤖', category: 'Data Science', catClass: 'bg-sky-400/15 text-sky-400', resources: 35 },
-  { id: 'photography', name: 'Photography', icon: '📷', category: 'Creative', catClass: 'bg-emerald-400/15 text-emerald-400', resources: 29 },
+  { id: 'python', name: 'Python Programming', icon: '🐍', category: 'Programming', catClass: 'bg-blue-400/15 text-blue-400' },
+  { id: 'javascript', name: 'JavaScript', icon: '⚡', category: 'Programming', catClass: 'bg-blue-400/15 text-blue-400' },
+  { id: 'ui-ux-design', name: 'UI/UX Design', icon: '🎨', category: 'Design', catClass: 'bg-pink-400/15 text-pink-400' },
+  { id: 'digital-marketing', name: 'Digital Marketing', icon: '📈', category: 'Marketing', catClass: 'bg-yellow-400/15 text-yellow-400' },
+  { id: 'machine-learning', name: 'Machine Learning', icon: '🤖', category: 'Data Science', catClass: 'bg-sky-400/15 text-sky-400' },
+  { id: 'photography', name: 'Photography', icon: '📷', category: 'Creative', catClass: 'bg-emerald-400/15 text-emerald-400' },
 ];
 
 // Hook for IntersectionObserver scroll reveals
@@ -48,6 +48,7 @@ function useScrollReveal() {
 export function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [skills, setSkills] = useState([]);
+  const [featuredCounts, setFeaturedCounts] = useState({});
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const revealRef = useScrollReveal();
@@ -67,6 +68,7 @@ export function HomePage() {
       ...utm,
     });
     loadSkills();
+    loadFeaturedCounts();
   }, []);
 
 
@@ -76,6 +78,26 @@ export function HomePage() {
       setSkills(data.skills || []);
     } catch (err) {
       console.error('Error loading skills:', err);
+    }
+  };
+
+  const loadFeaturedCounts = async () => {
+    try {
+      const results = await Promise.allSettled(
+        FEATURED_SKILLS.map(s => apiService.getSkillContent(s.id))
+      );
+      const counts = {};
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+          const content = result.value?.content || {};
+          const videos = content.videos?.length || 0;
+          const articles = content.articles?.length || 0;
+          counts[FEATURED_SKILLS[i].id] = videos + articles;
+        }
+      });
+      setFeaturedCounts(counts);
+    } catch (err) {
+      console.error('Error loading featured counts:', err);
     }
   };
 
@@ -321,7 +343,7 @@ export function HomePage() {
                 <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium mb-4 ${skill.catClass}`}>
                   {skill.category}
                 </span>
-                <p className="text-[13px] text-slate-400 mb-2">{skill.resources} resources curated</p>
+                <p className="text-[13px] text-slate-400 mb-2">{featuredCounts[skill.id] || '—'} resources curated</p>
                 <span className="skill-card-link-text inline-flex items-center gap-1 text-sm font-semibold text-teal">
                   Learn Now <ArrowRight className="w-3.5 h-3.5" />
                 </span>
