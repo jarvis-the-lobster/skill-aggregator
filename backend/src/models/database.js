@@ -293,6 +293,19 @@ class Database {
     return this.query('SELECT * FROM skills ORDER BY name');
   }
 
+  // Get content counts for a list of skill IDs in one query
+  async getContentCounts(skillIds) {
+    if (!skillIds || skillIds.length === 0) return {};
+    const placeholders = skillIds.map(() => '?').join(',');
+    const rows = await this.query(
+      `SELECT skill_id, COUNT(*) as count FROM content WHERE skill_id IN (${placeholders}) GROUP BY skill_id`,
+      skillIds
+    );
+    const counts = {};
+    rows.forEach(row => { counts[row.skill_id] = row.count; });
+    return counts;
+  }
+
   // Get a single skill by ID
   async getSkillById(id) {
     const rows = await this.query('SELECT * FROM skills WHERE id = ?', [id]);
