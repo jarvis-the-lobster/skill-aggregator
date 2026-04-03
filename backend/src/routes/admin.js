@@ -354,4 +354,29 @@ router.post('/scrape/skills', async (req, res) => {
   })().catch(err => console.error('[admin/scrape] Fatal:', err.message));
 });
 
+// POST /api/admin/purge-ted — remove all TED content and plan references from DB
+// One-time cleanup after removing TED scraper. Safe to call multiple times.
+router.post('/purge-ted', requireAdminAuth, async (req, res) => {
+  try {
+    const userPlanResult = await db.insert("DELETE FROM user_learning_plans WHERE content_id LIKE 'ted_%'");
+    const planResult = await db.insert("DELETE FROM learning_plans WHERE content_id LIKE 'ted_%'");
+    const contentResult = await db.insert("DELETE FROM content WHERE id LIKE 'ted_%'");
+    const scrapeLogResult = await db.insert("DELETE FROM scrape_log WHERE source = 'ted'");
+
+    console.log(`[purge-ted] Deleted: ${contentResult.changes} content, ${planResult.changes} plans, ${userPlanResult.changes} user_plans, ${scrapeLogResult.changes} scrape_log rows`);
+    res.json({
+      ok: true,
+      deleted: {
+        content: contentResult.changes,
+        learning_plans: planResult.changes,
+        user_learning_plans: userPlanResult.changes,
+        scrape_log: scrapeLogResult.changes
+      }
+    });
+  } catch (err) {
+    console.error('[purge-ted] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
