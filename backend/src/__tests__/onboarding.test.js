@@ -70,12 +70,43 @@ describe('Onboarding API', () => {
     expect(res.body.success).toBe(true);
   });
 
+  test('POST /api/onboarding saves valid answers with attribution', async () => {
+    const res = await request(app)
+      .post('/api/onboarding')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userType: 'student', goal: 'career-switch', dailyTime: '20-min', attributionSource: 'reddit' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  test('POST /api/onboarding rejects invalid attribution source', async () => {
+    const res = await request(app)
+      .post('/api/onboarding')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userType: 'student', goal: 'career-switch', dailyTime: '20-min', attributionSource: 'myspace' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid attribution source');
+  });
+
+  test('POST /api/onboarding saves without attribution (optional field)', async () => {
+    const res = await request(app)
+      .post('/api/onboarding')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userType: 'professional', goal: 'personal-interest', dailyTime: '10-min' });
+    expect(res.status).toBe(200);
+
+    const get = await request(app)
+      .get('/api/onboarding')
+      .set('Authorization', `Bearer ${token}`);
+    expect(get.body.data.attribution_source).toBeNull();
+  });
+
   test('GET /api/onboarding returns completed after saving', async () => {
     // Save first
     await request(app)
       .post('/api/onboarding')
       .set('Authorization', `Bearer ${token}`)
-      .send({ userType: 'student', goal: 'career-switch', dailyTime: '20-min' });
+      .send({ userType: 'student', goal: 'career-switch', dailyTime: '20-min', attributionSource: 'tiktok' });
 
     const res = await request(app)
       .get('/api/onboarding')
@@ -85,6 +116,7 @@ describe('Onboarding API', () => {
     expect(res.body.data.user_type).toBe('student');
     expect(res.body.data.goal).toBe('career-switch');
     expect(res.body.data.daily_time).toBe('20-min');
+    expect(res.body.data.attribution_source).toBe('tiktok');
   });
 
   test('POST /api/onboarding requires auth', async () => {
