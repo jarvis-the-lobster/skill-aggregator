@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, BookOpen } from 'lucide-react';
+import { Search, BookOpen, Zap, Shield, Star } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
@@ -37,12 +37,23 @@ const DAILY_TIMES = [
   { value: '30-plus-min', emoji: '\uD83D\uDD25', label: '30+ minutes', sub: 'accelerated learning' },
 ];
 
+const ATTRIBUTION_SOURCES = [
+  { value: 'reddit', label: 'Reddit' },
+  { value: 'google-search', label: 'Google' },
+  { value: 'friend-referral', label: 'Friend / Referral' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'twitter-x', label: 'Twitter / X' },
+  { value: 'other', label: 'Other' },
+];
+
 const CATEGORY_COLORS = {
   programming: 'bg-teal/15 text-teal-light',
   business: 'bg-emerald-400/15 text-emerald-400',
   design: 'bg-pink-400/15 text-pink-400',
 };
 
+// steps: 0=userType, 1=goal, 2=dailyTime, 3=skillPicker, 4=premiumPitch
+// progress bar covers steps 0–3
 const STEP_TITLES = [
   'What describes you best?',
   "What's your main goal?",
@@ -51,13 +62,16 @@ const STEP_TITLES = [
 ];
 
 function ProgressBar({ step }) {
+  // Progress bar only shown for the 4 main content steps (0-3); hidden on premium pitch
+  if (step === 4) return null;
+  const displayStep = step > 3 ? 3 : step;
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
       {[0, 1, 2, 3].map((i) => (
         <div
           key={i}
           className={`h-2 rounded-full transition-all duration-300 ${
-            i <= step ? 'bg-teal w-10' : 'bg-white/10 w-6'
+            i <= displayStep ? 'bg-teal w-10' : 'bg-white/10 w-6'
           }`}
         />
       ))}
@@ -86,6 +100,29 @@ function OptionCard({ emoji, label, sub, selected, onClick }) {
   );
 }
 
+function AttributionPills({ selected, onSelect }) {
+  return (
+    <div className="mt-8 pt-6 border-t border-white/[0.06]">
+      <p className="text-sm font-medium text-slate-400 mb-3">How did you find us? <span className="text-slate-600">(optional)</span></p>
+      <div className="flex flex-wrap gap-2">
+        {ATTRIBUTION_SOURCES.map((src) => (
+          <button
+            key={src.value}
+            onClick={() => onSelect(selected === src.value ? null : src.value)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all duration-150 ${
+              selected === src.value
+                ? 'border-teal bg-teal/10 text-teal'
+                : 'border-white/[0.12] bg-[#141929] text-slate-400 hover:border-white/25 hover:text-slate-300'
+            }`}
+          >
+            {src.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SkillPickerCard({ skill, contentCount, onClick }) {
   const categoryColor = CATEGORY_COLORS[skill.category] || 'bg-white/10 text-slate-400';
   return (
@@ -109,20 +146,76 @@ function SkillPickerCard({ skill, contentCount, onClick }) {
   );
 }
 
+function PremiumPitchScreen({ onContinue }) {
+  const perks = [
+    { icon: <Zap className="w-4 h-4 text-teal" />, text: 'Personalized learning plans' },
+    { icon: <BookOpen className="w-4 h-4 text-teal" />, text: 'Unlimited skills & content' },
+    { icon: <Shield className="w-4 h-4 text-teal" />, text: 'Streak protection' },
+    { icon: <Star className="w-4 h-4 text-teal" />, text: 'Priority new-content access' },
+  ];
+
+  return (
+    <div className="flex flex-col items-center text-center max-w-md mx-auto">
+      {/* Badge */}
+      <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-teal/30 rounded-full text-[13px] font-medium text-teal bg-teal/[0.06] mb-8">
+        <Star className="w-3.5 h-3.5" />
+        LearnStack Pro
+      </div>
+
+      <h2 className="text-3xl font-extrabold text-slate-100 mb-3 leading-tight">
+        Start your <span className="text-teal">7-day free trial</span>
+      </h2>
+      <p className="text-slate-400 text-base mb-8">
+        Personalized plans, unlimited skills, streak protection.
+      </p>
+
+      {/* Perk list */}
+      <div className="w-full bg-[#141929] border border-white/[0.08] rounded-2xl p-5 mb-8 text-left space-y-3">
+        {perks.map((perk, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-full bg-teal/10 flex items-center justify-center flex-shrink-0">
+              {perk.icon}
+            </div>
+            <span className="text-sm text-slate-200">{perk.text}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA — non-functional, advances like "Maybe later" */}
+      <button
+        onClick={onContinue}
+        className="w-full bg-teal text-dark-bg font-bold text-base py-4 rounded-xl hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-200 mb-4"
+      >
+        Start free trial
+      </button>
+      <p className="text-xs text-slate-600 mb-4">No credit card required · Cancel anytime</p>
+
+      <button
+        onClick={onContinue}
+        className="text-slate-500 hover:text-slate-300 text-sm font-medium underline underline-offset-2 transition-colors"
+      >
+        Maybe later
+      </button>
+    </div>
+  );
+}
+
 export function WelcomePage() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState({ userType: null, goal: null, dailyTime: null });
+  const [attribution, setAttribution] = useState(null);
   const [saving, setSaving] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
 
-  // Step 4 state
+  // Step 3 (skill picker) state
   const [skills, setSkills] = useState([]);
   const [contentCounts, setContentCounts] = useState({});
   const [skillSearch, setSkillSearch] = useState('');
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [enrolling, setEnrolling] = useState(null);
+  const [selectedSkillId, setSelectedSkillId] = useState(null);
 
   // Guard: redirect if not logged in or already completed
   const [checking, setChecking] = useState(true);
@@ -138,14 +231,13 @@ export function WelcomePage() {
     }).catch(() => setChecking(false));
   }, [user, authLoading]);
 
-  // Load skills for step 4
+  // Load skills for step 3 (skill picker)
   useEffect(() => {
     if (step !== 3) return;
     setSkillsLoading(true);
     apiService.getSkills().then((data) => {
       const allSkills = data.skills || data;
       setSkills(allSkills);
-      // Fetch content counts for featured skills
       const featured = allSkills.filter((s) => FEATURED_SKILL_IDS.includes(s.id));
       Promise.all(
         featured.map((s) =>
@@ -169,27 +261,35 @@ export function WelcomePage() {
         (s) => s.name?.toLowerCase().includes(q) || s.category?.toLowerCase().includes(q)
       ).slice(0, 20);
     }
-    // Show featured skills in order
     return FEATURED_SKILL_IDS
       .map((id) => skills.find((s) => s.id === id))
       .filter(Boolean);
   }, [skills, skillSearch]);
 
-  function selectOption(key, value, trackLabel) {
+  function advance() {
+    setTransitioning(true);
+    setTimeout(() => {
+      setStep((s) => s + 1);
+      setTransitioning(false);
+    }, 300);
+  }
+
+  function selectOption(key, value) {
     setAnswers((prev) => ({ ...prev, [key]: value }));
     analytics.track('onboarding_step_completed', { step: step + 1, value });
 
     if (step < 2) {
-      // Auto-advance with brief delay
-      setTransitioning(true);
-      setTimeout(() => {
-        setStep((s) => s + 1);
-        setTransitioning(false);
-      }, 300);
+      // Steps 0 and 1: auto-advance
+      advance();
     } else if (step === 2) {
-      // Save answers then advance to step 4
+      // Save answers then show skill picker (step 3)
       setSaving(true);
-      const payload = { userType: answers.userType, goal: answers.goal, dailyTime: value };
+      const payload = {
+        userType: answers.userType,
+        goal: answers.goal,
+        dailyTime: value,
+        ...(attribution ? { attributionSource: attribution } : {}),
+      };
       apiService.saveOnboarding(payload).then(() => {
         setTransitioning(true);
         setTimeout(() => {
@@ -199,7 +299,6 @@ export function WelcomePage() {
         }, 300);
       }).catch(() => {
         setSaving(false);
-        // Still advance — don't block the user
         setStep(3);
       });
     }
@@ -213,7 +312,15 @@ export function WelcomePage() {
     } catch {
       // If already enrolled or error, still navigate
     }
-    navigate(`/skills/${skill.id}/plan`);
+    // Store selected skill, show premium pitch before navigating to plan
+    setSelectedSkillId(skill.id);
+    setStep(4);
+    setEnrolling(null);
+  }
+
+  function handlePremiumContinue() {
+    analytics.track('onboarding_premium_skipped');
+    navigate(selectedSkillId ? `/skills/${selectedSkillId}/plan` : '/');
   }
 
   function handleSkip() {
@@ -239,23 +346,28 @@ export function WelcomePage() {
 
         <ProgressBar step={step} />
 
-        <h2 className="text-2xl font-bold text-slate-100 text-center mb-8">
-          {STEP_TITLES[step]}
-        </h2>
+        {step !== 4 && (
+          <h2 className="text-2xl font-bold text-slate-100 text-center mb-8">
+            {STEP_TITLES[Math.min(step, 3)]}
+          </h2>
+        )}
 
         <div className={`transition-opacity duration-200 ${transitioning || saving ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-          {/* Step 1: User type */}
+          {/* Step 1: User type + attribution */}
           {step === 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {USER_TYPES.map((opt) => (
-                <OptionCard
-                  key={opt.value}
-                  emoji={opt.emoji}
-                  label={opt.label}
-                  selected={answers.userType === opt.value}
-                  onClick={() => selectOption('userType', opt.value)}
-                />
-              ))}
+            <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {USER_TYPES.map((opt) => (
+                  <OptionCard
+                    key={opt.value}
+                    emoji={opt.emoji}
+                    label={opt.label}
+                    selected={answers.userType === opt.value}
+                    onClick={() => selectOption('userType', opt.value)}
+                  />
+                ))}
+              </div>
+              <AttributionPills selected={attribution} onSelect={setAttribution} />
             </div>
           )}
 
@@ -337,6 +449,11 @@ export function WelcomePage() {
                 </button>
               </div>
             </div>
+          )}
+
+          {/* Step 5: Premium pitch */}
+          {step === 4 && (
+            <PremiumPitchScreen onContinue={handlePremiumContinue} />
           )}
         </div>
       </div>

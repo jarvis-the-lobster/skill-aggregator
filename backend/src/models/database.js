@@ -165,6 +165,8 @@ class Database {
         user_type TEXT,
         goal TEXT,
         daily_time TEXT,
+        attribution_source TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
       )`,
@@ -199,7 +201,9 @@ class Database {
         'ALTER TABLE skills ADD COLUMN last_scraped_at DATETIME',
         'ALTER TABLE content ADD COLUMN likes INTEGER DEFAULT 0',
         "ALTER TABLE skills ADD COLUMN status TEXT DEFAULT 'pending'",
-        'ALTER TABLE user_interactions ADD COLUMN user_id INTEGER REFERENCES users(id)'
+        'ALTER TABLE user_interactions ADD COLUMN user_id INTEGER REFERENCES users(id)',
+        'ALTER TABLE user_onboarding ADD COLUMN attribution_source TEXT',
+        'ALTER TABLE user_onboarding ADD COLUMN created_at DATETIME'
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
