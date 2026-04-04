@@ -17,6 +17,10 @@ const FEATURED_SKILLS = [
   { id: 'photography', name: 'Photography', icon: '📷', category: 'Creative', catClass: 'bg-emerald-400/15 text-emerald-400' },
 ];
 
+const INITIAL_FEATURED_COUNTS = Object.fromEntries(
+  FEATURED_SKILLS.map((skill) => [skill.id, 0])
+);
+
 // Hook for IntersectionObserver scroll reveals
 function useScrollReveal() {
   const ref = useRef(null);
@@ -48,7 +52,7 @@ function useScrollReveal() {
 export function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [skills, setSkills] = useState([]);
-  const [featuredCounts, setFeaturedCounts] = useState({});
+  const [featuredCounts, setFeaturedCounts] = useState(INITIAL_FEATURED_COUNTS);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const revealRef = useScrollReveal();
@@ -332,7 +336,7 @@ export function HomePage() {
                   {skill.category}
                 </span>
                 <p className="text-[13px] text-slate-400 mb-2">
-                  {featuredCounts[skill.id] ?? '—'} resources curated
+                  {featuredCounts[skill.id] ?? 0} resources curated
                 </p>
                 <span className="skill-card-link-text inline-flex items-center gap-1 text-sm font-semibold text-teal">
                   Learn Now <ArrowRight className="w-3.5 h-3.5" />
