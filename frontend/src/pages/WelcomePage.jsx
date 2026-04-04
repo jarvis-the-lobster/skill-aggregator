@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, BookOpen, Zap, Shield, Star } from 'lucide-react';
+import { Search, BookOpen, Zap, Shield, Star, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
@@ -152,6 +152,7 @@ function PremiumPitchScreen({ onContinue }) {
     { icon: <BookOpen className="w-4 h-4 text-teal" />, text: 'Unlimited skills & content' },
     { icon: <Shield className="w-4 h-4 text-teal" />, text: 'Streak protection' },
     { icon: <Star className="w-4 h-4 text-teal" />, text: 'Priority new-content access' },
+    { icon: <Sparkles className="w-4 h-4 text-teal" />, text: 'AI-assisted learning — coming soon' },
   ];
 
   return (
