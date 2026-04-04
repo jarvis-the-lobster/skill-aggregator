@@ -325,7 +325,8 @@ export function WelcomePage() {
 
   function handleSkip() {
     analytics.track('onboarding_skipped');
-    navigate('/');
+    setSelectedSkillId(null);
+    setStep(4);
   }
 
   if (authLoading || checking) {
