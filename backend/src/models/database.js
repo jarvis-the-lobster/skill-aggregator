@@ -210,29 +210,6 @@ class Database {
         });
       });
 
-      // ─── One-time TED content purge (2026-04-03) ─────────────────────────
-      // TED scraper removed due to poor relevance. Clean up existing data.
-      // Safe to run multiple times — deletes are idempotent.
-      this.db.get("SELECT COUNT(*) as n FROM content WHERE id LIKE 'ted_%'", (err, row) => {
-        if (err) return;
-        if (row && row.n > 0) {
-          console.log(`[migration] 🧹 Purging ${row.n} TED content rows...`);
-          const tables = [
-            { name: 'user_learning_plans', sql: "DELETE FROM user_learning_plans WHERE content_id LIKE 'ted_%'" },
-            { name: 'learning_plans',      sql: "DELETE FROM learning_plans WHERE content_id LIKE 'ted_%'" },
-            { name: 'user_interactions',   sql: "DELETE FROM user_interactions WHERE content_id LIKE 'ted_%'" },
-            { name: 'content',             sql: "DELETE FROM content WHERE id LIKE 'ted_%'" },
-            { name: 'scrape_log',          sql: "DELETE FROM scrape_log WHERE source = 'ted'" }
-          ];
-          tables.forEach(({ name, sql }) => {
-            this.db.run(sql, function(err) {
-              if (err) console.error(`[migration] ❌ ${name}: ${err.message}`);
-              else if (this.changes > 0) console.log(`[migration] ✅ ${name}: ${this.changes} rows deleted`);
-            });
-          });
-        }
-      });
-      // TODO: Remove this migration block after confirming purge ran in production.
 
       // Indexes for frequently queried columns
       const indexes = [
