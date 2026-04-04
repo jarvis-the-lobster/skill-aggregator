@@ -195,9 +195,11 @@ export const apiService = {
     return response.data;
   },
 
-  async getSkillContentCounts(ids) {
-    const response = await api.get(`/skills/counts?ids=${ids.join(',')}`);
-    return response.data.counts;
+  async getSkillContentCounts(ids = []) {
+    if (!ids.length) return {};
+    const params = new URLSearchParams({ ids: ids.join(',') });
+    const response = await api.get(`/skills/counts?${params}`);
+    return response.data.counts || {};
   }
 };
 
