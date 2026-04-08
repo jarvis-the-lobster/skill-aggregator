@@ -110,6 +110,8 @@ const TABLE_SQL = [
     content_id TEXT,
     content_type TEXT,
     reason TEXT,
+    timestamp_start_seconds INTEGER,
+    timestamp_end_seconds INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (skill_id) REFERENCES skills(id),
     FOREIGN KEY (content_id) REFERENCES content(id)
@@ -163,6 +165,8 @@ const TABLE_SQL = [
     content_id TEXT,
     content_type TEXT,
     reason TEXT,
+    timestamp_start_seconds INTEGER,
+    timestamp_end_seconds INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (skill_id) REFERENCES skills(id),
@@ -352,6 +356,7 @@ function createTestDb() {
         async getLearningPlan(skillId) {
           return query(
             `SELECT lp.day_number, lp.content_id, lp.content_type, lp.reason,
+                    lp.timestamp_start_seconds, lp.timestamp_end_seconds,
                     c.title, c.url, c.thumbnail, c.duration, c.author, c.source
              FROM learning_plans lp
              LEFT JOIN content c ON c.id = lp.content_id
@@ -365,8 +370,9 @@ function createTestDb() {
           await insert('DELETE FROM learning_plans WHERE skill_id = ?', [skillId]);
           for (const entry of days) {
             await insert(
-              'INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason) VALUES (?, ?, ?, ?, ?)',
-              [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+              'INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+               entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
             );
           }
         },
@@ -437,6 +443,7 @@ function createTestDb() {
         async getUserLearningPlan(userId, skillId) {
           return query(
             `SELECT ulp.day_number, ulp.content_id, ulp.content_type, ulp.reason, ulp.created_at,
+                    ulp.timestamp_start_seconds, ulp.timestamp_end_seconds,
                     c.title, c.url, c.thumbnail, c.duration, c.author, c.source
              FROM user_learning_plans ulp
              LEFT JOIN content c ON c.id = ulp.content_id
@@ -453,9 +460,10 @@ function createTestDb() {
           );
           for (const entry of days) {
             await insert(
-              `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason)
-               VALUES (?, ?, ?, ?, ?, ?)`,
-              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+              `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+               entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
             );
           }
         },
@@ -478,9 +486,10 @@ function createTestDb() {
         async refreshUserPlanDays(userId, skillId, days) {
           for (const entry of days) {
             await insert(
-              `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+              `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+               entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
             );
           }
         },

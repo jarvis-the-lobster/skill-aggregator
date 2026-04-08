@@ -9,6 +9,26 @@ import analytics from '../services/analytics';
 
 const FREE_DAYS = 7;
 
+// Format seconds as "M:SS" for display (e.g. "25:00")
+function formatTimestamp(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const mm = String(m).padStart(h > 0 ? 2 : 1, '0');
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+// Build a YouTube URL with timestamp if applicable
+function getEntryUrl(entry) {
+  if (!entry.url) return null;
+  if (entry.timestamp_start_seconds > 0 && entry.source === 'YouTube') {
+    const sep = entry.url.includes('?') ? '&' : '?';
+    return `${entry.url}${sep}t=${entry.timestamp_start_seconds}s`;
+  }
+  return entry.url;
+}
+
 export function LearningPlanPage() {
   const { skillId } = useParams();
   const { user, loading: authLoading } = useAuth();
@@ -235,8 +255,13 @@ export function LearningPlanPage() {
                           {entry.content_type}
                         </span>
                       </div>
+                      {entry.timestamp_start_seconds > 0 && (
+                        <span className="text-xs text-amber-400 font-medium mb-0.5">
+                          Continue at {formatTimestamp(entry.timestamp_start_seconds)}
+                        </span>
+                      )}
                       <a
-                        href={entry.url}
+                        href={getEntryUrl(entry)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-sm font-medium text-slate-200 hover:text-teal line-clamp-3 flex-grow"
