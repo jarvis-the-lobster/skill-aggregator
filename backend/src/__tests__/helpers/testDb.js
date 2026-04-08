@@ -462,7 +462,80 @@ function createTestDb() {
         },
 
         async getMetrics() {
-          return { scrapeStats: [], skillHealth: [], youtubeQuota: { used: 0, limit: 10000, percentUsed: 0 }, recentErrors: [], contentCounts: [] };
+          const [scrapeStats, skillHealth, youtubeQuotaRows, recentErrors, contentCounts] = await Promise.all([
+            query(`
+              SELECT source,
+                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+                SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as error,
+                SUM(CASE WHEN status = 'quota_exceeded' THEN 1 ELSE 0 END) as quota_exceeded
+              FROM scrape_log
+              WHERE scraped_at >= datetime('now', '-7 days')
+              GROUP BY source
+            `),
+            query(`
+              SELECT
+                s.id as skill_id,
+                s.name,
+                s.last_scraped_at,
+                COUNT(c.id) as content_count,
+                CASE
+                  WHEN s.status = 'error' THEN 'error'
+                  WHEN COUNT(c.id) = 0 AND EXISTS (
+                    SELECT 1 FROM scrape_log sl
+                    WHERE sl.skill_id = s.id AND sl.status IN ('error', 'quota_exceeded')
+                  ) THEN 'error'
+                  WHEN COUNT(c.id) > 0 AND EXISTS (
+                    SELECT 1 FROM scrape_log sl
+                    WHERE sl.skill_id = s.id AND sl.status IN ('error', 'quota_exceeded')
+                  ) THEN 'partial'
+                  WHEN EXISTS (
+                    SELECT 1 FROM scrape_log sl
+                    WHERE sl.skill_id = s.id AND sl.status = 'success'
+                  ) THEN 'success'
+                  ELSE COALESCE(s.status, 'pending')
+                END as last_scrape_status
+              FROM skills s
+              LEFT JOIN content c ON c.skill_id = s.id
+              GROUP BY s.id
+              ORDER BY s.name
+            `),
+            query(`
+              SELECT COALESCE(SUM(quota_used), 0) as quota_used_today
+              FROM scrape_log
+              WHERE source = 'youtube' AND scraped_at >= date('now')
+            `),
+            query(`
+              SELECT sl.skill_id, sl.source, sl.error_message, sl.scraped_at
+              FROM scrape_log sl
+              WHERE sl.status IN ('error', 'quota_exceeded')
+                AND (
+                  sl.status = 'quota_exceeded'
+                  OR NOT EXISTS (
+                    SELECT 1 FROM content c WHERE c.skill_id = sl.skill_id
+                  )
+                  OR EXISTS (
+                    SELECT 1 FROM skills s WHERE s.id = sl.skill_id AND s.status = 'error'
+                  )
+                )
+              ORDER BY sl.scraped_at DESC
+              LIMIT 20
+            `),
+            query(`
+              SELECT skill_id, type, COUNT(*) as count
+              FROM content
+              GROUP BY skill_id, type
+              ORDER BY skill_id, type
+            `)
+          ]);
+
+          const quotaUsedToday = youtubeQuotaRows[0]?.quota_used_today || 0;
+          return {
+            scrapeStats,
+            skillHealth,
+            youtubeQuota: { used: quotaUsedToday, limit: 10000, percentUsed: Math.round((quotaUsedToday / 10000) * 100) },
+            recentErrors,
+            contentCounts
+          };
         },
 
         close() {
