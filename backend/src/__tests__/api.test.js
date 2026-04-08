@@ -105,6 +105,65 @@ describe('GET /api/skills/search', () => {
   });
 });
 
+describe('POST /api/admin/skills/:id/category', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  test('updates category when authorized with CRON_SECRET', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('reddit-marketing', 'Reddit Marketing', 'ready')"
+    );
+
+    const res = await request(app)
+      .post('/api/admin/skills/reddit-marketing/category')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ category: 'marketing' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.skillId).toBe('reddit-marketing');
+    expect(res.body.previousCategory).toBeNull();
+    expect(res.body.category).toBe('marketing');
+
+    const updated = await db.getSkillById('reddit-marketing');
+    expect(updated.category).toBe('marketing');
+  });
+
+  test('rejects unauthorized requests', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('reddit-marketing', 'Reddit Marketing', 'ready')"
+    );
+
+    const res = await request(app)
+      .post('/api/admin/skills/reddit-marketing/category')
+      .send({ category: 'marketing' });
+
+    expect(res.status).toBe(401);
+  });
+
+  test('rejects invalid category values', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('reddit-marketing', 'Reddit Marketing', 'ready')"
+    );
+
+    const res = await request(app)
+      .post('/api/admin/skills/reddit-marketing/category')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ category: 'Marketing Team' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/lowercase letters, numbers, and hyphens/i);
+  });
+});
+
 describe('POST /api/courses/enroll/:skillId', () => {
   test('requires auth', async () => {
     const res = await request(app).post('/api/courses/enroll/python');

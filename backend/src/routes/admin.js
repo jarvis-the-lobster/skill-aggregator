@@ -289,6 +289,45 @@ router.post('/skills/:id/merge', async (req, res) => {
   }
 });
 
+// POST /api/admin/skills/:id/category — update a skill category
+router.post('/skills/:id/category', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+  try {
+    const { id } = req.params;
+    const { category } = req.body;
+
+    if (typeof category !== 'string') {
+      return res.status(400).json({ error: 'category string required' });
+    }
+
+    const normalizedCategory = category.trim().toLowerCase();
+    if (!normalizedCategory) {
+      return res.status(400).json({ error: 'category cannot be empty' });
+    }
+    if (normalizedCategory.length > 64) {
+      return res.status(400).json({ error: 'category too long' });
+    }
+    if (!/^[a-z0-9-]+$/.test(normalizedCategory)) {
+      return res.status(400).json({ error: 'category must contain only lowercase letters, numbers, and hyphens' });
+    }
+
+    const existing = await db.query('SELECT id, category FROM skills WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Skill not found' });
+
+    await db.insert('UPDATE skills SET category = ? WHERE id = ?', [normalizedCategory, id]);
+
+    res.json({
+      ok: true,
+      skillId: id,
+      previousCategory: existing[0].category || null,
+      category: normalizedCategory
+    });
+  } catch (err) {
+    console.error('Update skill category error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/admin/skills/reset-stale — reset last_scraped_at for low-content skills
 router.post('/skills/reset-stale', async (req, res) => {
   if (!requireCronSecret(req, res)) return;
