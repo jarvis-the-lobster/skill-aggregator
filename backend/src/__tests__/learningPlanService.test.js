@@ -69,6 +69,73 @@ afterAll(async () => {
   await db.close();
 });
 
+describe('getPlan', () => {
+  test('regenerates an incomplete shared plan with missing day rows', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    const content = [];
+    for (let i = 1; i <= 20; i++) {
+      content.push({
+        id: `yt_v${i}`,
+        type: 'video',
+        title: `Python Video ${i}`,
+        url: `https://yt.com/v${i}`,
+        source: 'YouTube',
+        channel: 'TestChannel',
+        duration: '10:00',
+        views: 20000 - i * 100,
+      });
+    }
+    for (let i = 1; i <= 20; i++) {
+      content.push({
+        id: `devto_a${i}`,
+        type: 'article',
+        title: `Python Article ${i}`,
+        url: `https://dev.to/a${i}`,
+        source: 'Dev.to',
+        author: 'Author',
+        tags: ['python'],
+        views: 10000 - i * 100,
+      });
+    }
+    await db.saveContent(content, SKILL_ID);
+
+    await db.saveLearningPlan(SKILL_ID, [
+      { day_number: 1, content_id: 'yt_v1', content_type: 'video', reason: 'seed' },
+      { day_number: 2, content_id: 'yt_v2', content_type: 'video', reason: 'seed' },
+      { day_number: 4, content_id: 'yt_v3', content_type: 'video', reason: 'seed' },
+    ]);
+
+    const plan = await learningPlanService.getPlan(SKILL_ID);
+
+    expect(plan).toHaveLength(30);
+    expect(plan.map(d => d.day_number)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+    expect(plan.every(d => d.content_id)).toBe(true);
+  });
+
+  test('regenerates an incomplete shared plan with null content rows', async () => {
+    await seedSkillWithPlan();
+
+    const brokenPlan = Array.from({ length: 30 }, (_, i) => ({
+      day_number: i + 1,
+      content_id: i === 4 || i === 5 ? null : (i < 15 ? `yt_v${i + 1}` : `devto_a${i - 14}`),
+      content_type: i === 4 || i === 5 ? null : (i < 15 ? 'video' : 'article'),
+      reason: 'seed',
+    }));
+    await db.saveLearningPlan(SKILL_ID, brokenPlan);
+
+    const plan = await learningPlanService.getPlan(SKILL_ID);
+
+    expect(plan).toHaveLength(30);
+    expect(plan.every(d => d.content_id)).toBe(true);
+    const uniqueIds = new Set(plan.map(d => d.content_id));
+    expect(uniqueIds.size).toBe(30);
+  });
+});
+
 describe('copyPlanForUser', () => {
   test('enrolling creates a personal plan copy (30 days)', async () => {
     await seedSkillWithPlan();
