@@ -2,6 +2,29 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { getApplicableSources } = require('../constants/sourceApplicability');
 
+function getPacificDayWindow(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = Number(parts.find((p) => p.type === 'year')?.value);
+  const month = Number(parts.find((p) => p.type === 'month')?.value);
+  const day = Number(parts.find((p) => p.type === 'day')?.value);
+
+  const utcStart = new Date(Date.UTC(year, month - 1, day, 7, 0, 0));
+  const utcEnd = new Date(Date.UTC(year, month - 1, day + 1, 6, 59, 59));
+
+  const toSqliteUtc = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+
+  return {
+    start: toSqliteUtc(utcStart),
+    end: toSqliteUtc(utcEnd),
+  };
+}
+
 class Database {
   constructor() {
     const dbPath = process.env.DB_PATH || path.join(__dirname, '../../../database/skills.db');
@@ -392,6 +415,8 @@ class Database {
   }
 
   async getMetrics() {
+    const { start: pacificDayStart, end: pacificDayEnd } = getPacificDayWindow();
+
     const [scrapeStats, skillHealth, youtubeQuotaToday, recentErrors, contentCounts] = await Promise.all([
       // scrapeStats: success/error/quota_exceeded counts per source, last 7 days
       this.query(`
@@ -414,12 +439,14 @@ class Database {
         GROUP BY s.id
         ORDER BY s.name
       `),
-      // YouTube quota used today
+      // YouTube quota used today (Pacific time)
       this.query(`
         SELECT COALESCE(SUM(quota_used), 0) as quota_used_today
         FROM scrape_log
-        WHERE source = 'youtube' AND scraped_at >= date('now')
-      `),
+        WHERE source = 'youtube'
+          AND scraped_at >= ?
+          AND scraped_at <= ?
+      `, [pacificDayStart, pacificDayEnd]),
       // recentErrors: last 20 error rows, excluding per-source failures
       // where the skill has content from other sources (e.g. freeCodeCamp 404s
       // on non-tech skills that have YouTube/Dev.to content)
