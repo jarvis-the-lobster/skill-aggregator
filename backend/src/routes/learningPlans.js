@@ -6,6 +6,19 @@ const streakService = require('../services/streakService');
 const { requireAuth } = require('../middleware/auth');
 const { bulkLimiter } = require('../middleware/rateLimit');
 
+function requireCronSecretOrAdmin(req, res, next) {
+  const secret = process.env.CRON_SECRET;
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (secret && token === secret) {
+    req.adminAuth = { kind: 'cron-secret' };
+    return next();
+  }
+
+  return requireAuth(req, res, next);
+}
+
 // GET /api/learning-plans/bulk — public, returns ALL learning plans grouped by skill
 router.get('/bulk', bulkLimiter, async (req, res) => {
   try {
@@ -39,8 +52,8 @@ router.get('/:skillId', async (req, res) => {
   }
 });
 
-// POST /api/learning-plans/:skillId/generate — (re)generate plan (admin only)
-router.post('/:skillId/generate', requireAuth, async (req, res) => {
+// POST /api/learning-plans/:skillId/generate — (re)generate shared plan
+router.post('/:skillId/generate', requireCronSecretOrAdmin, async (req, res) => {
   try {
     const { skillId } = req.params;
     const plan = await learningPlanService.generatePlan(skillId);
