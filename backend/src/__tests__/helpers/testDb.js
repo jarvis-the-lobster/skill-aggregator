@@ -1,6 +1,29 @@
 const sqlite3 = require('sqlite3').verbose();
 const { getApplicableSources } = require('../../constants/sourceApplicability');
 
+function getPacificDayWindow(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = Number(parts.find((p) => p.type === 'year')?.value);
+  const month = Number(parts.find((p) => p.type === 'month')?.value);
+  const day = Number(parts.find((p) => p.type === 'day')?.value);
+
+  const utcStart = new Date(Date.UTC(year, month - 1, day, 7, 0, 0));
+  const utcEnd = new Date(Date.UTC(year, month - 1, day + 1, 6, 59, 59));
+
+  const toSqliteUtc = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+
+  return {
+    start: toSqliteUtc(utcStart),
+    end: toSqliteUtc(utcEnd),
+  };
+}
+
 const TABLE_SQL = [
   `CREATE TABLE IF NOT EXISTS skills (
     id TEXT PRIMARY KEY,
@@ -463,6 +486,8 @@ function createTestDb() {
         },
 
         async getMetrics() {
+          const { start: pacificDayStart, end: pacificDayEnd } = getPacificDayWindow();
+
           const [scrapeStats, rawSkillHealth, youtubeQuotaRows, recentErrors, contentCounts, latestSourceRows] = await Promise.all([
             query(`
               SELECT source,
@@ -484,8 +509,10 @@ function createTestDb() {
             query(`
               SELECT COALESCE(SUM(quota_used), 0) as quota_used_today
               FROM scrape_log
-              WHERE source = 'youtube' AND scraped_at >= date('now')
-            `),
+              WHERE source = 'youtube'
+                AND scraped_at >= ?
+                AND scraped_at <= ?
+            `, [pacificDayStart, pacificDayEnd]),
             query(`
               SELECT sl.skill_id, sl.source, sl.error_message, sl.scraped_at
               FROM scrape_log sl

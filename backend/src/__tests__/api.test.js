@@ -311,6 +311,34 @@ describe('GET /api/admin/metrics skill health status', () => {
   });
 });
 
+describe('GET /api/admin/metrics youtube quota window', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  test('counts youtube quota within the current Pacific day window', async () => {
+    await db.logScrape({ skill_id: 'python', source: 'youtube', status: 'success', quota_used: 120 });
+    await db.logScrape({ skill_id: 'javascript', source: 'youtube', status: 'success', quota_used: 240 });
+    await db.insert(
+      "INSERT INTO scrape_log (skill_id, source, status, quota_used, scraped_at) VALUES ('old-skill', 'youtube', 'success', 999, '2000-01-01 12:00:00')"
+    );
+
+    const res = await request(app)
+      .get('/api/admin/metrics')
+      .set('Authorization', 'Bearer test-cron-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.youtubeQuota.used).toBe(360);
+  });
+});
+
 describe('POST /api/courses/enroll/:skillId', () => {
   test('requires auth', async () => {
     const res = await request(app).post('/api/courses/enroll/python');
