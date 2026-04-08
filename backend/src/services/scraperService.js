@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const db = require('../models/database');
+const { isSourceApplicable } = require('../constants/sourceApplicability');
 
 const DELAY_MS = parseInt(process.env.SCRAPE_DELAY_MS || '1000');
 const MAX_RESULTS = parseInt(process.env.MAX_RESULTS_PER_SOURCE || '30');
@@ -61,13 +62,6 @@ const SKILL_SEARCH_TERMS = {
 };
 
 const ALL_SKILLS = Object.keys(SKILL_SEARCH_TERMS);
-const FREECODECAMP_ALLOWED_CATEGORIES = new Set([
-  'programming',
-  'data',
-  'ai',
-  'devops',
-  'security'
-]);
 
 class ScraperService {
   constructor() {
@@ -304,8 +298,8 @@ class ScraperService {
   async scrapeArticles(skillId) {
     const startTimes = { devto: Date.now(), medium: Date.now(), freecodecamp: Date.now() };
     const skill = await db.getSkillById(skillId);
-    const category = (skill?.category || '').trim().toLowerCase();
-    const shouldCheckFreeCodeCamp = FREECODECAMP_ALLOWED_CATEGORIES.has(category);
+    const category = skill?.category || '';
+    const shouldCheckFreeCodeCamp = isSourceApplicable('freecodecamp', category);
 
     const articlePromises = [
       this.scrapeDevTo(skillId),

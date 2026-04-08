@@ -1,4 +1,5 @@
 const sqlite3 = require('sqlite3').verbose();
+const { getApplicableSources } = require('../../constants/sourceApplicability');
 
 const TABLE_SQL = [
   `CREATE TABLE IF NOT EXISTS skills (
@@ -462,7 +463,7 @@ function createTestDb() {
         },
 
         async getMetrics() {
-          const [scrapeStats, skillHealth, youtubeQuotaRows, recentErrors, contentCounts] = await Promise.all([
+          const [scrapeStats, rawSkillHealth, youtubeQuotaRows, recentErrors, contentCounts, latestSourceRows] = await Promise.all([
             query(`
               SELECT source,
                 SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
@@ -473,27 +474,8 @@ function createTestDb() {
               GROUP BY source
             `),
             query(`
-              SELECT
-                s.id as skill_id,
-                s.name,
-                s.last_scraped_at,
-                COUNT(c.id) as content_count,
-                CASE
-                  WHEN s.status = 'error' THEN 'error'
-                  WHEN COUNT(c.id) = 0 AND EXISTS (
-                    SELECT 1 FROM scrape_log sl
-                    WHERE sl.skill_id = s.id AND sl.status IN ('error', 'quota_exceeded')
-                  ) THEN 'error'
-                  WHEN COUNT(c.id) > 0 AND EXISTS (
-                    SELECT 1 FROM scrape_log sl
-                    WHERE sl.skill_id = s.id AND sl.status IN ('error', 'quota_exceeded')
-                  ) THEN 'partial'
-                  WHEN EXISTS (
-                    SELECT 1 FROM scrape_log sl
-                    WHERE sl.skill_id = s.id AND sl.status = 'success'
-                  ) THEN 'success'
-                  ELSE COALESCE(s.status, 'pending')
-                END as last_scrape_status
+              SELECT s.id as skill_id, s.name, s.category, s.status, s.last_scraped_at,
+                COUNT(c.id) as content_count
               FROM skills s
               LEFT JOIN content c ON c.skill_id = s.id
               GROUP BY s.id
@@ -525,8 +507,54 @@ function createTestDb() {
               FROM content
               GROUP BY skill_id, type
               ORDER BY skill_id, type
+            `),
+            query(`
+              SELECT sl.skill_id, sl.source, sl.status
+              FROM scrape_log sl
+              INNER JOIN (
+                SELECT skill_id, source, MAX(id) as max_id
+                FROM scrape_log
+                GROUP BY skill_id, source
+              ) latest ON latest.max_id = sl.id
             `)
           ]);
+
+          const latestBySkill = new Map();
+          for (const row of latestSourceRows) {
+            if (!latestBySkill.has(row.skill_id)) latestBySkill.set(row.skill_id, new Map());
+            latestBySkill.get(row.skill_id).set(row.source, row.status);
+          }
+
+          const skillHealth = rawSkillHealth.map((skill) => {
+            const applicableSources = getApplicableSources(skill.category);
+            const latestStatuses = latestBySkill.get(skill.skill_id) || new Map();
+            const relevantStatuses = [...applicableSources]
+              .map((source) => latestStatuses.get(source))
+              .filter(Boolean);
+
+            let derivedStatus;
+            if (skill.status === 'error') {
+              derivedStatus = 'error';
+            } else if (skill.content_count === 0 && relevantStatuses.some((s) => s === 'error' || s === 'quota_exceeded')) {
+              derivedStatus = 'error';
+            } else if (skill.content_count > 0 && relevantStatuses.some((s) => s === 'error' || s === 'quota_exceeded')) {
+              derivedStatus = 'partial';
+            } else if (skill.content_count > 0 && relevantStatuses.every((s) => s === 'success' || s === 'skipped') && relevantStatuses.length > 0) {
+              derivedStatus = 'success';
+            } else if (relevantStatuses.some((s) => s === 'success' || s === 'skipped')) {
+              derivedStatus = skill.content_count > 0 ? 'success' : (skill.status || 'pending');
+            } else {
+              derivedStatus = skill.status || 'pending';
+            }
+
+            return {
+              skill_id: skill.skill_id,
+              name: skill.name,
+              last_scraped_at: skill.last_scraped_at,
+              content_count: skill.content_count,
+              last_scrape_status: derivedStatus,
+            };
+          });
 
           const quotaUsedToday = youtubeQuotaRows[0]?.quota_used_today || 0;
           return {

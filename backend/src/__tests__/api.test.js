@@ -250,15 +250,37 @@ describe('GET /api/admin/metrics skill health status', () => {
     else process.env.CRON_SECRET = originalCronSecret;
   });
 
-  test('marks skills with content plus source errors as partial, not error', async () => {
+  test('marks skills with content plus latest relevant source errors as partial, not error', async () => {
     await db.insert(
-      "INSERT INTO skills (id, name, status) VALUES ('reddit-marketing', 'Reddit Marketing', 'ready')"
+      "INSERT INTO skills (id, name, category, status) VALUES ('python', 'Python', 'programming', 'ready')"
+    );
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('a1', 'python', 'article', 'Python Guide', 'https://example.com/a1', 'devto')"
+    );
+    await db.logScrape({ skill_id: 'python', source: 'devto', status: 'success', items_fetched: 1 });
+    await db.logScrape({ skill_id: 'python', source: 'freecodecamp', status: 'error', error_message: '404' });
+
+    const res = await request(app)
+      .get('/api/admin/metrics')
+      .set('Authorization', 'Bearer test-cron-secret');
+
+    expect(res.status).toBe(200);
+    const skill = res.body.skillHealth.find((row) => row.skill_id === 'python');
+    expect(skill).toBeDefined();
+    expect(skill.content_count).toBe(1);
+    expect(skill.last_scrape_status).toBe('partial');
+  });
+
+  test('ignores old source errors when a newer skip supersedes them', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, category, status) VALUES ('reddit-marketing', 'Reddit Marketing', 'marketing', 'ready')"
     );
     await db.insert(
       "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('a1', 'reddit-marketing', 'article', 'Reddit Guide', 'https://example.com/a1', 'devto')"
     );
     await db.logScrape({ skill_id: 'reddit-marketing', source: 'devto', status: 'success', items_fetched: 1 });
-    await db.logScrape({ skill_id: 'reddit-marketing', source: 'freecodecamp', status: 'error', error_message: '404' });
+    await db.logScrape({ skill_id: 'reddit-marketing', source: 'freecodecamp', status: 'error', error_message: 'old 404' });
+    await db.logScrape({ skill_id: 'reddit-marketing', source: 'freecodecamp', status: 'skipped', error_message: 'category not eligible' });
 
     const res = await request(app)
       .get('/api/admin/metrics')
@@ -268,12 +290,12 @@ describe('GET /api/admin/metrics skill health status', () => {
     const skill = res.body.skillHealth.find((row) => row.skill_id === 'reddit-marketing');
     expect(skill).toBeDefined();
     expect(skill.content_count).toBe(1);
-    expect(skill.last_scrape_status).toBe('partial');
+    expect(skill.last_scrape_status).toBe('success');
   });
 
-  test('marks skills with no content and scrape errors as error', async () => {
+  test('marks skills with no content and latest relevant scrape errors as error', async () => {
     await db.insert(
-      "INSERT INTO skills (id, name, status) VALUES ('broken-skill', 'Broken Skill', 'ready')"
+      "INSERT INTO skills (id, name, category, status) VALUES ('broken-skill', 'Broken Skill', 'programming', 'ready')"
     );
     await db.logScrape({ skill_id: 'broken-skill', source: 'freecodecamp', status: 'error', error_message: '404' });
 
