@@ -402,11 +402,30 @@ class Database {
         WHERE scraped_at >= datetime('now', '-7 days')
         GROUP BY source
       `),
-      // skillHealth: last scraped, content count, last scrape status per skill
+      // skillHealth: derive a healthier overall status per skill instead of
+      // blindly using the last raw scrape_log row from any single source.
       this.query(`
-        SELECT s.id as skill_id, s.name, s.last_scraped_at,
+        SELECT
+          s.id as skill_id,
+          s.name,
+          s.last_scraped_at,
           COUNT(c.id) as content_count,
-          (SELECT status FROM scrape_log WHERE skill_id = s.id ORDER BY scraped_at DESC LIMIT 1) as last_scrape_status
+          CASE
+            WHEN s.status = 'error' THEN 'error'
+            WHEN COUNT(c.id) = 0 AND EXISTS (
+              SELECT 1 FROM scrape_log sl
+              WHERE sl.skill_id = s.id AND sl.status IN ('error', 'quota_exceeded')
+            ) THEN 'error'
+            WHEN COUNT(c.id) > 0 AND EXISTS (
+              SELECT 1 FROM scrape_log sl
+              WHERE sl.skill_id = s.id AND sl.status IN ('error', 'quota_exceeded')
+            ) THEN 'partial'
+            WHEN EXISTS (
+              SELECT 1 FROM scrape_log sl
+              WHERE sl.skill_id = s.id AND sl.status = 'success'
+            ) THEN 'success'
+            ELSE COALESCE(s.status, 'pending')
+          END as last_scrape_status
         FROM skills s
         LEFT JOIN content c ON c.skill_id = s.id
         GROUP BY s.id
