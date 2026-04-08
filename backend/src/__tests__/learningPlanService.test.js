@@ -268,6 +268,349 @@ describe('refreshUserPlan', () => {
   });
 });
 
+describe('parseDuration', () => {
+  const parseDuration = learningPlanService._parseDuration;
+
+  test('parses M:SS format', () => {
+    expect(parseDuration('10:00')).toBe(600);
+    expect(parseDuration('25:30')).toBe(1530);
+    expect(parseDuration('0:45')).toBe(45);
+  });
+
+  test('parses H:MM:SS format', () => {
+    expect(parseDuration('1:00:00')).toBe(3600);
+    expect(parseDuration('1:30:00')).toBe(5400);
+    expect(parseDuration('2:15:30')).toBe(8130);
+  });
+
+  test('returns 0 for null/undefined/invalid', () => {
+    expect(parseDuration(null)).toBe(0);
+    expect(parseDuration(undefined)).toBe(0);
+    expect(parseDuration('')).toBe(0);
+    expect(parseDuration('abc')).toBe(0);
+  });
+});
+
+describe('formatTimestamp', () => {
+  const formatTimestamp = learningPlanService._formatTimestamp;
+
+  test('formats seconds-only', () => {
+    expect(formatTimestamp(45)).toBe('0:45');
+  });
+
+  test('formats minutes and seconds', () => {
+    expect(formatTimestamp(1500)).toBe('25:00');
+    expect(formatTimestamp(1530)).toBe('25:30');
+  });
+
+  test('formats hours', () => {
+    expect(formatTimestamp(3600)).toBe('1:00:00');
+    expect(formatTimestamp(5430)).toBe('1:30:30');
+  });
+});
+
+describe('chunkVideo', () => {
+  const chunkVideo = learningPlanService._chunkVideo;
+
+  test('returns null for non-YouTube source', () => {
+    const video = { id: 'v1', type: 'video', source: 'Vimeo', duration: '1:30:00' };
+    expect(chunkVideo(video, 1, 'reason')).toBeNull();
+  });
+
+  test('returns null for short video (<= 40 min)', () => {
+    const video = { id: 'v1', type: 'video', source: 'YouTube', duration: '39:00' };
+    expect(chunkVideo(video, 1, 'reason')).toBeNull();
+  });
+
+  test('returns null for exactly 40 min video', () => {
+    const video = { id: 'v1', type: 'video', source: 'YouTube', duration: '40:00' };
+    expect(chunkVideo(video, 1, 'reason')).toBeNull();
+  });
+
+  test('chunks a 50 min video into 2 chunks', () => {
+    const video = { id: 'v1', type: 'video', source: 'YouTube', duration: '50:00' };
+    const chunks = chunkVideo(video, 1, 'Get started');
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].day_number).toBe(1);
+    expect(chunks[0].timestamp_start_seconds).toBe(0);
+    expect(chunks[0].timestamp_end_seconds).toBe(1500);
+    expect(chunks[1].day_number).toBe(2);
+    expect(chunks[1].timestamp_start_seconds).toBe(1500);
+    expect(chunks[1].timestamp_end_seconds).toBe(3000);
+    // First chunk keeps original reason
+    expect(chunks[0].reason).toBe('Get started');
+    // Continuation chunk has descriptive reason
+    expect(chunks[1].reason).toMatch(/^Continue:/);
+  });
+
+  test('chunks a 75 min video into 3 chunks', () => {
+    const video = { id: 'v1', type: 'video', source: 'YouTube', duration: '1:15:00' };
+    const chunks = chunkVideo(video, 1, 'reason');
+    expect(chunks).toHaveLength(3);
+    expect(chunks[0].timestamp_start_seconds).toBe(0);
+    expect(chunks[2].day_number).toBe(3);
+  });
+
+  test('limits to available days within early window', () => {
+    // Start on day 6: only 2 days left (6 and 7)
+    // 75 min video: ceil(75/25) = 3 chunks, but only 2 available
+    // 75*60/2 = 2250s = 37.5 min per chunk, under 40 min max
+    const video = { id: 'v1', type: 'video', source: 'YouTube', duration: '1:15:00' };
+    const chunks = chunkVideo(video, 6, 'reason');
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].day_number).toBe(6);
+    expect(chunks[1].day_number).toBe(7);
+  });
+
+  test('returns null when starting on day 7 with only 1 day available', () => {
+    const video = { id: 'v1', type: 'video', source: 'YouTube', duration: '1:30:00' };
+    const chunks = chunkVideo(video, 7, 'reason');
+    // Only 1 day available, chunksToUse = 1, returns null
+    expect(chunks).toBeNull();
+  });
+
+  test('caps at 7 chunks maximum', () => {
+    // 4 hour video = 240 min / 25 = ~10 chunks, capped to 7
+    const video = { id: 'v1', type: 'video', source: 'YouTube', duration: '4:00:00' };
+    const chunks = chunkVideo(video, 1, 'reason');
+    expect(chunks).toHaveLength(7);
+    expect(chunks[6].day_number).toBe(7);
+    // Last chunk ends at or before total duration
+    expect(chunks[6].timestamp_end_seconds).toBeLessThanOrEqual(14400);
+  });
+
+  test('all chunks share the same content_id', () => {
+    const video = { id: 'yt_abc', type: 'video', source: 'YouTube', duration: '1:15:00' };
+    const chunks = chunkVideo(video, 1, 'reason');
+    chunks.forEach(chunk => {
+      expect(chunk.content_id).toBe('yt_abc');
+      expect(chunk.content_type).toBe('video');
+    });
+  });
+});
+
+describe('generatePlan with chunked videos', () => {
+  test('chunks a long YouTube video across consecutive early days', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    const content = [];
+    // First video is long (75 min) — should be chunked into 3 days
+    content.push({
+      id: 'yt_long1',
+      type: 'video',
+      title: 'Python Full Course',
+      url: 'https://youtube.com/watch?v=long1',
+      source: 'YouTube',
+      channel: 'TestChannel',
+      duration: '1:15:00',
+      views: 50000,
+    });
+    // Remaining short videos
+    for (let i = 2; i <= 15; i++) {
+      content.push({
+        id: `yt_v${i}`,
+        type: 'video',
+        title: `Python Video ${i}`,
+        url: `https://yt.com/v${i}`,
+        source: 'YouTube',
+        channel: 'TestChannel',
+        duration: '10:00',
+        views: 10000 - i * 100,
+      });
+    }
+    for (let i = 1; i <= 15; i++) {
+      content.push({
+        id: `devto_a${i}`,
+        type: 'article',
+        title: `Python Article ${i}`,
+        url: `https://dev.to/a${i}`,
+        source: 'Dev.to',
+        author: 'Author',
+        tags: ['python'],
+        views: 5000 - i * 100,
+      });
+    }
+    await db.saveContent(content, SKILL_ID);
+
+    const plan = await learningPlanService.generatePlan(SKILL_ID);
+    expect(plan).toHaveLength(30);
+
+    // Days 1-3 should be chunks of the long video
+    const day1 = plan.find(d => d.day_number === 1);
+    const day2 = plan.find(d => d.day_number === 2);
+    const day3 = plan.find(d => d.day_number === 3);
+
+    expect(day1.content_id).toBe('yt_long1');
+    expect(day2.content_id).toBe('yt_long1');
+    expect(day3.content_id).toBe('yt_long1');
+
+    expect(day1.timestamp_start_seconds).toBe(0);
+    expect(day2.timestamp_start_seconds).toBeGreaterThan(0);
+    expect(day3.timestamp_start_seconds).toBeGreaterThan(day2.timestamp_start_seconds);
+
+    // Day 4+ should be different content
+    const day4 = plan.find(d => d.day_number === 4);
+    expect(day4.content_id).not.toBe('yt_long1');
+  });
+
+  test('does not chunk short YouTube videos', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    const content = [];
+    for (let i = 1; i <= 15; i++) {
+      content.push({
+        id: `yt_v${i}`,
+        type: 'video',
+        title: `Python Video ${i}`,
+        url: `https://yt.com/v${i}`,
+        source: 'YouTube',
+        channel: 'TestChannel',
+        duration: '30:00', // 30 min — under threshold
+        views: 10000 - i * 100,
+      });
+    }
+    for (let i = 1; i <= 15; i++) {
+      content.push({
+        id: `devto_a${i}`,
+        type: 'article',
+        title: `Python Article ${i}`,
+        url: `https://dev.to/a${i}`,
+        source: 'Dev.to',
+        author: 'Author',
+        tags: ['python'],
+        views: 5000 - i * 100,
+      });
+    }
+    await db.saveContent(content, SKILL_ID);
+
+    const plan = await learningPlanService.generatePlan(SKILL_ID);
+    expect(plan).toHaveLength(30);
+
+    // No chunking — each early day should have a unique content_id
+    const earlyIds = plan.slice(0, 7).map(d => d.content_id);
+    expect(new Set(earlyIds).size).toBe(7);
+
+    // No timestamp fields set
+    plan.slice(0, 7).forEach(d => {
+      expect(d.timestamp_start_seconds).toBeNull();
+      expect(d.timestamp_end_seconds).toBeNull();
+    });
+  });
+
+  test('does not chunk non-YouTube long videos', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    const content = [];
+    content.push({
+      id: 'vimeo_long',
+      type: 'video',
+      title: 'Long Vimeo Video',
+      url: 'https://vimeo.com/123',
+      source: 'Vimeo',
+      channel: 'TestChannel',
+      duration: '1:30:00',
+      views: 50000,
+    });
+    for (let i = 2; i <= 15; i++) {
+      content.push({
+        id: `yt_v${i}`,
+        type: 'video',
+        title: `Python Video ${i}`,
+        url: `https://yt.com/v${i}`,
+        source: 'YouTube',
+        channel: 'TestChannel',
+        duration: '10:00',
+        views: 10000 - i * 100,
+      });
+    }
+    for (let i = 1; i <= 15; i++) {
+      content.push({
+        id: `devto_a${i}`,
+        type: 'article',
+        title: `Python Article ${i}`,
+        url: `https://dev.to/a${i}`,
+        source: 'Dev.to',
+        author: 'Author',
+        tags: ['python'],
+        views: 5000 - i * 100,
+      });
+    }
+    await db.saveContent(content, SKILL_ID);
+
+    const plan = await learningPlanService.generatePlan(SKILL_ID);
+
+    // The Vimeo video should appear only once (no chunking)
+    const vimeoDays = plan.filter(d => d.content_id === 'vimeo_long');
+    expect(vimeoDays).toHaveLength(1);
+    expect(vimeoDays[0].timestamp_start_seconds).toBeNull();
+  });
+
+  test('chunked video timestamps are copied to user plan', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    const content = [];
+    content.push({
+      id: 'yt_long1',
+      type: 'video',
+      title: 'Python Full Course',
+      url: 'https://youtube.com/watch?v=long1',
+      source: 'YouTube',
+      channel: 'TestChannel',
+      duration: '1:15:00',
+      views: 50000,
+    });
+    for (let i = 2; i <= 15; i++) {
+      content.push({
+        id: `yt_v${i}`,
+        type: 'video',
+        title: `Python Video ${i}`,
+        url: `https://yt.com/v${i}`,
+        source: 'YouTube',
+        channel: 'TestChannel',
+        duration: '10:00',
+        views: 10000 - i * 100,
+      });
+    }
+    for (let i = 1; i <= 15; i++) {
+      content.push({
+        id: `devto_a${i}`,
+        type: 'article',
+        title: `Python Article ${i}`,
+        url: `https://dev.to/a${i}`,
+        source: 'Dev.to',
+        author: 'Author',
+        tags: ['python'],
+        views: 5000 - i * 100,
+      });
+    }
+    await db.saveContent(content, SKILL_ID);
+
+    await learningPlanService.generatePlan(SKILL_ID);
+    const userPlan = await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
+
+    // Verify timestamp data is preserved in user plan
+    const day1 = userPlan.find(d => d.day_number === 1);
+    const day2 = userPlan.find(d => d.day_number === 2);
+
+    expect(day1.content_id).toBe('yt_long1');
+    expect(day1.timestamp_start_seconds).toBe(0);
+    expect(day2.content_id).toBe('yt_long1');
+    expect(day2.timestamp_start_seconds).toBeGreaterThan(0);
+  });
+});
+
 describe('unenrollment', () => {
   test('deletes user plan entries', async () => {
     await seedSkillWithPlan();

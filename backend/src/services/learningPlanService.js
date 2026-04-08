@@ -1,5 +1,67 @@
 const db = require('../models/database');
 
+const CHUNK_TARGET_SECONDS = 25 * 60;  // ~25 minutes per chunk
+const CHUNK_MAX_SECONDS = 40 * 60;     // hard max 40 minutes per chunk
+const CHUNK_THRESHOLD_SECONDS = 40 * 60; // only chunk videos > 40 min
+const MAX_CHUNKS = 7;                   // max chunks per video
+const EARLY_DAYS_MAX = 7;              // only chunk in days 1-7
+
+// Parse "M:SS" or "H:MM:SS" duration string to total seconds
+function parseDuration(duration) {
+  if (!duration) return 0;
+  const parts = duration.split(':').map(Number);
+  if (parts.some(isNaN)) return 0;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
+// Format seconds as "M:SS" or "H:MM:SS"
+function formatTimestamp(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const mm = String(m).padStart(h > 0 ? 2 : 1, '0');
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+// Split a long YouTube video into consecutive-day chunks.
+// Returns array of plan entries, or null if the video shouldn't be chunked.
+function chunkVideo(video, startDay, reason) {
+  if (video.source !== 'YouTube') return null;
+  const totalSeconds = parseDuration(video.duration);
+  if (totalSeconds <= CHUNK_THRESHOLD_SECONDS) return null;
+
+  const numChunks = Math.min(
+    Math.ceil(totalSeconds / CHUNK_TARGET_SECONDS),
+    MAX_CHUNKS
+  );
+  // Don't chunk if it would exceed early days
+  const availableDays = EARLY_DAYS_MAX - startDay + 1;
+  const chunksToUse = Math.min(numChunks, availableDays);
+  if (chunksToUse <= 1) return null;
+
+  // Verify each chunk stays under hard max
+  const chunkDuration = Math.ceil(totalSeconds / chunksToUse);
+  if (chunkDuration > CHUNK_MAX_SECONDS) return null;
+
+  const entries = [];
+  for (let i = 0; i < chunksToUse; i++) {
+    const start = i * chunkDuration;
+    const end = Math.min((i + 1) * chunkDuration, totalSeconds);
+    entries.push({
+      day_number: startDay + i,
+      content_id: video.id,
+      content_type: video.type,
+      reason: i === 0 ? reason : `Continue: ${formatTimestamp(start)} – ${formatTimestamp(end)}`,
+      timestamp_start_seconds: start,
+      timestamp_end_seconds: end,
+    });
+  }
+  return entries;
+}
+
 // Quality score: views + rating weighted higher
 function qualityScore(row) {
   return (row.views || 0) + (row.rating || 0) * 1000;
@@ -50,10 +112,24 @@ class LearningPlanService {
     const plan = [];
     const usedIds = new Set();
 
-    // Days 1–7: prefer videos, fallback to best remaining content
+    // Days 1–7: prefer videos, with chunking for long YouTube videos
     for (let day = 1; day <= 7; day++) {
       const item = this.pickNext(videos, usedIds) || this.pickNext(allRanked, usedIds);
-      plan.push(buildEntry(day, item, 'Top-ranked content to get you started'));
+      if (!item) {
+        plan.push(buildEntry(day, null, null));
+        continue;
+      }
+
+      const chunks = chunkVideo(item, day, 'Top-ranked content to get you started');
+      if (chunks) {
+        // Add all chunk entries and skip ahead
+        for (const chunk of chunks) {
+          plan.push(chunk);
+        }
+        day = chunks[chunks.length - 1].day_number; // loop will increment
+      } else {
+        plan.push(buildEntry(day, item, 'Top-ranked content to get you started'));
+      }
     }
 
     // Days 8–14: prefer articles, fallback to best remaining content
@@ -113,6 +189,8 @@ class LearningPlanService {
       content_id: day.content_id,
       content_type: day.content_type,
       reason: day.reason,
+      timestamp_start_seconds: day.timestamp_start_seconds,
+      timestamp_end_seconds: day.timestamp_end_seconds,
     })));
 
     return db.getUserLearningPlan(userId, skillId);
@@ -149,6 +227,8 @@ class LearningPlanService {
         content_id: day.content_id,
         content_type: day.content_type,
         reason: day.reason,
+        timestamp_start_seconds: day.timestamp_start_seconds,
+        timestamp_end_seconds: day.timestamp_end_seconds,
       }));
 
     if (daysToRefresh.length > 0) {
@@ -159,4 +239,8 @@ class LearningPlanService {
   }
 }
 
-module.exports = new LearningPlanService();
+const service = new LearningPlanService();
+service._parseDuration = parseDuration;
+service._formatTimestamp = formatTimestamp;
+service._chunkVideo = chunkVideo;
+module.exports = service;

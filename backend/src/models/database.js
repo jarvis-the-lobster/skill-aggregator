@@ -139,6 +139,8 @@ class Database {
         content_id TEXT,
         content_type TEXT,
         reason TEXT,
+        timestamp_start_seconds INTEGER,
+        timestamp_end_seconds INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (skill_id) REFERENCES skills(id),
         FOREIGN KEY (content_id) REFERENCES content(id)
@@ -202,6 +204,8 @@ class Database {
         content_id TEXT,
         content_type TEXT,
         reason TEXT,
+        timestamp_start_seconds INTEGER,
+        timestamp_end_seconds INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (skill_id) REFERENCES skills(id),
@@ -223,7 +227,11 @@ class Database {
         'ALTER TABLE skills ADD COLUMN last_scraped_at DATETIME',
         'ALTER TABLE content ADD COLUMN likes INTEGER DEFAULT 0',
         "ALTER TABLE skills ADD COLUMN status TEXT DEFAULT 'pending'",
-        'ALTER TABLE user_interactions ADD COLUMN user_id INTEGER REFERENCES users(id)'
+        'ALTER TABLE user_interactions ADD COLUMN user_id INTEGER REFERENCES users(id)',
+        'ALTER TABLE learning_plans ADD COLUMN timestamp_start_seconds INTEGER',
+        'ALTER TABLE learning_plans ADD COLUMN timestamp_end_seconds INTEGER',
+        'ALTER TABLE user_learning_plans ADD COLUMN timestamp_start_seconds INTEGER',
+        'ALTER TABLE user_learning_plans ADD COLUMN timestamp_end_seconds INTEGER'
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -686,6 +694,7 @@ class Database {
   async getLearningPlan(skillId) {
     return this.query(
       `SELECT lp.day_number, lp.content_id, lp.content_type, lp.reason,
+              lp.timestamp_start_seconds, lp.timestamp_end_seconds,
               c.title, c.url, c.thumbnail, c.duration, c.author, c.source
        FROM learning_plans lp
        LEFT JOIN content c ON c.id = lp.content_id
@@ -699,9 +708,10 @@ class Database {
     await this.insert('DELETE FROM learning_plans WHERE skill_id = ?', [skillId]);
     for (const entry of days) {
       await this.insert(
-        `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason)
-         VALUES (?, ?, ?, ?, ?)`,
-        [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+        `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+         entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
       );
     }
   }
@@ -711,6 +721,7 @@ class Database {
   async getUserLearningPlan(userId, skillId) {
     return this.query(
       `SELECT ulp.day_number, ulp.content_id, ulp.content_type, ulp.reason, ulp.created_at,
+              ulp.timestamp_start_seconds, ulp.timestamp_end_seconds,
               c.title, c.url, c.thumbnail, c.duration, c.author, c.source
        FROM user_learning_plans ulp
        LEFT JOIN content c ON c.id = ulp.content_id
@@ -727,9 +738,10 @@ class Database {
     );
     for (const entry of days) {
       await this.insert(
-        `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+        `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+         entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
       );
     }
   }
@@ -752,9 +764,10 @@ class Database {
   async refreshUserPlanDays(userId, skillId, days) {
     for (const entry of days) {
       await this.insert(
-        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+         entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
       );
     }
   }
