@@ -194,6 +194,22 @@ describe('scrapeArticles freeCodeCamp category gating', () => {
     expect(fccLog.error_message).toMatch(/not eligible/i);
   });
 
+  test('skips freeCodeCamp when category is null', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, category, status) VALUES ('mystery-skill', 'Mystery Skill', NULL, 'ready')"
+    );
+
+    const articles = await scraperService.scrapeArticles('mystery-skill');
+    expect(articles).toEqual([]);
+    expect(scraperService.scrapeFreeCodeCamp).not.toHaveBeenCalled();
+
+    const logs = await db.query(
+      "SELECT source, status, error_message FROM scrape_log WHERE skill_id = 'mystery-skill' AND source = 'freecodecamp' ORDER BY id DESC LIMIT 1"
+    );
+    expect(logs[0].status).toBe('skipped');
+    expect(logs[0].error_message).toMatch(/uncategorized/i);
+  });
+
   test('runs freeCodeCamp for supported categories', async () => {
     await db.insert(
       "INSERT INTO skills (id, name, category, status) VALUES ('python', 'Python', 'programming', 'ready')"
