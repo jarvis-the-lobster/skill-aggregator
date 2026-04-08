@@ -5,7 +5,33 @@ function qualityScore(row) {
   return (row.views || 0) + (row.rating || 0) * 1000;
 }
 
+function buildEntry(day, item, reason) {
+  return {
+    day_number: day,
+    content_id: item?.id || null,
+    content_type: item?.type || null,
+    reason: item ? reason : null,
+  };
+}
+
 class LearningPlanService {
+  pickNext(candidates, usedIds) {
+    const item = candidates.find(candidate => candidate && !usedIds.has(candidate.id)) || null;
+    if (item) usedIds.add(item.id);
+    return item;
+  }
+
+  isPlanIncomplete(plan) {
+    if (plan.length !== 30) return true;
+
+    const dayNumbers = new Set(plan.map(day => day.day_number));
+    for (let day = 1; day <= 30; day++) {
+      if (!dayNumbers.has(day)) return true;
+    }
+
+    return plan.some(day => !day.content_id);
+  }
+
   // Generate and persist a 30-day plan for a skill based on existing content
   async generatePlan(skillId) {
     const allContent = await db.getSkillContent(skillId);
@@ -18,66 +44,42 @@ class LearningPlanService {
       .filter(r => r.type === 'article')
       .sort((a, b) => qualityScore(b) - qualityScore(a));
 
+    const allRanked = [...videos, ...articles]
+      .sort((a, b) => qualityScore(b) - qualityScore(a));
+
     const plan = [];
+    const usedIds = new Set();
 
-    // Days 1–7: beginner videos (top by quality)
+    // Days 1–7: prefer videos, fallback to best remaining content
     for (let day = 1; day <= 7; day++) {
-      const item = videos[day - 1] || null;
-      plan.push({
-        day_number: day,
-        content_id: item?.id || null,
-        content_type: item ? 'video' : null,
-        reason: item ? 'Top-ranked video to get you started' : null,
-      });
+      const item = this.pickNext(videos, usedIds) || this.pickNext(allRanked, usedIds);
+      plan.push(buildEntry(day, item, 'Top-ranked content to get you started'));
     }
 
-    // Days 8–14: beginner/intermediate articles
+    // Days 8–14: prefer articles, fallback to best remaining content
     for (let day = 8; day <= 14; day++) {
-      const item = articles[day - 8] || null;
-      plan.push({
-        day_number: day,
-        content_id: item?.id || null,
-        content_type: item ? 'article' : null,
-        reason: item ? 'Key article to reinforce week 1 concepts' : null,
-      });
+      const item = this.pickNext(articles, usedIds) || this.pickNext(allRanked, usedIds);
+      plan.push(buildEntry(day, item, 'Key content to reinforce week 1 concepts'));
     }
 
-    // Days 15–21: intermediate videos (next batch)
+    // Days 15–21: prefer remaining videos, fallback to best remaining content
     for (let day = 15; day <= 21; day++) {
-      const item = videos[day - 8] || null; // videos[7..13]
-      plan.push({
-        day_number: day,
-        content_id: item?.id || null,
-        content_type: item ? 'video' : null,
-        reason: item ? 'Intermediate video to deepen understanding' : null,
-      });
+      const item = this.pickNext(videos, usedIds) || this.pickNext(allRanked, usedIds);
+      plan.push(buildEntry(day, item, 'Intermediate content to deepen understanding'));
     }
 
-    // Days 22–28: advanced articles then videos
+    // Days 22–28: prefer remaining articles, fallback to videos, then anything left
     for (let day = 22; day <= 28; day++) {
-      const articleIdx = day - 15; // articles[7..13]
-      const videoIdx = day - 8;   // videos[14..20]
-      const item = articles[articleIdx] || videos[videoIdx] || null;
-      const type = articles[articleIdx] ? 'article' : (videos[videoIdx] ? 'video' : null);
-      plan.push({
-        day_number: day,
-        content_id: item?.id || null,
-        content_type: type,
-        reason: item ? 'Advanced content to master the skill' : null,
-      });
+      const item = this.pickNext(articles, usedIds)
+        || this.pickNext(videos, usedIds)
+        || this.pickNext(allRanked, usedIds);
+      plan.push(buildEntry(day, item, 'Advanced content to master the skill'));
     }
 
     // Days 29–30: best remaining content (capstone)
-    const usedIds = new Set(plan.filter(p => p.content_id).map(p => p.content_id));
-    const remaining = [...videos, ...articles].filter(c => !usedIds.has(c.id));
     for (let day = 29; day <= 30; day++) {
-      const item = remaining[day - 29] || null;
-      plan.push({
-        day_number: day,
-        content_id: item?.id || null,
-        content_type: item?.type || null,
-        reason: item ? 'Capstone content to consolidate your learning' : null,
-      });
+      const item = this.pickNext(allRanked, usedIds);
+      plan.push(buildEntry(day, item, 'Capstone content to consolidate your learning'));
     }
 
     await db.saveLearningPlan(skillId, plan);
@@ -87,10 +89,7 @@ class LearningPlanService {
   async getPlan(skillId) {
     const existing = await db.getLearningPlan(skillId);
     if (existing.length > 0) {
-      // Check if days 1-7 have content — if not and content exists, regenerate
-      const firstWeek = existing.filter(d => d.day_number <= 7);
-      const emptyFirstWeek = firstWeek.every(d => !d.content_id);
-      if (emptyFirstWeek) {
+      if (this.isPlanIncomplete(existing)) {
         const allContent = await db.getSkillContent(skillId);
         if (allContent.length > 0) {
           return this.generatePlan(skillId);
