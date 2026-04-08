@@ -10,6 +10,10 @@ jest.mock('../services/analyticsService', () => ({
 }));
 jest.mock('../services/scraperService', () => ({
   scrapeSkill: jest.fn().mockResolvedValue({ videos: [], articles: [] }),
+  scrapeDevTo: jest.fn().mockResolvedValue([]),
+  scrapeMediumRSS: jest.fn().mockResolvedValue([]),
+  scrapeFreeCodeCamp: jest.fn().mockResolvedValue([]),
+  scrapeArticles: jest.requireActual('../services/scraperService').scrapeArticles,
 }));
 jest.mock('../services/pushService', () => ({
   saveSubscription: jest.fn(),
@@ -17,6 +21,7 @@ jest.mock('../services/pushService', () => ({
   sendPushToUser: jest.fn(),
 }));
 
+const scraperService = require('../services/scraperService');
 const request = require('supertest');
 const app = require('../app');
 
@@ -161,6 +166,75 @@ describe('POST /api/admin/skills/:id/category', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/lowercase letters, numbers, and hyphens/i);
+  });
+});
+
+describe('scrapeArticles freeCodeCamp category gating', () => {
+  beforeEach(() => {
+    scraperService.scrapeDevTo.mockResolvedValue([]);
+    scraperService.scrapeMediumRSS.mockResolvedValue([]);
+    scraperService.scrapeFreeCodeCamp.mockResolvedValue([]);
+  });
+
+  test('skips freeCodeCamp for uncategorized or unsupported skills', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, category, status) VALUES ('reddit-marketing', 'Reddit Marketing', 'marketing', 'ready')"
+    );
+
+    const articles = await scraperService.scrapeArticles('reddit-marketing');
+    expect(articles).toEqual([]);
+    expect(scraperService.scrapeFreeCodeCamp).not.toHaveBeenCalled();
+
+    const logs = await db.query(
+      "SELECT source, status, error_message FROM scrape_log WHERE skill_id = 'reddit-marketing' ORDER BY id"
+    );
+    const fccLog = logs.find((row) => row.source === 'freecodecamp');
+    expect(fccLog).toBeDefined();
+    expect(fccLog.status).toBe('skipped');
+    expect(fccLog.error_message).toMatch(/not eligible/i);
+  });
+
+  test('skips freeCodeCamp when category is null', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, category, status) VALUES ('mystery-skill', 'Mystery Skill', NULL, 'ready')"
+    );
+
+    const articles = await scraperService.scrapeArticles('mystery-skill');
+    expect(articles).toEqual([]);
+    expect(scraperService.scrapeFreeCodeCamp).not.toHaveBeenCalled();
+
+    const logs = await db.query(
+      "SELECT source, status, error_message FROM scrape_log WHERE skill_id = 'mystery-skill' AND source = 'freecodecamp' ORDER BY id DESC LIMIT 1"
+    );
+    expect(logs[0].status).toBe('skipped');
+    expect(logs[0].error_message).toMatch(/uncategorized/i);
+  });
+
+  test('runs freeCodeCamp for supported categories', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, category, status) VALUES ('python', 'Python', 'programming', 'ready')"
+    );
+    scraperService.scrapeFreeCodeCamp.mockResolvedValue([
+      {
+        id: 'fcc_python_1',
+        title: 'Learn Python',
+        url: 'https://www.freecodecamp.org/news/python',
+        source: 'freeCodeCamp',
+        author: 'freeCodeCamp',
+        excerpt: 'Python article',
+        tags: ['python']
+      }
+    ]);
+
+    const articles = await scraperService.scrapeArticles('python');
+    expect(scraperService.scrapeFreeCodeCamp).toHaveBeenCalledWith('python');
+    expect(articles).toHaveLength(1);
+
+    const logs = await db.query(
+      "SELECT source, status, items_fetched FROM scrape_log WHERE skill_id = 'python' AND source = 'freecodecamp' ORDER BY id DESC LIMIT 1"
+    );
+    expect(logs[0].status).toBe('success');
+    expect(logs[0].items_fetched).toBe(1);
   });
 });
 

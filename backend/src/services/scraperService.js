@@ -61,6 +61,13 @@ const SKILL_SEARCH_TERMS = {
 };
 
 const ALL_SKILLS = Object.keys(SKILL_SEARCH_TERMS);
+const FREECODECAMP_ALLOWED_CATEGORIES = new Set([
+  'programming',
+  'data',
+  'ai',
+  'devops',
+  'security'
+]);
 
 class ScraperService {
   constructor() {
@@ -296,12 +303,19 @@ class ScraperService {
 
   async scrapeArticles(skillId) {
     const startTimes = { devto: Date.now(), medium: Date.now(), freecodecamp: Date.now() };
+    const skill = await db.getSkillById(skillId);
+    const category = (skill?.category || '').trim().toLowerCase();
+    const shouldCheckFreeCodeCamp = FREECODECAMP_ALLOWED_CATEGORIES.has(category);
 
-    const [devtoResult, mediumResult, fccResult] = await Promise.allSettled([
+    const articlePromises = [
       this.scrapeDevTo(skillId),
       this.scrapeMediumRSS(skillId),
-      this.scrapeFreeCodeCamp(skillId)
-    ]);
+      shouldCheckFreeCodeCamp
+        ? this.scrapeFreeCodeCamp(skillId)
+        : Promise.resolve({ __skipped: true, reason: `category '${category || 'uncategorized'}' not eligible` })
+    ];
+
+    const [devtoResult, mediumResult, fccResult] = await Promise.allSettled(articlePromises);
 
     const articles = [];
 
@@ -322,8 +336,18 @@ class ScraperService {
     }
 
     if (fccResult.status === 'fulfilled') {
-      articles.push(...fccResult.value);
-      await db.logScrape({ skill_id: skillId, source: 'freecodecamp', status: 'success', items_fetched: fccResult.value.length, duration_ms: Date.now() - startTimes.freecodecamp });
+      if (fccResult.value?.__skipped) {
+        await db.logScrape({
+          skill_id: skillId,
+          source: 'freecodecamp',
+          status: 'skipped',
+          error_message: fccResult.value.reason,
+          duration_ms: Date.now() - startTimes.freecodecamp
+        });
+      } else {
+        articles.push(...fccResult.value);
+        await db.logScrape({ skill_id: skillId, source: 'freecodecamp', status: 'success', items_fetched: fccResult.value.length, duration_ms: Date.now() - startTimes.freecodecamp });
+      }
     } else {
       console.error(`    ❌ freeCodeCamp: ${fccResult.reason?.message}`);
       await db.logScrape({ skill_id: skillId, source: 'freecodecamp', status: 'error', error_message: fccResult.reason?.message, duration_ms: Date.now() - startTimes.freecodecamp });
