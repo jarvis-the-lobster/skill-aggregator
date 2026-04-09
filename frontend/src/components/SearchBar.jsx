@@ -42,8 +42,8 @@ export function SearchBar({ value, onChange, onSearch, onSuggestionSelect, skill
 
   return (
     <div className="relative">
-      <div className="flex items-center bg-[#141929] border border-white/[0.08] rounded-full shadow-lg px-2 py-2">
-        <Search className="w-5 h-5 text-slate-500 ml-3 flex-shrink-0" />
+      <div className="flex items-center rounded-full border border-white/70 bg-white shadow-[0_18px_45px_rgba(0,0,0,0.28)] px-2 py-2 transition-all duration-200 focus-within:border-teal/70 focus-within:shadow-[0_22px_55px_rgba(0,191,166,0.18)]">
+        <Search className="ml-3 h-5 w-5 flex-shrink-0 text-slate-500" />
         <input
           type="text"
           placeholder={placeholder || 'Search skills...'}
@@ -52,12 +52,12 @@ export function SearchBar({ value, onChange, onSearch, onSuggestionSelect, skill
           onKeyDown={handleKeyDown}
           onFocus={() => setShowDropdown(true)}
           onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-          className="flex-grow px-4 py-2 text-slate-100 text-lg focus:outline-none bg-transparent placeholder-slate-500"
+          className="flex-grow bg-transparent px-4 py-2 text-lg text-slate-900 focus:outline-none placeholder-slate-400"
         />
         {value && (
           <button
             onClick={() => onChange('')}
-            className="mr-2 text-slate-500 hover:text-slate-300 text-xl leading-none"
+            className="mr-2 text-xl leading-none text-slate-400 transition-colors hover:text-slate-600"
             aria-label="Clear search"
           >
             ×
