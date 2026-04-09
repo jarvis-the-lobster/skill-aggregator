@@ -279,13 +279,13 @@ export function HomePage() {
       </section>
 
       {/* ===== HOW IT WORKS ===== */}
-      <section id="how-it-works" className="py-32 bg-[#f8f9fc] text-slate-800">
+      <section id="how-it-works" className="py-32 bg-dark-card border-y border-white/[0.06] text-slate-100">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="text-[13px] font-semibold uppercase tracking-widest text-teal mb-4 fade-up">How it works</div>
-          <h2 className="text-4xl md:text-[48px] font-extrabold tracking-tight leading-[1.1] mb-4 text-slate-800 fade-up delay-1">
+          <h2 className="text-4xl md:text-[48px] font-extrabold tracking-tight leading-[1.1] mb-4 text-slate-100 fade-up delay-1">
             From zero to skilled in 30 days
           </h2>
-          <p className="text-lg text-slate-500 max-w-[560px] mb-16 fade-up delay-2">
+          <p className="text-lg text-slate-400 max-w-[560px] mb-16 fade-up delay-2">
             Three steps. No signup walls. No credit card. Just pick a skill and start learning.
           </p>
 
@@ -301,7 +301,7 @@ export function HomePage() {
                 </div>
                 <div className="text-[32px] mb-4">{step.icon}</div>
                 <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
-                <p className="text-[15px] text-slate-500 leading-relaxed">{step.desc}</p>
+                <p className="text-[15px] text-slate-400 leading-relaxed">{step.desc}</p>
               </div>
             ))}
           </div>
@@ -363,21 +363,21 @@ export function HomePage() {
       </section>
 
       {/* ===== FEATURE HIGHLIGHTS ===== */}
-      <section className="py-32 bg-white text-slate-800">
+      <section className="py-32 bg-dark-card border-y border-white/[0.06] text-slate-100">
         <div className="max-w-[1200px] mx-auto px-6">
           {/* Feature 1: Quality Ranking */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center mb-32 fade-up">
             <div>
               <div className="text-[13px] font-semibold uppercase tracking-widest text-teal mb-4">Smart Curation</div>
-              <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-[1.15] mb-4 text-slate-800">
+              <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-[1.15] mb-4 text-slate-100">
                 Quality over quantity
               </h3>
-              <p className="text-base text-slate-500 leading-relaxed mb-6">
+              <p className="text-base text-slate-400 leading-relaxed mb-6">
                 We don't just dump links at you. Every resource is scored by engagement, clarity, and relevance — so you always learn from the best content available.
               </p>
               <div className="flex flex-col gap-3">
                 {['Ranked by quality score, not recency', 'Mix of videos, articles, and projects', 'Updated regularly as new content surfaces'].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 text-[15px] text-slate-500">
+                  <div key={i} className="flex items-start gap-3 text-[15px] text-slate-400">
                     <div className="w-5 h-5 rounded-full bg-teal/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Check className="w-3 h-3 text-teal" />
                     </div>
@@ -415,15 +415,15 @@ export function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center fade-up">
             <div className="lg:order-2">
               <div className="text-[13px] font-semibold uppercase tracking-widest text-teal mb-4">Structured Learning</div>
-              <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-[1.15] mb-4 text-slate-800">
+              <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-[1.15] mb-4 text-slate-100">
                 Your personal learning plan
               </h3>
-              <p className="text-base text-slate-500 leading-relaxed mb-6">
+              <p className="text-base text-slate-400 leading-relaxed mb-6">
                 No more "what should I learn next?" Every skill has a structured 30-day plan that takes you from zero to confident. Check off each day as you go.
               </p>
               <div className="flex flex-col gap-3">
                 {['Daily lessons of 15–30 minutes', 'Progressive difficulty — never overwhelmed', 'Streaks keep you accountable'].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 text-[15px] text-slate-500">
+                  <div key={i} className="flex items-start gap-3 text-[15px] text-slate-400">
                     <div className="w-5 h-5 rounded-full bg-teal/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Check className="w-3 h-3 text-teal" />
                     </div>
