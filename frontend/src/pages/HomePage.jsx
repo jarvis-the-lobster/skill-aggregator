@@ -279,7 +279,7 @@ export function HomePage() {
       </section>
 
       {/* ===== HOW IT WORKS ===== */}
-      <section id="how-it-works" className="py-32 bg-dark-bg text-slate-100">
+      <section id="how-it-works" className="py-32 bg-dark-card border-y border-white/[0.06] text-slate-100">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="text-[13px] font-semibold uppercase tracking-widest text-teal mb-4 fade-up">How it works</div>
           <h2 className="text-4xl md:text-[48px] font-extrabold tracking-tight leading-[1.1] mb-4 text-slate-100 fade-up delay-1">
@@ -363,7 +363,7 @@ export function HomePage() {
       </section>
 
       {/* ===== FEATURE HIGHLIGHTS ===== */}
-      <section className="py-32 bg-dark-bg text-slate-100">
+      <section className="py-32 bg-dark-card border-y border-white/[0.06] text-slate-100">
         <div className="max-w-[1200px] mx-auto px-6">
           {/* Feature 1: Quality Ranking */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center mb-32 fade-up">
