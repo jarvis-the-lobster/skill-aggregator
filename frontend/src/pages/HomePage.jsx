@@ -174,18 +174,6 @@ export function HomePage() {
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
             </div>
 
-            <div className="flex items-center gap-3 hero-animate hero-animate-delay-4">
-              <div className="flex">
-                {['bg-gradient-to-br from-pink-400 to-pink-500', 'bg-gradient-to-br from-teal to-teal-deep', 'bg-gradient-to-br from-emerald-400 to-emerald-500', 'bg-gradient-to-br from-amber-400 to-amber-500'].map((bg, i) => (
-                  <div key={i} className={`w-8 h-8 rounded-full border-2 border-dark-bg flex items-center justify-center text-xs font-semibold ${bg} ${i > 0 ? '-ml-2' : ''}`}>
-                    {['A', 'K', 'M', 'S'][i]}
-                  </div>
-                ))}
-              </div>
-              <span className="text-[13px] text-slate-400">
-                Join <strong className="text-slate-100">1,000+ learners</strong> already leveling up
-              </span>
-            </div>
           </div>
 
           {/* Right: Product mockup */}
