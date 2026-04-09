@@ -121,7 +121,7 @@ class LearningPlanService {
         const chunks = chunkVideo(video, day, 'Top-ranked content to get you started');
         if (chunks && chunks.length <= remainingEarlyDays) return true;
 
-        const durationSeconds = parseDurationToSeconds(video.duration);
+        const durationSeconds = parseDuration(video.duration);
         return durationSeconds > 0 && durationSeconds <= CHUNK_MAX_SECONDS;
       });
 
