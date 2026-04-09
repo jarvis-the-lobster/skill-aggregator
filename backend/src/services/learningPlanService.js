@@ -237,7 +237,16 @@ class LearningPlanService {
 
   // Get user's personal plan, flagging if a refresh is available
   async getUserPlanWithRefresh(userId, skillId) {
-    const userPlan = await db.getUserLearningPlan(userId, skillId);
+    let userPlan = await db.getUserLearningPlan(userId, skillId);
+
+    // Self-heal inconsistent states where enrollment/progress exists but the copied user plan rows are missing.
+    if (userPlan.length === 0) {
+      const progress = await db.getPlanProgress(userId, skillId);
+      if (progress) {
+        userPlan = await this.copyPlanForUser(userId, skillId);
+      }
+    }
+
     if (userPlan.length === 0) return { plan: [], refreshAvailable: false };
 
     // Flag refresh when the shared plan has been regenerated since the user plan was last synced
