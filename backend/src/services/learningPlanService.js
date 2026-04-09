@@ -112,24 +112,35 @@ class LearningPlanService {
     const plan = [];
     const usedIds = new Set();
 
-    // Days 1–7: prefer videos, with chunking for long YouTube videos
+    // Days 1–7: prefer sane-length videos or properly chunkable videos, avoid giant unchunked videos
     for (let day = 1; day <= 7; day++) {
-      const item = this.pickNext(videos, usedIds) || this.pickNext(allRanked, usedIds);
-      if (!item) {
-        plan.push(buildEntry(day, null, null));
+      const remainingEarlyDays = 8 - day;
+      const candidateVideo = videos.find((video) => {
+        if (usedIds.has(video.id)) return false;
+
+        const chunks = chunkVideo(video, day, 'Top-ranked content to get you started');
+        if (chunks && chunks.length <= remainingEarlyDays) return true;
+
+        const durationSeconds = parseDuration(video.duration);
+        return durationSeconds > 0 && durationSeconds <= CHUNK_MAX_SECONDS;
+      });
+
+      if (candidateVideo) {
+        usedIds.add(candidateVideo.id);
+        const chunks = chunkVideo(candidateVideo, day, 'Top-ranked content to get you started');
+        if (chunks && chunks.length <= remainingEarlyDays) {
+          for (const chunk of chunks) {
+            plan.push(chunk);
+          }
+          day = chunks[chunks.length - 1].day_number;
+        } else {
+          plan.push(buildEntry(day, candidateVideo, 'Top-ranked content to get you started'));
+        }
         continue;
       }
 
-      const chunks = chunkVideo(item, day, 'Top-ranked content to get you started');
-      if (chunks) {
-        // Add all chunk entries and skip ahead
-        for (const chunk of chunks) {
-          plan.push(chunk);
-        }
-        day = chunks[chunks.length - 1].day_number; // loop will increment
-      } else {
-        plan.push(buildEntry(day, item, 'Top-ranked content to get you started'));
-      }
+      const fallback = this.pickNext(allRanked, usedIds);
+      plan.push(buildEntry(day, fallback, 'Top-ranked content to get you started'));
     }
 
     // Days 8–14: prefer articles, fallback to best remaining content
