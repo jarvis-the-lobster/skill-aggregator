@@ -174,15 +174,6 @@ export function HomePage() {
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
             </div>
 
-            <div className="flex gap-4 mb-8 hero-animate hero-animate-delay-3">
-              <a
-                href="#skills"
-                className="inline-flex items-center gap-2 bg-transparent text-slate-100 font-semibold text-sm px-5 py-2.5 rounded-lg border border-white/20 hover:border-white/40 hover:bg-white/5 transition-all hover:-translate-y-px"
-              >
-                Browse Skills
-              </a>
-            </div>
-
             <div className="flex items-center gap-3 hero-animate hero-animate-delay-4">
               <div className="flex">
                 {['bg-gradient-to-br from-pink-400 to-pink-500', 'bg-gradient-to-br from-teal to-teal-deep', 'bg-gradient-to-br from-emerald-400 to-emerald-500', 'bg-gradient-to-br from-amber-400 to-amber-500'].map((bg, i) => (
