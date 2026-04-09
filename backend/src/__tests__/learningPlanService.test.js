@@ -136,6 +136,118 @@ describe('getPlan', () => {
   });
 });
 
+describe('generatePlan chunking', () => {
+  test('chunks a long youtube video across early plan days with resume timestamps', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    await db.saveContent([
+      {
+        id: 'yt_long',
+        type: 'video',
+        title: 'Long Python Course',
+        url: 'https://www.youtube.com/watch?v=longvid',
+        source: 'YouTube',
+        channel: 'Longform',
+        duration: '1:15:00',
+        views: 50000,
+      },
+      {
+        id: 'yt_short_1',
+        type: 'video',
+        title: 'Short Python Lesson 1',
+        url: 'https://www.youtube.com/watch?v=shortvid1',
+        source: 'YouTube',
+        channel: 'Shortform',
+        duration: '18:00',
+        views: 10000,
+      },
+      {
+        id: 'yt_short_2',
+        type: 'video',
+        title: 'Short Python Lesson 2',
+        url: 'https://www.youtube.com/watch?v=shortvid2',
+        source: 'YouTube',
+        channel: 'Shortform',
+        duration: '22:00',
+        views: 9000,
+      },
+      {
+        id: 'devto_a1',
+        type: 'article',
+        title: 'Python article',
+        url: 'https://dev.to/python',
+        source: 'Dev.to',
+        author: 'Author',
+        views: 1000,
+      },
+    ], SKILL_ID);
+
+    const plan = await learningPlanService.generatePlan(SKILL_ID);
+    const longEntries = plan.filter(day => day.content_id === 'yt_long');
+
+    expect(longEntries.length).toBe(3);
+    expect(longEntries.map(day => day.day_number)).toEqual([1, 2, 3]);
+    expect(longEntries.map(day => day.timestamp_start_seconds)).toEqual([0, 1500, 3000]);
+    expect(longEntries.every(day => day.segment_count === 3)).toBe(true);
+  });
+
+  test('does not reuse a chunked long video later in the same plan', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    const content = [
+      {
+        id: 'yt_long',
+        type: 'video',
+        title: 'Long Python Course',
+        url: 'https://www.youtube.com/watch?v=longvid',
+        source: 'YouTube',
+        channel: 'Longform',
+        duration: '1:15:00',
+        views: 50000,
+      }
+    ];
+
+    for (let i = 1; i <= 20; i++) {
+      content.push({
+        id: `yt_short_${i}`,
+        type: 'video',
+        title: `Short Python Lesson ${i}`,
+        url: `https://www.youtube.com/watch?v=short${i}`,
+        source: 'YouTube',
+        channel: 'Shortform',
+        duration: '18:00',
+        views: 20000 - i * 100,
+      });
+    }
+
+    for (let i = 1; i <= 20; i++) {
+      content.push({
+        id: `devto_a${i}`,
+        type: 'article',
+        title: `Python Article ${i}`,
+        url: `https://dev.to/python-${i}`,
+        source: 'Dev.to',
+        author: 'Author',
+        views: 10000 - i * 100,
+      });
+    }
+
+    await db.saveContent(content, SKILL_ID);
+
+    const plan = await learningPlanService.generatePlan(SKILL_ID);
+    const longEntries = plan.filter(day => day.content_id === 'yt_long');
+
+    expect(longEntries.map(day => day.day_number)).toEqual([1, 2, 3]);
+    expect(plan.filter(day => day.content_id === 'yt_long')).toHaveLength(3);
+  });
+});
+
 describe('copyPlanForUser', () => {
   test('enrolling creates a personal plan copy (30 days)', async () => {
     await seedSkillWithPlan();
