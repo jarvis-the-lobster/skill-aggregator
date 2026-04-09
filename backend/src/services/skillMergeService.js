@@ -433,29 +433,70 @@ class SkillMergeService {
 
       // Collect content_ids already used in immutable rows to avoid duplicates
       const usedContentFamilies = new Set();
+      const mergedByDay = new Map();
+      const srcByDay = new Map(srcPlans.map(r => [r.day_number, r]));
       for (const day of immutableDays) {
         const row = tgtByDay.get(day);
-        if (row && row.content_id) usedContentFamilies.add(this._contentFamily(row.content_id));
+        if (row && row.content_id) {
+          const family = this._contentFamily(row.content_id);
+          if (family) usedContentFamilies.add(family);
+          mergedByDay.set(day, {
+            day_number: row.day_number,
+            content_id: row.content_id,
+            content_type: row.content_type,
+            reason: row.reason,
+            timestamp_start_seconds: row.timestamp_start_seconds ?? null,
+            timestamp_end_seconds: row.timestamp_end_seconds ?? null,
+          });
+        }
       }
 
-      // For non-immutable days (1-30), try to fill from shared plan, avoiding content duplication
+      const fallbackSharedRows = Array.from(sharedByDay.values()).filter(row => row && row.content_id);
+      const fallbackTargetRows = Array.from(tgtByDay.values()).filter(row => row && row.content_id && !immutableDays.has(row.day_number));
+      const fallbackSourceRows = Array.from(srcByDay.values()).filter(row => row && row.content_id && !immutableDays.has(row.day_number));
+
+      // For non-immutable days (1-30), fully rebuild the remaining target plan, preferring shared alignment
       for (let day = 1; day <= 30; day++) {
         if (immutableDays.has(day)) continue; // locked
 
-        const sharedDay = sharedByDay.get(day);
-        if (sharedDay && sharedDay.content_id && !usedContentFamilies.has(this._contentFamily(sharedDay.content_id))) {
-          // Realign to shared plan
-          await db.insert(
-            `INSERT OR REPLACE INTO user_learning_plans
-             (user_id, skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, targetId, day, sharedDay.content_id, sharedDay.content_type, sharedDay.reason,
-             sharedDay.timestamp_start_seconds ?? null, sharedDay.timestamp_end_seconds ?? null]
-          );
-          usedContentFamilies.add(this._contentFamily(sharedDay.content_id));
-        }
-        // If no shared plan entry or content already used, leave existing target row (if any)
+        const tryRow = (row) => {
+          if (!row || !row.content_id) return false;
+          const family = this._contentFamily(row.content_id);
+          if (family && usedContentFamilies.has(family)) return false;
+          mergedByDay.set(day, {
+            day_number: day,
+            content_id: row.content_id,
+            content_type: row.content_type,
+            reason: row.reason,
+            timestamp_start_seconds: row.timestamp_start_seconds ?? null,
+            timestamp_end_seconds: row.timestamp_end_seconds ?? null,
+          });
+          if (family) usedContentFamilies.add(family);
+          return true;
+        };
+
+        if (tryRow(sharedByDay.get(day))) continue;
+        if (tryRow(tgtByDay.get(day))) continue;
+        if (tryRow(srcByDay.get(day))) continue;
+        if (tryRow(fallbackSharedRows.find(row => {
+          const family = this._contentFamily(row.content_id);
+          return !family || !usedContentFamilies.has(family);
+        }))) continue;
+        if (tryRow(fallbackTargetRows.find(row => {
+          const family = this._contentFamily(row.content_id);
+          return !family || !usedContentFamilies.has(family);
+        }))) continue;
+        tryRow(fallbackSourceRows.find(row => {
+          const family = this._contentFamily(row.content_id);
+          return !family || !usedContentFamilies.has(family);
+        }));
       }
+
+      await db.saveUserLearningPlan(
+        userId,
+        targetId,
+        Array.from(mergedByDay.values()).sort((a, b) => a.day_number - b.day_number)
+      );
 
       // Delete source rows for this user (they've been merged)
       for (const row of srcPlans) {
