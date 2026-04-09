@@ -294,12 +294,18 @@ router.post('/skills/:id/safe-merge', async (req, res) => {
   if (!requireCronSecret(req, res)) return;
   try {
     const { id } = req.params;
-    const { targetId, dryRun = true } = req.body;
+    const { targetId, mode = 'dry-run', renameTargetName } = req.body;
     if (!targetId) return res.status(400).json({ error: 'targetId required' });
     if (id === targetId) return res.status(400).json({ error: 'sourceId and targetId must differ' });
+    if (!['dry-run', 'execute'].includes(mode)) {
+      return res.status(400).json({ error: 'mode must be dry-run or execute' });
+    }
 
     const skillMergeService = require('../services/skillMergeService');
-    const result = await skillMergeService.safeMerge(id, targetId, { dryRun: dryRun !== false });
+    const result = await skillMergeService.safeMerge(id, targetId, {
+      dryRun: mode !== 'execute',
+      renameTargetName,
+    });
     res.json(result);
   } catch (err) {
     const status = err.status || 500;
