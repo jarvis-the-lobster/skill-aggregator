@@ -282,10 +282,39 @@ router.post('/skills/:id/merge', async (req, res) => {
     await db.insert('DELETE FROM user_plan_progress WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM skills WHERE id = ?', [id]);
 
-    res.json({ ok: true, merged: `${id} → ${targetId}` });
+    res.json({
+      ok: true,
+      merged: `${id} → ${targetId}`,
+      warning: 'Legacy merge endpoint does not safely preserve all user state. Prefer /api/admin/skills/:id/safe-merge for production use.'
+    });
   } catch (err) {
     console.error('Merge skill error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/skills/:id/safe-merge — safe merge with dry-run support
+router.post('/skills/:id/safe-merge', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+  try {
+    const { id } = req.params;
+    const { targetId, mode = 'dry-run', renameTargetName } = req.body;
+    if (!targetId) return res.status(400).json({ error: 'targetId required' });
+    if (id === targetId) return res.status(400).json({ error: 'sourceId and targetId must differ' });
+    if (!['dry-run', 'execute'].includes(mode)) {
+      return res.status(400).json({ error: 'mode must be dry-run or execute' });
+    }
+
+    const skillMergeService = require('../services/skillMergeService');
+    const result = await skillMergeService.safeMerge(id, targetId, {
+      dryRun: mode !== 'execute',
+      renameTargetName,
+    });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 500;
+    console.error('Safe merge error:', err.message);
+    res.status(status).json({ error: err.message });
   }
 });
 
