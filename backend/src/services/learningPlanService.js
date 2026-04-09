@@ -42,9 +42,28 @@ function chunkVideo(video, startDay, reason) {
   const chunksToUse = Math.min(numChunks, availableDays);
   if (chunksToUse <= 1) return null;
 
-  // Verify each chunk stays under hard max
-  const chunkDuration = Math.ceil(totalSeconds / chunksToUse);
-  if (chunkDuration > CHUNK_MAX_SECONDS) return null;
+  // Verify each chunk stays under hard max. If not, use the maximum chunk count we allow
+  // and deliberately discard the remainder after the early-day chunk run.
+  let chunkDuration = Math.ceil(totalSeconds / chunksToUse);
+  if (chunkDuration > CHUNK_MAX_SECONDS) {
+    if (availableDays <= 1) return null;
+    const forcedChunks = Math.min(availableDays, MAX_CHUNKS);
+    chunkDuration = CHUNK_TARGET_SECONDS;
+    const cappedEntries = [];
+    for (let i = 0; i < forcedChunks; i++) {
+      const start = i * chunkDuration;
+      const end = Math.min((i + 1) * chunkDuration, totalSeconds);
+      cappedEntries.push({
+        day_number: startDay + i,
+        content_id: video.id,
+        content_type: video.type,
+        reason: i === 0 ? reason : `Continue: ${formatTimestamp(start)} – ${formatTimestamp(end)}`,
+        timestamp_start_seconds: start,
+        timestamp_end_seconds: end,
+      });
+    }
+    return cappedEntries;
+  }
 
   const entries = [];
   for (let i = 0; i < chunksToUse; i++) {
