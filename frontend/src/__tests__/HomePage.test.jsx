@@ -9,6 +9,7 @@ vi.mock('../services/api', () => ({
   apiService: {
     getSkills: vi.fn(),
     getSkillStats: vi.fn(),
+    getSkillContentCounts: vi.fn(),
     searchSkill: vi.fn(),
   },
 }));
@@ -55,12 +56,14 @@ describe('HomePage', () => {
     vi.clearAllMocks();
     apiService.getSkills.mockResolvedValue({ skills: MOCK_SKILLS });
     apiService.getSkillStats.mockResolvedValue({ stats: { totalVideos: 10, totalArticles: 5 } });
+    apiService.getSkillContentCounts.mockResolvedValue({ counts: {} });
   });
 
-  it('renders homepage with title LearnStack', async () => {
+  it('renders homepage with updated hero copy', async () => {
     renderWithRouter(<HomePage />);
-    expect(await screen.findByText(/Learn any skill/)).toBeInTheDocument();
-    expect(screen.getByText(/Free, fast/)).toBeInTheDocument();
+    expect(await screen.findByText(/Learn any skill with/i)).toBeInTheDocument();
+    expect(screen.getByText(/a clear 30-day plan\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Find the best free videos and articles/i)).toBeInTheDocument();
   });
 
   it('shows featured skill cards', async () => {

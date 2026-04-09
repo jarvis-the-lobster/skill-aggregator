@@ -154,11 +154,11 @@ export function HomePage() {
               <span>🎯</span> 200+ skills available
             </div>
             <h1 className="text-5xl md:text-[68px] font-extrabold leading-[1.05] tracking-tight mb-6 hero-animate hero-animate-delay-1">
-              Learn any skill.<br />
-              <span className="gradient-text-teal">Free, fast, and<br />actually fun.</span>
+              Learn any skill with<br />
+              <span className="gradient-text-teal">a clear 30-day plan.</span>
             </h1>
             <p className="text-lg text-slate-400 max-w-[480px] mb-8 leading-relaxed hero-animate hero-animate-delay-2">
-              Curated videos and articles ranked by quality. A structured 30-day plan for every skill. Zero fluff.
+              Find the best free videos and articles for any skill, ranked by quality and organized into a step-by-step path.
             </p>
 
             {/* Search bar */}
@@ -172,15 +172,6 @@ export function HomePage() {
                 placeholder="Search Python, Kubernetes, Design…"
               />
               {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-            </div>
-
-            <div className="flex gap-4 mb-8 hero-animate hero-animate-delay-3">
-              <a
-                href="#skills"
-                className="inline-flex items-center gap-2 bg-transparent text-slate-100 font-semibold text-sm px-5 py-2.5 rounded-lg border border-white/20 hover:border-white/40 hover:bg-white/5 transition-all hover:-translate-y-px"
-              >
-                Browse Skills
-              </a>
             </div>
 
             <div className="flex items-center gap-3 hero-animate hero-animate-delay-4">
