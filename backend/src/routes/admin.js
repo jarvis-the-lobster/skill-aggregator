@@ -282,7 +282,11 @@ router.post('/skills/:id/merge', async (req, res) => {
     await db.insert('DELETE FROM user_plan_progress WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM skills WHERE id = ?', [id]);
 
-    res.json({ ok: true, merged: `${id} → ${targetId}` });
+    res.json({
+      ok: true,
+      merged: `${id} → ${targetId}`,
+      warning: 'Legacy merge endpoint does not safely preserve all user state. Prefer /api/admin/skills/:id/safe-merge for production use.'
+    });
   } catch (err) {
     console.error('Merge skill error:', err.message);
     res.status(500).json({ error: err.message });

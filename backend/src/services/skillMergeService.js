@@ -166,7 +166,6 @@ class SkillMergeService {
     await db.insert('UPDATE user_courses SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('UPDATE user_plan_progress SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('UPDATE user_learning_plans SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
-    await db.insert('UPDATE scrape_log SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('DELETE FROM skills WHERE id = ?', [sourceId]);
   }
 
@@ -197,8 +196,7 @@ class SkillMergeService {
       await db.insert('DELETE FROM learning_plans WHERE skill_id = ?', [sourceId]);
     }
 
-    // 6. Scrape log: repoint
-    await db.insert('UPDATE scrape_log SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    // 6. Scrape log: leave on source for historical accuracy
 
     // 7. Delete source skill
     await db.insert('DELETE FROM skills WHERE id = ?', [sourceId]);
@@ -306,9 +304,115 @@ class SkillMergeService {
       const tgtPlans = targetByUser.get(userId);
 
       if (!tgtPlans) {
-        // No conflict — repoint source rows to target
+        const sourceProgress = await db.query(
+          'SELECT * FROM user_plan_progress WHERE user_id = ? AND skill_id = ?',
+          [userId, sourceId]
+        );
+        const completedDays = new Set(JSON.parse(sourceProgress[0]?.completed_days || '[]'));
+        const immutableRows = srcPlans.filter(row => (
+          completedDays.has(row.day_number) ||
+          row.timestamp_start_seconds != null ||
+          row.timestamp_end_seconds != null
+        ));
+
+        const mutableSourceByDay = new Map(
+          srcPlans
+            .filter(row => !completedDays.has(row.day_number) && row.timestamp_start_seconds == null && row.timestamp_end_seconds == null)
+            .map(row => [row.day_number, row])
+        );
+
+        const usedContentFamilies = new Set(
+          immutableRows.map(row => this._contentFamily(row.content_id)).filter(Boolean)
+        );
+        const mergedByDay = new Map();
+
+        for (const row of immutableRows) {
+          mergedByDay.set(row.day_number, {
+            day_number: row.day_number,
+            content_id: row.content_id,
+            content_type: row.content_type,
+            reason: row.reason,
+            timestamp_start_seconds: row.timestamp_start_seconds ?? null,
+            timestamp_end_seconds: row.timestamp_end_seconds ?? null,
+          });
+        }
+
+        const fallbackSharedRows = Array.from(sharedByDay.values()).filter(row => row && row.content_id);
+        const fallbackSourceRows = Array.from(mutableSourceByDay.values()).filter(row => row && row.content_id);
+
+        for (let day = 1; day <= 30; day++) {
+          if (mergedByDay.has(day)) continue;
+
+          const sharedDay = sharedByDay.get(day);
+          const sharedFamily = this._contentFamily(sharedDay?.content_id);
+          if (sharedDay && sharedDay.content_id && (!sharedFamily || !usedContentFamilies.has(sharedFamily))) {
+            mergedByDay.set(day, {
+              day_number: day,
+              content_id: sharedDay.content_id,
+              content_type: sharedDay.content_type,
+              reason: sharedDay.reason,
+              timestamp_start_seconds: sharedDay.timestamp_start_seconds ?? null,
+              timestamp_end_seconds: sharedDay.timestamp_end_seconds ?? null,
+            });
+            if (sharedFamily) usedContentFamilies.add(sharedFamily);
+            continue;
+          }
+
+          const sourceDay = mutableSourceByDay.get(day);
+          const sourceFamily = this._contentFamily(sourceDay?.content_id);
+          if (sourceDay && sourceDay.content_id && (!sourceFamily || !usedContentFamilies.has(sourceFamily))) {
+            mergedByDay.set(day, {
+              day_number: day,
+              content_id: sourceDay.content_id,
+              content_type: sourceDay.content_type,
+              reason: sourceDay.reason,
+              timestamp_start_seconds: sourceDay.timestamp_start_seconds ?? null,
+              timestamp_end_seconds: sourceDay.timestamp_end_seconds ?? null,
+            });
+            if (sourceFamily) usedContentFamilies.add(sourceFamily);
+            continue;
+          }
+
+          const fallbackShared = fallbackSharedRows.find(row => {
+            const family = this._contentFamily(row.content_id);
+            return !family || !usedContentFamilies.has(family);
+          });
+          if (fallbackShared) {
+            const family = this._contentFamily(fallbackShared.content_id);
+            mergedByDay.set(day, {
+              day_number: day,
+              content_id: fallbackShared.content_id,
+              content_type: fallbackShared.content_type,
+              reason: fallbackShared.reason,
+              timestamp_start_seconds: fallbackShared.timestamp_start_seconds ?? null,
+              timestamp_end_seconds: fallbackShared.timestamp_end_seconds ?? null,
+            });
+            if (family) usedContentFamilies.add(family);
+            continue;
+          }
+
+          const fallbackSource = fallbackSourceRows.find(row => {
+            const family = this._contentFamily(row.content_id);
+            return !family || !usedContentFamilies.has(family);
+          });
+          if (fallbackSource) {
+            const family = this._contentFamily(fallbackSource.content_id);
+            mergedByDay.set(day, {
+              day_number: day,
+              content_id: fallbackSource.content_id,
+              content_type: fallbackSource.content_type,
+              reason: fallbackSource.reason,
+              timestamp_start_seconds: fallbackSource.timestamp_start_seconds ?? null,
+              timestamp_end_seconds: fallbackSource.timestamp_end_seconds ?? null,
+            });
+            if (family) usedContentFamilies.add(family);
+          }
+        }
+
+        await db.saveUserLearningPlan(userId, targetId, Array.from(mergedByDay.values()).sort((a, b) => a.day_number - b.day_number));
+
         for (const row of srcPlans) {
-          await db.insert('UPDATE user_learning_plans SET skill_id = ? WHERE id = ?', [targetId, row.id]);
+          await db.insert('DELETE FROM user_learning_plans WHERE id = ?', [row.id]);
         }
         continue;
       }

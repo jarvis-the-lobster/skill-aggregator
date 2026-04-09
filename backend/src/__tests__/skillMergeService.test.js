@@ -164,9 +164,9 @@ describe('SkillMergeService', () => {
       const userPlans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'business-consulting'");
       expect(userPlans.length).toBe(2);
 
-      // Scrape logs migrated
+      // Scrape logs stay on source for historical accuracy
       const logs = await db.query("SELECT * FROM scrape_log WHERE skill_id = 'business-consulting'");
-      expect(logs.length).toBe(2);
+      expect(logs.length).toBe(0);
 
       // Nothing left under source
       const srcContent = await db.query("SELECT id FROM content WHERE skill_id = 'busines-consulting'");
@@ -240,9 +240,9 @@ describe('SkillMergeService', () => {
       const srcPlans = await db.query("SELECT * FROM learning_plans WHERE skill_id = 'src-skill'");
       expect(srcPlans.length).toBe(0);
 
-      // Scrape log repointed
+      // Scrape log stays on source
       const logs = await db.query("SELECT * FROM scrape_log WHERE skill_id = 'tgt-skill'");
-      expect(logs.length).toBe(1);
+      expect(logs.length).toBe(0);
     });
   });
 
@@ -444,6 +444,82 @@ describe('SkillMergeService', () => {
     });
   });
 
+  describe('user state precedence and transfer', () => {
+    test('preserves target immutable user-plan rows when the same completed day exists on both plans', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+
+      await seedContent('src-c1', 'src', 'Source Completed Content');
+      await seedContent('tgt-c1', 'tgt', 'Target Completed Content');
+      await seedLearningPlan('src', 1, 'src-c1');
+      await seedLearningPlan('tgt', 1, 'tgt-c1');
+
+      await seedPlanProgress(1, 'src', { completed_days: '[1]' });
+      await seedPlanProgress(1, 'tgt', { completed_days: '[1]' });
+      await seedUserLearningPlan(1, 'src', 1, 'src-c1');
+      await seedUserLearningPlan(1, 'tgt', 1, 'tgt-c1');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const rows = await db.query(
+        "SELECT day_number, content_id FROM user_learning_plans WHERE user_id = 1 AND skill_id = 'tgt' AND day_number = 1"
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].content_id).toBe('tgt-c1');
+    });
+
+    test('fully transfers source-only enrolled user state onto target', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      await seedContent('src-c1', 'src', 'Source 1');
+      await seedLearningPlan('src', 1, 'src-c1');
+      for (let day = 1; day <= 30; day++) {
+        const contentId = `tgt-c${day}`;
+        await seedContent(contentId, 'tgt', `Target ${day}`);
+        await seedLearningPlan('tgt', day, contentId);
+      }
+      await seedUserCourse(1, 'src');
+      await seedPlanProgress(1, 'src', { completed_days: '[1,2]' });
+      await seedUserLearningPlan(1, 'src', 1, 'src-c1');
+      await seedUserLearningPlan(1, 'src', 2, 'src-c1');
+      await seedScrapeLog('src');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const tgtCourse = await db.query("SELECT * FROM user_courses WHERE user_id = 1 AND skill_id = 'tgt'");
+      expect(tgtCourse).toHaveLength(1);
+
+      const tgtProgress = await db.query("SELECT * FROM user_plan_progress WHERE user_id = 1 AND skill_id = 'tgt'");
+      expect(tgtProgress).toHaveLength(1);
+      expect(tgtProgress[0].completed_days).toBe('[1,2]');
+
+      const tgtUserPlan = await db.query("SELECT * FROM user_learning_plans WHERE user_id = 1 AND skill_id = 'tgt'");
+      expect(tgtUserPlan).toHaveLength(30);
+
+      const srcCourse = await db.query("SELECT * FROM user_courses WHERE user_id = 1 AND skill_id = 'src'");
+      const srcProgress = await db.query("SELECT * FROM user_plan_progress WHERE user_id = 1 AND skill_id = 'src'");
+      const srcUserPlan = await db.query("SELECT * FROM user_learning_plans WHERE user_id = 1 AND skill_id = 'src'");
+      expect(srcCourse).toHaveLength(0);
+      expect(srcProgress).toHaveLength(0);
+      expect(srcUserPlan).toHaveLength(0);
+    });
+
+    test('leaves scrape_log on source skill for historical accuracy', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedScrapeLog('src');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const srcLogs = await db.query("SELECT * FROM scrape_log WHERE skill_id = 'src'");
+      const tgtLogs = await db.query("SELECT * FROM scrape_log WHERE skill_id = 'tgt'");
+      expect(srcLogs).toHaveLength(1);
+      expect(tgtLogs).toHaveLength(0);
+    });
+  });
+
   describe('source deleted only after success', () => {
     test('source skill is deleted after all migrations complete', async () => {
       await seedSkill('src', 'Source');
@@ -474,9 +550,9 @@ describe('SkillMergeService', () => {
       const srcPlans = await db.query("SELECT id FROM learning_plans WHERE skill_id = 'src'");
       expect(srcPlans.length).toBe(0);
       const srcLogs = await db.query("SELECT id FROM scrape_log WHERE skill_id = 'src'");
-      expect(srcLogs.length).toBe(0);
+      expect(srcLogs.length).toBe(1);
 
-      // But all data exists under target
+      // But all user/stateful data exists under target
       const tgtContent = await db.query("SELECT id FROM content WHERE skill_id = 'tgt'");
       expect(tgtContent.length).toBe(1);
       const tgtCourses = await db.query("SELECT id FROM user_courses WHERE skill_id = 'tgt'");
