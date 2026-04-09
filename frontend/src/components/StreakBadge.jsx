@@ -13,7 +13,7 @@ function getTimeUntilMidnight() {
   return `${hours}h ${minutes}m`;
 }
 
-export function StreakBadge() {
+export function StreakBadge({ compact = false }) {
   const { streak, loading } = useStreak();
   const [timeLeft, setTimeLeft] = useState(getTimeUntilMidnight());
 
@@ -27,6 +27,30 @@ export function StreakBadge() {
   const { currentStreak, freezeAvailable, freezeRechargesIn } = streak;
   const freezeUsedThisWeek = streak.weeklyCalendar?.some(d => d.status === 'frozen');
   const isNewUser = currentStreak === 0 && !streak.lastActivityDate;
+
+  if (compact) {
+    const compactBg = freezeUsedThisWeek && !streak.todayCompleted
+      ? 'bg-cyan-50 border-cyan-200 hover:bg-cyan-100'
+      : !streak.todayCompleted && currentStreak > 0
+        ? 'bg-orange-50 border-orange-200 hover:bg-orange-100'
+        : 'bg-white border-gray-200 hover:bg-gray-50';
+
+    const compactMeta = isNewUser
+      ? 'Start'
+      : !streak.todayCompleted && currentStreak > 0
+        ? timeLeft
+        : freezeAvailable
+          ? 'Ready'
+          : `${freezeRechargesIn ?? 0}d`;
+
+    return (
+      <Link to="/my-courses" className={`inline-flex items-center space-x-2 rounded-xl border px-3 py-2 shadow-sm transition-colors ${compactBg}`}>
+        <span className={`text-base inline-block ${currentStreak > 0 ? 'streak-flame-animate' : ''}`}>🔥</span>
+        <span className="text-sm font-bold text-gray-900">{isNewUser ? '0' : currentStreak}</span>
+        <span className="text-xs text-gray-500">{compactMeta}</span>
+      </Link>
+    );
+  }
 
   // No streak
   if (isNewUser) {
