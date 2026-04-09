@@ -253,6 +253,21 @@ describe('generatePlan chunking', () => {
   });
 });
 
+describe('getUserPlanWithRefresh', () => {
+  test('reseeds missing user plan rows for an enrolled user', async () => {
+    await seedSkillWithPlan();
+    await db.enrollPlan(USER_ID, SKILL_ID);
+    await db.enrollCourse(USER_ID, SKILL_ID);
+
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+
+    expect(result.plan).toHaveLength(30);
+    expect(result.plan.every(day => day.content_id)).toBe(true);
+    const persistedPlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
+    expect(persistedPlan).toHaveLength(30);
+  });
+});
+
 describe('copyPlanForUser', () => {
   test('enrolling creates a personal plan copy (30 days)', async () => {
     await seedSkillWithPlan();
