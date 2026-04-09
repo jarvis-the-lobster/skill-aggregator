@@ -5,6 +5,7 @@ const CHUNK_MAX_SECONDS = 40 * 60;     // hard max 40 minutes per chunk
 const CHUNK_THRESHOLD_SECONDS = 40 * 60; // only chunk videos > 40 min
 const MAX_CHUNKS = 7;                   // max chunks per video
 const EARLY_DAYS_MAX = 7;              // only chunk in days 1-7
+const SHARED_PLAN_STALE_DAYS = 7;      // regenerate shared plans older than this
 
 // Parse "M:SS" or "H:MM:SS" duration string to total seconds
 function parseDuration(duration) {
@@ -192,10 +193,18 @@ class LearningPlanService {
     return db.getLearningPlan(skillId);
   }
 
+  async isSharedPlanStale(skillId) {
+    const createdAt = await db.getSharedPlanCreatedAt(skillId);
+    if (!createdAt) return true;
+    const planDate = new Date(createdAt.replace(' ', 'T') + 'Z');
+    const ageMs = Date.now() - planDate.getTime();
+    return ageMs > SHARED_PLAN_STALE_DAYS * 24 * 60 * 60 * 1000;
+  }
+
   async getPlan(skillId) {
     const existing = await db.getLearningPlan(skillId);
     if (existing.length > 0) {
-      if (this.isPlanIncomplete(existing)) {
+      if (this.isPlanIncomplete(existing) || await this.isSharedPlanStale(skillId)) {
         const allContent = await db.getSkillContent(skillId);
         if (allContent.length > 0) {
           return this.generatePlan(skillId);
@@ -231,38 +240,159 @@ class LearningPlanService {
     const userPlan = await db.getUserLearningPlan(userId, skillId);
     if (userPlan.length === 0) return { plan: [], refreshAvailable: false };
 
-    // Check if content has been refreshed since user plan was created
-    const skill = await db.getSkillById(skillId);
-    if (!skill || !skill.last_scraped_at) return { plan: userPlan, refreshAvailable: false };
+    // Flag refresh when the shared plan has been regenerated since the user plan was last synced
+    const sharedCreatedAt = await db.getSharedPlanCreatedAt(skillId);
+    const userMaxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
 
-    const maxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
-    const hasNewContent = maxCreatedAt && new Date(skill.last_scraped_at) > new Date(maxCreatedAt);
+    let refreshAvailable = false;
+    if (sharedCreatedAt && userMaxCreatedAt) {
+      const sharedDate = new Date(sharedCreatedAt.replace(' ', 'T') + 'Z');
+      const userDate = new Date(userMaxCreatedAt.replace(' ', 'T') + 'Z');
+      refreshAvailable = sharedDate > userDate;
+    }
 
-    return { plan: userPlan, refreshAvailable: hasNewContent };
+    return { plan: userPlan, refreshAvailable };
   }
 
-  // Actually apply the refresh — called when user opts in
+  // Actually apply the refresh — called when user opts in.
+  // Merge semantics:
+  //   1. Completed days are immutable
+  //   2. Existing chunked day runs (timestamped entries) are immutable
+  //   3. Remaining days realign toward the current shared plan
+  //   4. No duplicate content_ids after merge
+  //   5. All 30 days filled; days 1-7 always have content
   async refreshUserPlan(userId, skillId) {
     const progress = await db.getPlanProgress(userId, skillId);
     const completedDays = new Set(JSON.parse(progress?.completed_days || '[]'));
+    const userPlan = await db.getUserLearningPlan(userId, skillId);
+    const sharedPlan = await db.getLearningPlan(skillId);
 
-    // Regenerate a fresh shared plan to get updated content assignments
-    const freshPlan = await this.generatePlan(skillId);
+    // --- Step 1: identify immutable days and used content_ids ---
+    const immutableDays = new Set();
+    const usedContentIds = new Set();
 
-    // Only refresh days the user hasn't completed
-    const daysToRefresh = freshPlan
-      .filter(day => !completedDays.has(day.day_number))
-      .map(day => ({
+    // Completed days are immutable
+    for (const day of userPlan) {
+      if (completedDays.has(day.day_number)) {
+        immutableDays.add(day.day_number);
+        if (day.content_id) usedContentIds.add(day.content_id);
+      }
+    }
+
+    // Existing chunked runs (timestamped entries) are immutable
+    for (const day of userPlan) {
+      if (day.timestamp_start_seconds != null && day.content_id) {
+        immutableDays.add(day.day_number);
+        usedContentIds.add(day.content_id);
+      }
+    }
+
+    // --- Step 2: identify shared plan chunk runs ---
+    const sharedChunkRuns = new Map(); // content_id -> [entries]
+    for (const day of sharedPlan) {
+      if (day.timestamp_start_seconds != null && day.content_id) {
+        if (!sharedChunkRuns.has(day.content_id)) sharedChunkRuns.set(day.content_id, []);
+        sharedChunkRuns.get(day.content_id).push(day);
+      }
+    }
+
+    // --- Step 3: build merged plan ---
+    const merged = new Array(30).fill(null);
+
+    // Place immutable days (these won't be written — they stay in DB untouched)
+    for (const day of userPlan) {
+      if (immutableDays.has(day.day_number)) {
+        merged[day.day_number - 1] = day;
+      }
+    }
+
+    // Try to place shared plan chunk runs atomically on mutable days
+    for (const [contentId, entries] of sharedChunkRuns) {
+      if (usedContentIds.has(contentId)) continue;
+      const allAvailable = entries.every(e => !merged[e.day_number - 1]);
+      if (allAvailable) {
+        for (const entry of entries) {
+          merged[entry.day_number - 1] = {
+            day_number: entry.day_number,
+            content_id: entry.content_id,
+            content_type: entry.content_type,
+            reason: entry.reason,
+            timestamp_start_seconds: entry.timestamp_start_seconds,
+            timestamp_end_seconds: entry.timestamp_end_seconds,
+          };
+        }
+        usedContentIds.add(contentId);
+      }
+    }
+
+    // Fill mutable days from shared plan (non-chunk, single-day entries)
+    for (const day of sharedPlan) {
+      const idx = day.day_number - 1;
+      if (merged[idx]) continue;
+      if (!day.content_id || usedContentIds.has(day.content_id)) continue;
+      if (sharedChunkRuns.has(day.content_id)) continue; // already handled above
+
+      merged[idx] = {
         day_number: day.day_number,
         content_id: day.content_id,
         content_type: day.content_type,
         reason: day.reason,
         timestamp_start_seconds: day.timestamp_start_seconds,
         timestamp_end_seconds: day.timestamp_end_seconds,
-      }));
+      };
+      usedContentIds.add(day.content_id);
+    }
 
-    if (daysToRefresh.length > 0) {
-      await db.refreshUserPlanDays(userId, skillId, daysToRefresh);
+    // Collect unused shared plan content for gap-filling
+    const unusedShared = [];
+    const seenIds = new Set();
+    for (const d of sharedPlan) {
+      if (d.content_id && !usedContentIds.has(d.content_id)
+          && !sharedChunkRuns.has(d.content_id) && !seenIds.has(d.content_id)) {
+        unusedShared.push(d);
+        seenIds.add(d.content_id);
+      }
+    }
+    let unusedIdx = 0;
+
+    // Fill remaining empty days
+    for (let i = 0; i < 30; i++) {
+      if (merged[i]) continue;
+
+      if (unusedIdx < unusedShared.length) {
+        const src = unusedShared[unusedIdx++];
+        merged[i] = {
+          day_number: i + 1,
+          content_id: src.content_id,
+          content_type: src.content_type,
+          reason: src.reason,
+          timestamp_start_seconds: src.timestamp_start_seconds,
+          timestamp_end_seconds: src.timestamp_end_seconds,
+        };
+        usedContentIds.add(src.content_id);
+      } else {
+        // Fall back to existing user plan content if not a duplicate
+        const userDay = userPlan.find(d => d.day_number === i + 1);
+        if (userDay?.content_id && !usedContentIds.has(userDay.content_id)) {
+          merged[i] = {
+            day_number: i + 1,
+            content_id: userDay.content_id,
+            content_type: userDay.content_type,
+            reason: userDay.reason,
+            timestamp_start_seconds: userDay.timestamp_start_seconds,
+            timestamp_end_seconds: userDay.timestamp_end_seconds,
+          };
+          usedContentIds.add(userDay.content_id);
+        } else {
+          merged[i] = { day_number: i + 1, content_id: null, content_type: null, reason: null };
+        }
+      }
+    }
+
+    // Write only mutable days — immutable days keep their original created_at
+    const mutableEntries = merged.filter((_, i) => !immutableDays.has(i + 1));
+    if (mutableEntries.length > 0) {
+      await db.refreshUserPlanDays(userId, skillId, mutableEntries);
     }
 
     return db.getUserLearningPlan(userId, skillId);
@@ -273,4 +403,5 @@ const service = new LearningPlanService();
 service._parseDuration = parseDuration;
 service._formatTimestamp = formatTimestamp;
 service._chunkVideo = chunkVideo;
+service.SHARED_PLAN_STALE_DAYS = SHARED_PLAN_STALE_DAYS;
 module.exports = service;

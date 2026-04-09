@@ -283,7 +283,7 @@ describe('copyPlanForUser', () => {
 });
 
 describe('getUserPlanWithRefresh', () => {
-  test('returns plan without refresh flag when content has not changed', async () => {
+  test('returns plan without refresh flag when shared plan has not been regenerated', async () => {
     await seedSkillWithPlan();
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
 
@@ -294,14 +294,15 @@ describe('getUserPlanWithRefresh', () => {
     expect(result.refreshAvailable).toBe(false);
   });
 
-  test('flags refresh available when new content exists', async () => {
+  test('flags refresh available when shared plan is newer than user plan', async () => {
     await seedSkillWithPlan();
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
     await db.enrollPlan(USER_ID, SKILL_ID);
 
+    // Simulate shared plan regeneration after user plan was copied
     await new Promise(r => setTimeout(r, 50));
     await db.insert(
-      "UPDATE skills SET last_scraped_at = datetime('now', '+1 hour') WHERE id = ?",
+      "UPDATE learning_plans SET created_at = datetime('now', '+1 hour') WHERE skill_id = ?",
       [SKILL_ID]
     );
 
@@ -340,27 +341,6 @@ describe('refreshUserPlan', () => {
     const day8Before = beforeRows.find(d => d.day_number === 8);
     const day3Before = beforeRows.find(d => d.day_number === 3);
 
-    // Add new content that could change the plan ordering
-    for (let i = 100; i < 115; i++) {
-      await db.saveContent([{
-        id: `devto_new${i}`,
-        type: 'article',
-        title: `New Article ${i}`,
-        url: `https://dev.to/new${i}`,
-        source: 'Dev.to',
-        author: 'Author',
-        views: 50000 + i * 100, // high views to change sort order
-        tags: [],
-      }], SKILL_ID);
-    }
-
-    // Simulate new content scraped
-    await new Promise(r => setTimeout(r, 50));
-    await db.insert(
-      "UPDATE skills SET last_scraped_at = datetime('now', '+1 hour') WHERE id = ?",
-      [SKILL_ID]
-    );
-
     const refreshedPlan = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
     expect(refreshedPlan).toHaveLength(30);
 
@@ -382,6 +362,178 @@ describe('refreshUserPlan', () => {
     expect(new Date(day3After.created_at).getTime()).toBeGreaterThanOrEqual(
       new Date(day3Before.created_at).getTime()
     );
+  });
+
+  test('preserves chunked personal day runs during refresh', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    // Create content: one long video (will be chunked) + filler
+    const content = [
+      { id: 'yt_long', type: 'video', title: 'Long Course', url: 'https://yt.com/long',
+        source: 'YouTube', channel: 'Ch', duration: '1:15:00', views: 50000 },
+    ];
+    for (let i = 1; i <= 30; i++) {
+      content.push({
+        id: `yt_v${i}`, type: 'video', title: `Video ${i}`, url: `https://yt.com/v${i}`,
+        source: 'YouTube', channel: 'Ch', duration: '10:00', views: 10000 - i * 100,
+      });
+    }
+    await db.saveContent(content, SKILL_ID);
+
+    // Generate shared plan (chunks yt_long into days 1-3)
+    await learningPlanService.generatePlan(SKILL_ID);
+    await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
+    await db.enrollPlan(USER_ID, SKILL_ID);
+
+    const beforePlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
+    const chunkedBefore = beforePlan.filter(d => d.content_id === 'yt_long');
+    expect(chunkedBefore.length).toBeGreaterThanOrEqual(2);
+    expect(chunkedBefore[0].timestamp_start_seconds).toBe(0);
+
+    // Refresh — chunked run should be preserved
+    const refreshed = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
+    const chunkedAfter = refreshed.filter(d => d.content_id === 'yt_long');
+
+    expect(chunkedAfter).toHaveLength(chunkedBefore.length);
+    for (let i = 0; i < chunkedBefore.length; i++) {
+      expect(chunkedAfter[i].day_number).toBe(chunkedBefore[i].day_number);
+      expect(chunkedAfter[i].timestamp_start_seconds).toBe(chunkedBefore[i].timestamp_start_seconds);
+      expect(chunkedAfter[i].timestamp_end_seconds).toBe(chunkedBefore[i].timestamp_end_seconds);
+      expect(chunkedAfter[i].created_at).toBe(chunkedBefore[i].created_at); // untouched
+    }
+  });
+
+  test('no duplicate content_ids after merge', async () => {
+    await seedSkillWithPlan();
+    await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
+    await db.enrollPlan(USER_ID, SKILL_ID);
+
+    // Mark day 1 complete
+    await db.insert(
+      "UPDATE user_plan_progress SET completed_days = ? WHERE user_id = ? AND skill_id = ?",
+      [JSON.stringify([1]), USER_ID, SKILL_ID]
+    );
+
+    const refreshed = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
+
+    const contentIds = refreshed.map(d => d.content_id).filter(Boolean);
+    const uniqueIds = new Set(contentIds);
+    expect(uniqueIds.size).toBe(contentIds.length);
+  });
+
+  test('all 30 days filled after merge', async () => {
+    await seedSkillWithPlan();
+    await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
+    await db.enrollPlan(USER_ID, SKILL_ID);
+
+    await db.insert(
+      "UPDATE user_plan_progress SET completed_days = ? WHERE user_id = ? AND skill_id = ?",
+      [JSON.stringify([1, 5, 10, 20]), USER_ID, SKILL_ID]
+    );
+
+    const refreshed = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
+
+    expect(refreshed).toHaveLength(30);
+    const dayNumbers = refreshed.map(d => d.day_number).sort((a, b) => a - b);
+    expect(dayNumbers).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+  });
+
+  test('days 1-7 have content after merge', async () => {
+    await seedSkillWithPlan();
+    await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
+    await db.enrollPlan(USER_ID, SKILL_ID);
+
+    const refreshed = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
+
+    for (let day = 1; day <= 7; day++) {
+      const entry = refreshed.find(d => d.day_number === day);
+      expect(entry).toBeDefined();
+      expect(entry.content_id).toBeTruthy();
+    }
+  });
+
+  test('does not reinsert chunks of a video already completed in full', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES (?, 'Python', 'ready')",
+      [SKILL_ID]
+    );
+
+    // Create content
+    const content = [
+      { id: 'yt_long', type: 'video', title: 'Long Course', url: 'https://yt.com/long',
+        source: 'YouTube', channel: 'Ch', duration: '1:15:00', views: 50000 },
+    ];
+    for (let i = 1; i <= 30; i++) {
+      content.push({
+        id: `yt_v${i}`, type: 'video', title: `Video ${i}`, url: `https://yt.com/v${i}`,
+        source: 'YouTube', channel: 'Ch', duration: '10:00', views: 10000 - i * 100,
+      });
+    }
+    await db.saveContent(content, SKILL_ID);
+
+    // Build a user plan where yt_long appears once (un-chunked) on day 5
+    const userPlanDays = [];
+    let vidIdx = 1;
+    for (let d = 1; d <= 30; d++) {
+      if (d === 5) {
+        userPlanDays.push({ day_number: d, content_id: 'yt_long', content_type: 'video', reason: 'full video' });
+      } else {
+        userPlanDays.push({ day_number: d, content_id: `yt_v${vidIdx}`, content_type: 'video', reason: 'filler' });
+        vidIdx++;
+      }
+    }
+    await db.saveUserLearningPlan(USER_ID, SKILL_ID, userPlanDays);
+    await db.enrollPlan(USER_ID, SKILL_ID);
+
+    // User completed day 5 (the full video)
+    await db.insert(
+      "UPDATE user_plan_progress SET completed_days = ? WHERE user_id = ? AND skill_id = ?",
+      [JSON.stringify([5]), USER_ID, SKILL_ID]
+    );
+
+    // Generate a shared plan that chunks yt_long across days 1-3
+    await learningPlanService.generatePlan(SKILL_ID);
+
+    const refreshed = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
+
+    // yt_long should only appear on day 5 (completed), NOT re-chunked into other days
+    const longEntries = refreshed.filter(d => d.content_id === 'yt_long');
+    expect(longEntries).toHaveLength(1);
+    expect(longEntries[0].day_number).toBe(5);
+  });
+});
+
+describe('shared plan staleness', () => {
+  test('regenerates shared plan when older than 7 days', async () => {
+    await seedSkillWithPlan();
+
+    // Backdate shared plan to 8 days ago
+    await db.insert(
+      "UPDATE learning_plans SET created_at = datetime('now', '-8 days') WHERE skill_id = ?",
+      [SKILL_ID]
+    );
+
+    const stale = await learningPlanService.isSharedPlanStale(SKILL_ID);
+    expect(stale).toBe(true);
+
+    // getPlan should regenerate
+    const plan = await learningPlanService.getPlan(SKILL_ID);
+    expect(plan).toHaveLength(30);
+
+    // Now it should no longer be stale
+    const freshStale = await learningPlanService.isSharedPlanStale(SKILL_ID);
+    expect(freshStale).toBe(false);
+  });
+
+  test('does not regenerate shared plan younger than 7 days', async () => {
+    await seedSkillWithPlan();
+
+    // Plan was just created — should not be stale
+    const stale = await learningPlanService.isSharedPlanStale(SKILL_ID);
+    expect(stale).toBe(false);
   });
 });
 

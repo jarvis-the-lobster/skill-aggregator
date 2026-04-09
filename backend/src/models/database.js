@@ -761,6 +761,14 @@ class Database {
     return rows[0]?.max_created_at || null;
   }
 
+  async getSharedPlanCreatedAt(skillId) {
+    const rows = await this.query(
+      'SELECT MAX(created_at) as created_at FROM learning_plans WHERE skill_id = ?',
+      [skillId]
+    );
+    return rows[0]?.created_at || null;
+  }
+
   async refreshUserPlanDays(userId, skillId, days) {
     for (const entry of days) {
       await this.insert(
