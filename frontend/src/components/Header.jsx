@@ -58,6 +58,12 @@ export function Header() {
             >
               About
             </Link>
+            <Link
+              to="/premium"
+              className="relative py-1 text-sm font-medium text-slate-300 transition-colors hover:text-white nav-link-premium"
+            >
+              Premium
+            </Link>
             {user && (
               <Link
                 to="/my-courses"
@@ -131,6 +137,13 @@ export function Header() {
                 className="rounded-xl px-4 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.06]"
               >
                 About
+              </Link>
+              <Link
+                to="/premium"
+                onClick={handleMobileNav}
+                className="rounded-xl px-4 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.06]"
+              >
+                Premium
               </Link>
               {user && (
                 <Link

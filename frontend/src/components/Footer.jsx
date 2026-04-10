@@ -40,6 +40,7 @@ export function Footer() {
             <div className="flex flex-col">
               {[
                 { to: '/about', label: 'About' },
+                { to: '/premium', label: 'Premium' },
                 { to: '/early-access', label: 'Newsletter' },
               ].map((link) => (
                 <Link key={link.to} to={link.to} className="text-sm text-slate-400 py-1 hover:text-teal transition-colors">
