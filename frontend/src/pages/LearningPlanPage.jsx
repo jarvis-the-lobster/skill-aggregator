@@ -64,13 +64,21 @@ export function LearningPlanPage() {
       if (user) fetches.push(apiService.getPlanProgress(skillId).catch(() => null));
       const [planData, skillData, progressData] = await Promise.all(fetches);
 
-      // Use personal plan if enrolled, otherwise fall back to shared plan
-      const displayPlan = (progressData?.enrolled && progressData?.plan?.length > 0)
+      const hasPersonalPlan = Boolean(progressData?.enrolled && Array.isArray(progressData?.plan));
+
+      // If enrolled, always trust the personal plan payload, even when it's empty.
+      // Falling back to shared here can mask backend issues and makes the UI look like
+      // a personal plan was overwritten when it wasn't.
+      const displayPlan = hasPersonalPlan
         ? progressData.plan
         : (planData.plan || []);
 
-      setPlanReady(progressData?.planReady ?? planData.planReady ?? true);
-      setReviewContent(progressData?.reviewContent ?? planData.reviewContent ?? {});
+      const selectedReviewContent = hasPersonalPlan ? (progressData?.reviewContent ?? {}) : (planData.reviewContent ?? {});
+      const selectedPlanReady = hasPersonalPlan ? (progressData?.planReady ?? true) : (planData.planReady ?? true);
+      const hasPendingRenderedReviewDays = displayPlan.some((entry) => REVIEW_DAYS.has(entry.day_number) && !entry.content_id);
+
+      setPlanReady(hasPendingRenderedReviewDays ? selectedPlanReady : true);
+      setReviewContent(selectedReviewContent);
 
       // Fetch ratings in parallel with nothing — we have the IDs now, before any setState
       const ids = displayPlan.map(e => e.content_id).filter(Boolean);
@@ -83,11 +91,14 @@ export function LearningPlanPage() {
       setSkillName(skillData.skill?.name || skillId);
       setRatings(ratingsData);
 
+      setEnrolled(Boolean(progressData?.enrolled));
       if (progressData?.enrolled) {
-        setEnrolled(true);
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
         setCompletedDays(new Set(days));
         setRefreshAvailable(progressData.refreshAvailable || false);
+      } else {
+        setCompletedDays(new Set());
+        setRefreshAvailable(false);
       }
     } catch (error) {
       console.error('Error loading learning plan:', error);
@@ -236,6 +247,7 @@ export function LearningPlanPage() {
               const isCompleted = completedDays.has(entry.day_number);
               const isReviewDay = REVIEW_DAYS.has(entry.day_number);
               const review = reviewContent[entry.day_number];
+              const shouldRenderReviewCard = isReviewDay && (!hasContent || Boolean(review));
 
               return (
                 <div
@@ -243,7 +255,7 @@ export function LearningPlanPage() {
                   className={`relative rounded-lg border p-3 flex flex-col min-h-[8rem] ${
                     isCompleted
                       ? 'bg-green-500/10 border-green-500/30'
-                      : isReviewDay && unlocked
+                      : shouldRenderReviewCard && unlocked
                       ? 'bg-purple-500/10 border-purple-500/20 hover:border-purple-400/40 hover:shadow-sm transition-all'
                       : unlocked
                       ? 'bg-dark-card border-white/[0.08] hover:border-teal/30 hover:shadow-sm transition-all'
@@ -253,11 +265,11 @@ export function LearningPlanPage() {
                   <div className="flex items-center justify-between mb-2">
                     <span
                       className={`text-xs font-semibold ${
-                        isCompleted ? 'text-sky-400' : isReviewDay && unlocked ? 'text-purple-400' : unlocked ? 'text-sky-400' : 'text-slate-500'
+                        isCompleted ? 'text-sky-400' : shouldRenderReviewCard && unlocked ? 'text-purple-400' : unlocked ? 'text-sky-400' : 'text-slate-500'
                       }`}
                     >
                       Day {entry.day_number}
-                      {isReviewDay && unlocked && <span className="ml-1 text-purple-400/70">· Check-in</span>}
+                      {shouldRenderReviewCard && unlocked && <span className="ml-1 text-purple-400/70">· Check-in</span>}
                     </span>
                     {isCompleted ? (
                       <CheckCircle className="w-3 h-3 text-green-400" />
@@ -266,7 +278,7 @@ export function LearningPlanPage() {
                     ) : null}
                   </div>
 
-                  {isReviewDay && unlocked && review ? (
+                  {shouldRenderReviewCard && unlocked && review ? (
                     <div className="flex flex-col flex-grow">
                       <div className="flex items-center space-x-1 mb-1">
                         <ClipboardCheck className="w-3 h-3 text-purple-400 flex-shrink-0" />
@@ -294,7 +306,7 @@ export function LearningPlanPage() {
                         </button>
                       )}
                     </div>
-                  ) : isReviewDay && unlocked && !review && !planReady ? (
+                  ) : shouldRenderReviewCard && unlocked && !review && !planReady ? (
                     <div className="flex flex-col flex-grow">
                       <div className="flex items-center space-x-1 mb-1">
                         <Loader className="w-3 h-3 text-purple-400/50 animate-spin flex-shrink-0" />
@@ -304,7 +316,7 @@ export function LearningPlanPage() {
                         Generating review content. Check back within 24 hours.
                       </p>
                     </div>
-                  ) : isReviewDay && unlocked && !review ? (
+                  ) : shouldRenderReviewCard && unlocked && !review ? (
                     <div className="flex flex-col flex-grow">
                       <div className="flex items-center space-x-1 mb-1">
                         <ClipboardCheck className="w-3 h-3 text-purple-400/50 flex-shrink-0" />

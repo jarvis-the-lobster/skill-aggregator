@@ -129,9 +129,61 @@ describe('LearningPlanPage', () => {
       await screen.findByText('My Resource 1');
 
       // Completed days should not show "Mark complete" button.
-      // Review placeholder days (7, 14, 21, 28) also do not show it.
+      // In this fixture, day 7 still has personal content so it remains completable.
       const markCompleteButtons = screen.getAllByText('Mark complete');
-      expect(markCompleteButtons).toHaveLength(23);
+      expect(markCompleteButtons).toHaveLength(27);
+    });
+
+    it('does not fall back to shared plan when enrolled response returns an empty personal plan', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: false, reviewContent: { 7: { title: 'Shared review', body: { summary: 'shared' } } } });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[]' },
+        plan: [],
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      await waitFor(() => {
+        expect(mockGetPlanProgress).toHaveBeenCalled();
+      });
+
+      expect(screen.queryByText('Shared Resource 1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Generating review content. Check back within 24 hours.')).not.toBeInTheDocument();
+    });
+
+    it('renders real personal-plan content on day 7 instead of forcing a review card', async () => {
+      const personalPlan = PERSONAL_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: 'yt_J2j1yk-34OY',
+              content_type: 'video',
+              title: 'Complete React Native Tutorial #1 - Introduction & Setup (Expo)',
+              url: 'https://www.youtube.com/watch?v=J2j1yk-34OY',
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: false, reviewContent: {} });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[4,10,9]' },
+        plan: personalPlan,
+        refreshAvailable: false,
+        planReady: false,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      expect(await screen.findByText('Complete React Native Tutorial #1 - Introduction & Setup (Expo)')).toBeInTheDocument();
+      expect(screen.queryByText('Generating review content. Check back within 24 hours.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Your plan is being finalized')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Day 7.*Check-in/)).not.toBeInTheDocument();
     });
   });
 

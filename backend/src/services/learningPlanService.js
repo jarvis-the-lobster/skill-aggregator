@@ -316,33 +316,17 @@ class LearningPlanService {
 
   // Get user's personal plan, flagging if a refresh is available
   async getUserPlanWithRefresh(userId, skillId) {
+    const progress = await db.getPlanProgress(userId, skillId);
+    if (!progress) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
+
     let userPlan = await db.getUserLearningPlan(userId, skillId);
 
-    // Self-heal inconsistent states where enrollment/progress exists but the copied user plan rows are missing.
+    // Self-heal only when the enrolled user has no personal plan rows at all.
     if (userPlan.length === 0) {
-      const progress = await db.getPlanProgress(userId, skillId);
-      if (progress) {
-        userPlan = await this.copyPlanForUser(userId, skillId);
-      }
+      userPlan = await this.copyPlanForUser(userId, skillId);
     }
 
     if (userPlan.length === 0) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
-
-    userPlan = userPlan.map((day) => (
-      REVIEW_DAY_NUMBERS.has(day.day_number)
-        ? {
-            ...day,
-            content_id: null,
-            content_type: 'review',
-            title: null,
-            url: null,
-            thumbnail: null,
-            duration: null,
-            author: null,
-            source: null,
-          }
-        : day
-    ));
 
     await this.ensureReviewJobs(skillId);
     const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));

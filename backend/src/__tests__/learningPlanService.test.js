@@ -263,8 +263,7 @@ describe('getUserPlanWithRefresh', () => {
     const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
 
     expect(result.plan).toHaveLength(30);
-    expect(result.plan.filter(day => ![7, 14, 21, 28].includes(day.day_number)).every(day => day.content_id)).toBe(true);
-    expect(result.plan.filter(day => [7, 14, 21, 28].includes(day.day_number)).every(day => day.content_id === null)).toBe(true);
+    expect(result.plan.some(day => day.day_number === 7 && day.content_type === 'review' && day.content_id === null)).toBe(true);
     const persistedPlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
     expect(persistedPlan).toHaveLength(30);
   });
@@ -300,9 +299,19 @@ describe('copyPlanForUser', () => {
 });
 
 describe('getUserPlanWithRefresh', () => {
+  test('returns empty plan when user is not enrolled even if shared plan exists', async () => {
+    await seedSkillWithPlan();
+
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+
+    expect(result.plan).toEqual([]);
+    expect(result.refreshAvailable).toBe(false);
+  });
+
   test('returns plan without refresh flag when shared plan has not been regenerated', async () => {
     await seedSkillWithPlan();
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
+    await db.enrollPlan(USER_ID, SKILL_ID);
 
     const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
 
@@ -342,13 +351,38 @@ describe('getUserPlanWithRefresh', () => {
     expect(reviewJobs.every((job) => job.status === 'pending')).toBe(true);
   });
 
-  test('returns empty plan when no user plan exists', async () => {
+  test('self-heals only for enrolled users with zero personal plan rows', async () => {
     await seedSkillWithPlan();
+    await db.enrollPlan(USER_ID, SKILL_ID);
 
     const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+    const persistedPlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
 
-    expect(result.plan).toEqual([]);
-    expect(result.refreshAvailable).toBe(false);
+    expect(result.plan).toHaveLength(30);
+    expect(persistedPlan).toHaveLength(30);
+  });
+
+  test('does not overwrite an existing personal plan when the shared plan regenerates', async () => {
+    await seedSkillWithPlan();
+    await db.enrollPlan(USER_ID, SKILL_ID);
+
+    const originalPersonalPlan = Array.from({ length: 30 }, (_, i) => ({
+      day_number: i + 1,
+      content_id: i + 1 === 7 || i + 1 === 14 || i + 1 === 21 || i + 1 === 28 ? null : `personal_${i + 1}`,
+      content_type: i + 1 === 7 || i + 1 === 14 || i + 1 === 21 || i + 1 === 28 ? 'review' : (i < 7 ? 'video' : 'article'),
+      reason: 'personalized',
+    }));
+    await db.saveUserLearningPlan(USER_ID, SKILL_ID, originalPersonalPlan);
+
+    await db.insert("DELETE FROM learning_plans WHERE skill_id = ?", [SKILL_ID]);
+    await learningPlanService.getPlanWithReadiness(SKILL_ID);
+
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+    const persistedPlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
+
+    expect(result.plan.find((day) => day.day_number === 1).content_id).toBe('personal_1');
+    expect(persistedPlan.find((day) => day.day_number === 1).content_id).toBe('personal_1');
+    expect(persistedPlan.filter((day) => day.content_id && String(day.content_id).startsWith('personal_')).length).toBe(26);
   });
 });
 
