@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const learningPlanService = require('../services/learningPlanService');
-const reviewContentService = require('../services/reviewContentService');
 const streakService = require('../services/streakService');
 const { requireAuth } = require('../middleware/auth');
 const { bulkLimiter } = require('../middleware/rateLimit');

@@ -182,27 +182,108 @@ router.post('/test-push', async (req, res) => {
   }
 });
 
-// POST /api/admin/process-review-jobs — process pending review content generation jobs (Bearer CRON_SECRET)
-router.post('/process-review-jobs', async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers['authorization'];
-  if (!secret || auth !== `Bearer ${secret}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+// GET /api/admin/review-jobs — list pending review content generation jobs (Bearer CRON_SECRET)
+router.get('/review-jobs', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
 
   try {
-    const pendingJobs = await db.getPendingJobs(100);
-    const reviewJobs = pendingJobs.filter(job => job.job_type === 'review_content');
+    const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 100);
+    const pendingJobs = await db.getPendingJobs(limit);
+    const reviewJobs = pendingJobs
+      .filter((job) => job.job_type === 'review_content')
+      .map((job) => ({
+        id: job.id,
+        skillId: job.skill_id,
+        userId: job.user_id,
+        dayNumber: job.day_number,
+        status: job.status,
+        attempts: job.attempts,
+        maxAttempts: job.max_attempts,
+        payload: job.payload ? JSON.parse(job.payload) : null,
+        planCreatedAt: job.plan_created_at,
+        createdAt: job.created_at,
+        updatedAt: job.updated_at,
+      }));
+
     res.json({
       ok: true,
-      processed: 0,
-      succeeded: 0,
-      failed: 0,
-      pending: reviewJobs.length,
-      message: 'Review jobs remain pending until an external generator writes content and marks them complete.',
+      jobs: reviewJobs,
+      count: reviewJobs.length,
     });
   } catch (err) {
-    console.error('[process-review-jobs] error:', err.message);
+    console.error('[review-jobs] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/review-jobs/:id/process — save generated review content and mark job complete (Bearer CRON_SECRET)
+router.post('/review-jobs/:id/process', async (req, res) => {
+  if (!requireCronSecret(req, res)) return;
+
+  try {
+    const jobId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(jobId) || jobId <= 0) {
+      return res.status(400).json({ error: 'Valid numeric job id required' });
+    }
+
+    const claimedJob = await db.claimJob(jobId);
+    if (!claimedJob) {
+      const existing = await db.query('SELECT id, status, job_type FROM plan_jobs WHERE id = ?', [jobId]);
+      if (existing.length === 0) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      return res.status(409).json({ error: `Job is not pending (current status: ${existing[0].status})` });
+    }
+
+    if (claimedJob.job_type !== 'review_content') {
+      await db.failJob(jobId, 'Unsupported job type for review job processor');
+      return res.status(400).json({ error: `Unsupported job type: ${claimedJob.job_type}` });
+    }
+
+    const {
+      reviewType = 'weekly_checkin',
+      title,
+      body,
+      result = null,
+    } = req.body || {};
+
+    if (typeof title !== 'string' || !title.trim()) {
+      await db.failJob(jobId, 'title is required');
+      return res.status(400).json({ error: 'title is required' });
+    }
+
+    const bodyType = typeof body;
+    const isValidBody = body != null && (bodyType === 'string' || bodyType === 'object');
+    if (!isValidBody) {
+      await db.failJob(jobId, 'body is required');
+      return res.status(400).json({ error: 'body is required' });
+    }
+
+    await db.saveReviewContent({
+      skill_id: claimedJob.skill_id,
+      user_id: claimedJob.user_id,
+      day_number: claimedJob.day_number,
+      review_type: reviewType,
+      title: title.trim(),
+      body,
+      plan_created_at: claimedJob.plan_created_at,
+    });
+
+    await db.completeJob(jobId, result || {
+      reviewType,
+      title: title.trim(),
+      saved: true,
+    });
+
+    res.json({
+      ok: true,
+      jobId,
+      status: 'completed',
+      skillId: claimedJob.skill_id,
+      dayNumber: claimedJob.day_number,
+    });
+  } catch (err) {
+    console.error('[review-jobs/process] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
