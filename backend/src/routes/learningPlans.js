@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const learningPlanService = require('../services/learningPlanService');
+const reviewContentService = require('../services/reviewContentService');
 const streakService = require('../services/streakService');
 const { requireAuth } = require('../middleware/auth');
 const { bulkLimiter } = require('../middleware/rateLimit');
@@ -45,8 +46,8 @@ router.get('/bulk', bulkLimiter, async (req, res) => {
 router.get('/:skillId', async (req, res) => {
   try {
     const { skillId } = req.params;
-    const plan = await learningPlanService.getPlan(skillId);
-    res.json({ skillId, plan });
+    const { plan, planReady, reviewContent } = await learningPlanService.getPlanWithReadiness(skillId);
+    res.json({ skillId, plan, planReady, reviewContent });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -89,10 +90,9 @@ router.get('/:skillId/my-progress', requireAuth, async (req, res) => {
   try {
     const { skillId } = req.params;
     const progress = await db.getPlanProgress(req.user.id, skillId);
-    if (!progress) return res.json({ enrolled: false, progress: null, plan: null, refreshAvailable: false });
-    // Serve from user_learning_plans, flag if refresh is available
-    const { plan, refreshAvailable } = await learningPlanService.getUserPlanWithRefresh(req.user.id, skillId);
-    res.json({ enrolled: true, progress, plan, refreshAvailable });
+    if (!progress) return res.json({ enrolled: false, progress: null, plan: null, refreshAvailable: false, planReady: true, reviewContent: {} });
+    const { plan, refreshAvailable, planReady, reviewContent } = await learningPlanService.getUserPlanWithRefresh(req.user.id, skillId);
+    res.json({ enrolled: true, progress, plan, refreshAvailable, planReady, reviewContent });
   } catch (err) {
     console.error('Plan progress error:', err);
     res.status(500).json({ error: 'Failed to fetch progress' });

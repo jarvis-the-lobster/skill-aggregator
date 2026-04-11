@@ -1,4 +1,5 @@
 const db = require('../models/database');
+const reviewContentService = require('./reviewContentService');
 
 const CHUNK_TARGET_SECONDS = 25 * 60;  // ~25 minutes per chunk
 const CHUNK_MAX_SECONDS = 40 * 60;     // hard max 40 minutes per chunk
@@ -190,6 +191,10 @@ class LearningPlanService {
     }
 
     await db.saveLearningPlan(skillId, plan);
+
+    const planCreatedAt = await db.getSharedPlanCreatedAt(skillId);
+    await reviewContentService.enqueueReviewJobs(skillId, planCreatedAt);
+
     return db.getLearningPlan(skillId);
   }
 
@@ -215,6 +220,13 @@ class LearningPlanService {
     const allContent = await db.getSkillContent(skillId);
     if (allContent.length === 0) return [];
     return this.generatePlan(skillId);
+  }
+
+  async getPlanWithReadiness(skillId) {
+    const plan = await this.getPlan(skillId);
+    const planReady = await reviewContentService.isPlanFullyReady(skillId);
+    const reviewContent = await reviewContentService.getReviewContentMap(skillId);
+    return { plan, planReady, reviewContent };
   }
 
   // Get or generate the shared plan, then copy it into user_learning_plans
@@ -247,20 +259,27 @@ class LearningPlanService {
       }
     }
 
-    if (userPlan.length === 0) return { plan: [], refreshAvailable: false };
+    if (userPlan.length === 0) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
 
-    // Flag refresh when the shared plan has been regenerated since the user plan was last synced
-    const sharedCreatedAt = await db.getSharedPlanCreatedAt(skillId);
-    const userMaxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
+    const planReady = await reviewContentService.isPlanFullyReady(skillId);
 
+    // Only flag refresh when the shared plan is fully ready (review content generated)
+    // and the shared plan is newer than the user's copy. This prevents the double-update
+    // problem where a user sees "Update Plan" before review content is finished.
     let refreshAvailable = false;
-    if (sharedCreatedAt && userMaxCreatedAt) {
-      const sharedDate = new Date(sharedCreatedAt.replace(' ', 'T') + 'Z');
-      const userDate = new Date(userMaxCreatedAt.replace(' ', 'T') + 'Z');
-      refreshAvailable = sharedDate > userDate;
+    if (planReady) {
+      const sharedCreatedAt = await db.getSharedPlanCreatedAt(skillId);
+      const userMaxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
+      if (sharedCreatedAt && userMaxCreatedAt) {
+        const sharedDate = new Date(sharedCreatedAt.replace(' ', 'T') + 'Z');
+        const userDate = new Date(userMaxCreatedAt.replace(' ', 'T') + 'Z');
+        refreshAvailable = sharedDate > userDate;
+      }
     }
 
-    return { plan: userPlan, refreshAvailable };
+    const reviewContent = await reviewContentService.getReviewContentMap(skillId);
+
+    return { plan: userPlan, refreshAvailable, planReady, reviewContent };
   }
 
   // Actually apply the refresh — called when user opts in.

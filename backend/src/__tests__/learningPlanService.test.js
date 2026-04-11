@@ -314,6 +314,10 @@ describe('getUserPlanWithRefresh', () => {
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
     await db.enrollPlan(USER_ID, SKILL_ID);
 
+    // Process review jobs so the plan is "ready"
+    const reviewContentService = require('../services/reviewContentService');
+    await reviewContentService.processPendingJobs();
+
     // Simulate shared plan regeneration after user plan was copied
     await new Promise(r => setTimeout(r, 50));
     await db.insert(

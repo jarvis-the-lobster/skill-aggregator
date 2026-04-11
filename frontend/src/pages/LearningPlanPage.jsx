@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Play, BookOpen, Lock, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { RatingButtons } from '../components/RatingButtons';
 import analytics from '../services/analytics';
 
 const FREE_DAYS = 7;
+const REVIEW_DAYS = new Set([7, 14, 21, 28]);
 
 // Format seconds as "M:SS" for display (e.g. "25:00")
 function formatTimestamp(totalSeconds) {
@@ -41,6 +42,9 @@ export function LearningPlanPage() {
   const [refreshAvailable, setRefreshAvailable] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
+  const [planReady, setPlanReady] = useState(true);
+  const [reviewContent, setReviewContent] = useState({});
+  const [expandedReview, setExpandedReview] = useState(null);
 
   useEffect(() => {
     // Wait for auth to resolve before loading — otherwise user is null
@@ -64,6 +68,9 @@ export function LearningPlanPage() {
       const displayPlan = (progressData?.enrolled && progressData?.plan?.length > 0)
         ? progressData.plan
         : (planData.plan || []);
+
+      setPlanReady(progressData?.planReady ?? planData.planReady ?? true);
+      setReviewContent(progressData?.reviewContent ?? planData.reviewContent ?? {});
 
       // Fetch ratings in parallel with nothing — we have the IDs now, before any setState
       const ids = displayPlan.map(e => e.content_id).filter(Boolean);
@@ -186,6 +193,16 @@ export function LearningPlanPage() {
         </p>
 
 
+        {!planReady && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex items-center gap-3">
+            <Loader className="w-5 h-5 text-amber-400 animate-spin flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-300">Your plan is being finalized</p>
+              <p className="text-xs text-amber-400/70">Weekly check-in content is still generating. Please check back within 24 hours.</p>
+            </div>
+          </div>
+        )}
+
         {refreshAvailable && enrolled && (
           <div className="mb-6 bg-teal/10 border border-teal/20 rounded-lg p-4 flex items-center justify-between">
             <div>
@@ -211,11 +228,14 @@ export function LearningPlanPage() {
             </p>
           </div>
         ) : (
+          <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {(enrolled ? plan : plan.slice(0, FREE_DAYS)).map((entry) => {
               const unlocked = entry.day_number <= FREE_DAYS || enrolled;
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
+              const isReviewDay = REVIEW_DAYS.has(entry.day_number);
+              const review = reviewContent[entry.day_number];
 
               return (
                 <div
@@ -223,6 +243,8 @@ export function LearningPlanPage() {
                   className={`relative rounded-lg border p-3 flex flex-col min-h-[8rem] ${
                     isCompleted
                       ? 'bg-green-500/10 border-green-500/30'
+                      : isReviewDay && unlocked
+                      ? 'bg-purple-500/10 border-purple-500/20 hover:border-purple-400/40 hover:shadow-sm transition-all'
                       : unlocked
                       ? 'bg-dark-card border-white/[0.08] hover:border-teal/30 hover:shadow-sm transition-all'
                       : 'bg-dark-surface/50 border-white/[0.05]'
@@ -231,10 +253,11 @@ export function LearningPlanPage() {
                   <div className="flex items-center justify-between mb-2">
                     <span
                       className={`text-xs font-semibold ${
-                        isCompleted ? 'text-sky-400' : unlocked ? 'text-sky-400' : 'text-slate-500'
+                        isCompleted ? 'text-sky-400' : isReviewDay && unlocked ? 'text-purple-400' : unlocked ? 'text-sky-400' : 'text-slate-500'
                       }`}
                     >
                       Day {entry.day_number}
+                      {isReviewDay && unlocked && <span className="ml-1 text-purple-400/70">· Check-in</span>}
                     </span>
                     {isCompleted ? (
                       <CheckCircle className="w-3 h-3 text-green-400" />
@@ -243,7 +266,45 @@ export function LearningPlanPage() {
                     ) : null}
                   </div>
 
-                  {unlocked && hasContent ? (
+                  {isReviewDay && unlocked && review ? (
+                    <div className="flex flex-col flex-grow">
+                      <div className="flex items-center space-x-1 mb-1">
+                        <ClipboardCheck className="w-3 h-3 text-purple-400 flex-shrink-0" />
+                        <span className="text-xs text-purple-400">check-in</span>
+                      </div>
+                      <button
+                        onClick={() => setExpandedReview(expandedReview === entry.day_number ? null : entry.day_number)}
+                        className="text-sm font-medium text-slate-200 hover:text-purple-300 text-left line-clamp-2 flex-grow"
+                      >
+                        {review.title || 'Weekly Check-in'}
+                      </button>
+                      {review.body?.stats && (
+                        <p className="text-xs text-purple-400/60 mt-1">
+                          {review.body.stats.videos > 0 && `${review.body.stats.videos} videos`}
+                          {review.body.stats.videos > 0 && review.body.stats.articles > 0 && ', '}
+                          {review.body.stats.articles > 0 && `${review.body.stats.articles} articles`}
+                        </p>
+                      )}
+                      {enrolled && !isCompleted && (
+                        <button
+                          onClick={() => handleCompleteDay(entry.day_number)}
+                          className="mt-2 text-xs text-green-400 hover:text-green-300 text-left"
+                        >
+                          Mark complete
+                        </button>
+                      )}
+                    </div>
+                  ) : isReviewDay && unlocked && !review && !planReady ? (
+                    <div className="flex flex-col flex-grow">
+                      <div className="flex items-center space-x-1 mb-1">
+                        <Loader className="w-3 h-3 text-purple-400/50 animate-spin flex-shrink-0" />
+                        <span className="text-xs text-purple-400/50">check-in</span>
+                      </div>
+                      <p className="text-xs text-slate-500 flex-grow flex items-center">
+                        Check-in generating...
+                      </p>
+                    </div>
+                  ) : unlocked && hasContent ? (
                     <>
                       <div className="flex items-center space-x-1 mb-1">
                         {entry.content_type === 'video' ? (
@@ -287,7 +348,7 @@ export function LearningPlanPage() {
                   ) : unlocked && !hasContent ? (
                     <div className="flex flex-col flex-grow">
                       <p className="text-xs text-slate-500 flex-grow flex items-center">
-                        📝 Review & practice day
+                        Review & practice day
                       </p>
                       {enrolled && !isCompleted && (
                         <button
@@ -308,6 +369,57 @@ export function LearningPlanPage() {
               );
             })}
           </div>
+
+          {expandedReview && reviewContent[expandedReview]?.body && (
+            <div className="mt-6 bg-purple-500/5 border border-purple-500/20 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-purple-300">
+                  {reviewContent[expandedReview].title}
+                </h3>
+                <button
+                  onClick={() => setExpandedReview(null)}
+                  className="text-xs text-slate-400 hover:text-slate-300"
+                >
+                  Close
+                </button>
+              </div>
+              {reviewContent[expandedReview].body.summary && (
+                <p className="text-sm text-slate-300 mb-4">
+                  {reviewContent[expandedReview].body.summary}
+                </p>
+              )}
+              {reviewContent[expandedReview].body.content_covered?.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">What you covered</h4>
+                  <ul className="space-y-1">
+                    {reviewContent[expandedReview].body.content_covered.map((item, i) => (
+                      <li key={i} className="text-sm text-slate-300 flex items-center gap-2">
+                        {item.type === 'video' ? (
+                          <Play className="w-3 h-3 text-teal flex-shrink-0" />
+                        ) : (
+                          <BookOpen className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                        )}
+                        <span>Day {item.day}: {item.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {reviewContent[expandedReview].body.reflection_prompts?.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">Reflect on your learning</h4>
+                  <ul className="space-y-2">
+                    {reviewContent[expandedReview].body.reflection_prompts.map((prompt, i) => (
+                      <li key={i} className="text-sm text-slate-300 pl-4 border-l-2 border-purple-500/30">
+                        {prompt}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          </>
         )}
 
         {!enrolled && plan.length > 0 && (

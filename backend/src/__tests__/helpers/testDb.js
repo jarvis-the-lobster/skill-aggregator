@@ -172,6 +172,38 @@ const TABLE_SQL = [
     FOREIGN KEY (skill_id) REFERENCES skills(id),
     UNIQUE(user_id, skill_id, day_number)
   )`,
+  `CREATE TABLE IF NOT EXISTS plan_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    skill_id TEXT NOT NULL,
+    user_id INTEGER,
+    job_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    day_number INTEGER,
+    payload TEXT,
+    result TEXT,
+    error_message TEXT,
+    attempts INTEGER DEFAULT 0,
+    max_attempts INTEGER DEFAULT 3,
+    plan_created_at TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    FOREIGN KEY (skill_id) REFERENCES skills(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS plan_review_content (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    skill_id TEXT NOT NULL,
+    user_id INTEGER,
+    day_number INTEGER NOT NULL,
+    review_type TEXT NOT NULL DEFAULT 'weekly_checkin',
+    title TEXT,
+    body TEXT,
+    plan_created_at TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (skill_id) REFERENCES skills(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`,
 ];
 
 const INDEX_SQL = [
@@ -502,6 +534,117 @@ function createTestDb() {
           }
         },
 
+        // --- Plan job queue methods ---
+
+        async createPlanJob({ skill_id, user_id = null, job_type, day_number, payload = null, plan_created_at = null }) {
+          return insert(
+            `INSERT INTO plan_jobs (skill_id, user_id, job_type, day_number, payload, plan_created_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [skill_id, user_id, job_type, day_number, payload ? JSON.stringify(payload) : null, plan_created_at]
+          );
+        },
+
+        async getPendingJobs(limit = 50) {
+          return query(
+            `SELECT * FROM plan_jobs
+             WHERE status = 'pending' AND attempts < max_attempts
+             ORDER BY created_at ASC
+             LIMIT ?`,
+            [limit]
+          );
+        },
+
+        async claimJob(jobId) {
+          const result = await insert(
+            `UPDATE plan_jobs
+             SET status = 'processing', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status = 'pending'`,
+            [jobId]
+          );
+          if (result.changes === 0) return null;
+          const rows = await query('SELECT * FROM plan_jobs WHERE id = ?', [jobId]);
+          return rows[0] || null;
+        },
+
+        async completeJob(jobId, result = null) {
+          return insert(
+            `UPDATE plan_jobs
+             SET status = 'completed', result = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [result ? JSON.stringify(result) : null, jobId]
+          );
+        },
+
+        async failJob(jobId, errorMessage) {
+          const rows = await query('SELECT attempts, max_attempts FROM plan_jobs WHERE id = ?', [jobId]);
+          const job = rows[0];
+          const newStatus = job && job.attempts >= job.max_attempts ? 'failed' : 'pending';
+          return insert(
+            `UPDATE plan_jobs
+             SET status = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [newStatus, errorMessage, jobId]
+          );
+        },
+
+        async cancelJobsForSkill(skillId, jobType = null) {
+          let sql = `UPDATE plan_jobs SET status = 'failed', error_message = 'superseded', updated_at = CURRENT_TIMESTAMP
+                     WHERE skill_id = ? AND status IN ('pending', 'processing')`;
+          const params = [skillId];
+          if (jobType) {
+            sql += ' AND job_type = ?';
+            params.push(jobType);
+          }
+          return insert(sql, params);
+        },
+
+        async hasIncompleteJobs(skillId, jobType = null) {
+          let sql = `SELECT COUNT(*) as count FROM plan_jobs
+                     WHERE skill_id = ? AND status IN ('pending', 'processing')`;
+          const params = [skillId];
+          if (jobType) {
+            sql += ' AND job_type = ?';
+            params.push(jobType);
+          }
+          const rows = await query(sql, params);
+          return (rows[0]?.count || 0) > 0;
+        },
+
+        async saveReviewContent({ skill_id, user_id = null, day_number, review_type, title, body, plan_created_at }) {
+          await insert(
+            `DELETE FROM plan_review_content WHERE skill_id = ? AND day_number = ? AND user_id IS ?`,
+            [skill_id, day_number, user_id]
+          );
+          return insert(
+            `INSERT INTO plan_review_content (skill_id, user_id, day_number, review_type, title, body, plan_created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [skill_id, user_id, day_number, review_type, title, body ? JSON.stringify(body) : null, plan_created_at]
+          );
+        },
+
+        async getReviewContent(skillId, dayNumber, userId = null) {
+          const rows = await query(
+            `SELECT * FROM plan_review_content
+             WHERE skill_id = ? AND day_number = ? AND user_id IS ?
+             ORDER BY created_at DESC LIMIT 1`,
+            [skillId, dayNumber, userId]
+          );
+          return rows[0] || null;
+        },
+
+        async getReviewContentForPlan(skillId, userId = null) {
+          return query(
+            `SELECT * FROM plan_review_content
+             WHERE skill_id = ? AND user_id IS ?
+             ORDER BY day_number ASC`,
+            [skillId, userId]
+          );
+        },
+
+        async deleteReviewContentForSkill(skillId) {
+          return insert('DELETE FROM plan_review_content WHERE skill_id = ?', [skillId]);
+        },
+
         async getMetrics() {
           const { start: pacificDayStart, end: pacificDayEnd } = getPacificDayWindow();
 
@@ -630,6 +773,7 @@ async function clearTables(db) {
     'skills', 'content', 'users', 'user_streaks', 'user_interactions',
     'user_courses', 'push_subscriptions', 'subscribers', 'learning_plans',
     'user_plan_progress', 'scrape_log', 'user_onboarding', 'user_learning_plans',
+    'plan_jobs', 'plan_review_content',
   ];
   for (const t of tables) {
     await db.insert(`DELETE FROM ${t}`);

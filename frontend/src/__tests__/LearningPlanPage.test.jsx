@@ -96,12 +96,14 @@ describe('LearningPlanPage', () => {
 
   describe('enrolled user sees personal plan', () => {
     it('displays personal plan content instead of shared plan', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -112,12 +114,14 @@ describe('LearningPlanPage', () => {
     });
 
     it('shows completed days from progress', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -134,12 +138,14 @@ describe('LearningPlanPage', () => {
 
   describe('non-enrolled user sees shared plan', () => {
     it('displays shared plan when not enrolled', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: false,
         progress: null,
         plan: null,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -152,12 +158,14 @@ describe('LearningPlanPage', () => {
 
   describe('refresh banner', () => {
     it('shows refresh banner when new content is available', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: true,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -167,12 +175,14 @@ describe('LearningPlanPage', () => {
     });
 
     it('does not show refresh banner when no new content', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -182,12 +192,14 @@ describe('LearningPlanPage', () => {
     });
 
     it('clicking Update Plan refreshes with preserved completed content', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: true,
+        planReady: true,
+        reviewContent: {},
       });
       mockRefreshPlan.mockResolvedValue({
         refreshed: true,

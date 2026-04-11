@@ -182,6 +182,25 @@ router.post('/test-push', async (req, res) => {
   }
 });
 
+// POST /api/admin/process-review-jobs — process pending review content generation jobs (Bearer CRON_SECRET)
+router.post('/process-review-jobs', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers['authorization'];
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const reviewContentService = require('../services/reviewContentService');
+    const results = await reviewContentService.processPendingJobs();
+    console.log(`[process-review-jobs] Processed: ${results.processed}, succeeded: ${results.succeeded}, failed: ${results.failed}`);
+    res.json({ ok: true, ...results });
+  } catch (err) {
+    console.error('[process-review-jobs] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Skill Management ──────────────────────────────────────────────────────
 
 // Helper: verify CRON_SECRET
@@ -208,6 +227,8 @@ router.delete('/skills/:id', async (req, res) => {
     await db.insert('DELETE FROM user_courses WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM user_plan_progress WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM scrape_log WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM plan_jobs WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM plan_review_content WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM skills WHERE id = ?', [id]);
 
     res.json({ ok: true, deleted: id });
