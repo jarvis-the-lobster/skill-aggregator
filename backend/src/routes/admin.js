@@ -191,10 +191,16 @@ router.post('/process-review-jobs', async (req, res) => {
   }
 
   try {
-    const reviewContentService = require('../services/reviewContentService');
-    const results = await reviewContentService.processPendingJobs();
-    console.log(`[process-review-jobs] Processed: ${results.processed}, succeeded: ${results.succeeded}, failed: ${results.failed}`);
-    res.json({ ok: true, ...results });
+    const pendingJobs = await db.getPendingJobs(100);
+    const reviewJobs = pendingJobs.filter(job => job.job_type === 'review_content');
+    res.json({
+      ok: true,
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      pending: reviewJobs.length,
+      message: 'Review jobs remain pending until an external generator writes content and marks them complete.',
+    });
   } catch (err) {
     console.error('[process-review-jobs] error:', err.message);
     res.status(500).json({ error: err.message });

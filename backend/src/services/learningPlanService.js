@@ -1,5 +1,4 @@
 const db = require('../models/database');
-const reviewContentService = require('./reviewContentService');
 
 const CHUNK_TARGET_SECONDS = 25 * 60;  // ~25 minutes per chunk
 const CHUNK_MAX_SECONDS = 40 * 60;     // hard max 40 minutes per chunk
@@ -193,7 +192,15 @@ class LearningPlanService {
     await db.saveLearningPlan(skillId, plan);
 
     const planCreatedAt = await db.getSharedPlanCreatedAt(skillId);
-    await reviewContentService.enqueueReviewJobs(skillId, planCreatedAt);
+    await db.cancelJobsForSkill(skillId, 'review_content');
+    for (const dayNumber of [7, 14, 21, 28]) {
+      await db.createPlanJob({
+        skill_id: skillId,
+        job_type: 'review_content',
+        day_number: dayNumber,
+        plan_created_at: planCreatedAt,
+      });
+    }
 
     return db.getLearningPlan(skillId);
   }
@@ -224,8 +231,21 @@ class LearningPlanService {
 
   async getPlanWithReadiness(skillId) {
     const plan = await this.getPlan(skillId);
-    const planReady = await reviewContentService.isPlanFullyReady(skillId);
-    const reviewContent = await reviewContentService.getReviewContentMap(skillId);
+    const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
+    const reviewContentRows = await db.getReviewContentForPlan(skillId, null);
+    const reviewContent = {};
+    for (const row of reviewContentRows) {
+      let body = row.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch { /* leave as-is */ }
+      }
+      reviewContent[row.day_number] = {
+        title: row.title,
+        body,
+        review_type: row.review_type,
+        day_number: row.day_number,
+      };
+    }
     return { plan, planReady, reviewContent };
   }
 
@@ -261,7 +281,7 @@ class LearningPlanService {
 
     if (userPlan.length === 0) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
 
-    const planReady = await reviewContentService.isPlanFullyReady(skillId);
+    const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
 
     // Only flag refresh when the shared plan is fully ready (review content generated)
     // and the shared plan is newer than the user's copy. This prevents the double-update
@@ -277,7 +297,20 @@ class LearningPlanService {
       }
     }
 
-    const reviewContent = await reviewContentService.getReviewContentMap(skillId);
+    const reviewContentRows = await db.getReviewContentForPlan(skillId, null);
+    const reviewContent = {};
+    for (const row of reviewContentRows) {
+      let body = row.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch { /* leave as-is */ }
+      }
+      reviewContent[row.day_number] = {
+        title: row.title,
+        body,
+        review_type: row.review_type,
+        day_number: row.day_number,
+      };
+    }
 
     return { plan: userPlan, refreshAvailable, planReady, reviewContent };
   }
