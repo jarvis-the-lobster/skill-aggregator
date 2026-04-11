@@ -113,7 +113,8 @@ describe('getPlan', () => {
 
     expect(plan).toHaveLength(30);
     expect(plan.map(d => d.day_number)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
-    expect(plan.every(d => d.content_id)).toBe(true);
+    expect(plan.filter(d => ![7, 14, 21, 28].includes(d.day_number)).every(d => d.content_id)).toBe(true);
+    expect(plan.filter(d => [7, 14, 21, 28].includes(d.day_number)).every(d => d.content_id === null)).toBe(true);
   });
 
   test('regenerates an incomplete shared plan with null content rows', async () => {
@@ -130,9 +131,9 @@ describe('getPlan', () => {
     const plan = await learningPlanService.getPlan(SKILL_ID);
 
     expect(plan).toHaveLength(30);
-    expect(plan.every(d => d.content_id)).toBe(true);
-    const uniqueIds = new Set(plan.map(d => d.content_id));
-    expect(uniqueIds.size).toBe(30);
+    expect(plan.filter(d => ![7, 14, 21, 28].includes(d.day_number)).every(d => d.content_id)).toBe(true);
+    const uniqueIds = new Set(plan.map(d => d.content_id).filter(Boolean));
+    expect(uniqueIds.size).toBe(26);
   });
 });
 
@@ -262,7 +263,7 @@ describe('getUserPlanWithRefresh', () => {
     const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
 
     expect(result.plan).toHaveLength(30);
-    expect(result.plan.every(day => day.content_id)).toBe(true);
+    expect(result.plan.some(day => day.day_number === 7 && day.content_type === 'review' && day.content_id === null)).toBe(true);
     const persistedPlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
     expect(persistedPlan).toHaveLength(30);
   });
@@ -298,9 +299,19 @@ describe('copyPlanForUser', () => {
 });
 
 describe('getUserPlanWithRefresh', () => {
+  test('returns empty plan when user is not enrolled even if shared plan exists', async () => {
+    await seedSkillWithPlan();
+
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+
+    expect(result.plan).toEqual([]);
+    expect(result.refreshAvailable).toBe(false);
+  });
+
   test('returns plan without refresh flag when shared plan has not been regenerated', async () => {
     await seedSkillWithPlan();
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
+    await db.enrollPlan(USER_ID, SKILL_ID);
 
     const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
 
@@ -324,16 +335,54 @@ describe('getUserPlanWithRefresh', () => {
     const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
 
     expect(result.plan).toHaveLength(30);
-    expect(result.refreshAvailable).toBe(true);
+    expect(result.refreshAvailable).toBe(false);
+    expect(result.planReady).toBe(false);
   });
 
-  test('returns empty plan when no user plan exists', async () => {
+  test('backfills pending review jobs for legacy plans without review job rows', async () => {
     await seedSkillWithPlan();
+    await db.insert("DELETE FROM plan_jobs WHERE skill_id = ?", [SKILL_ID]);
+
+    const result = await learningPlanService.getPlanWithReadiness(SKILL_ID);
+    const reviewJobs = await db.getPlanJobs(SKILL_ID, 'review_content');
+
+    expect(result.planReady).toBe(false);
+    expect(reviewJobs.map((job) => job.day_number)).toEqual([7, 14, 21, 28]);
+    expect(reviewJobs.every((job) => job.status === 'pending')).toBe(true);
+  });
+
+  test('self-heals only for enrolled users with zero personal plan rows', async () => {
+    await seedSkillWithPlan();
+    await db.enrollPlan(USER_ID, SKILL_ID);
 
     const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+    const persistedPlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
 
-    expect(result.plan).toEqual([]);
-    expect(result.refreshAvailable).toBe(false);
+    expect(result.plan).toHaveLength(30);
+    expect(persistedPlan).toHaveLength(30);
+  });
+
+  test('does not overwrite an existing personal plan when the shared plan regenerates', async () => {
+    await seedSkillWithPlan();
+    await db.enrollPlan(USER_ID, SKILL_ID);
+
+    const originalPersonalPlan = Array.from({ length: 30 }, (_, i) => ({
+      day_number: i + 1,
+      content_id: i + 1 === 7 || i + 1 === 14 || i + 1 === 21 || i + 1 === 28 ? null : `personal_${i + 1}`,
+      content_type: i + 1 === 7 || i + 1 === 14 || i + 1 === 21 || i + 1 === 28 ? 'review' : (i < 7 ? 'video' : 'article'),
+      reason: 'personalized',
+    }));
+    await db.saveUserLearningPlan(USER_ID, SKILL_ID, originalPersonalPlan);
+
+    await db.insert("DELETE FROM learning_plans WHERE skill_id = ?", [SKILL_ID]);
+    await learningPlanService.getPlanWithReadiness(SKILL_ID);
+
+    const result = await learningPlanService.getUserPlanWithRefresh(USER_ID, SKILL_ID);
+    const persistedPlan = await db.getUserLearningPlan(USER_ID, SKILL_ID);
+
+    expect(result.plan.find((day) => day.day_number === 1).content_id).toBe('personal_1');
+    expect(persistedPlan.find((day) => day.day_number === 1).content_id).toBe('personal_1');
+    expect(persistedPlan.filter((day) => day.content_id && String(day.content_id).startsWith('personal_')).length).toBe(26);
   });
 });
 
@@ -456,18 +505,23 @@ describe('refreshUserPlan', () => {
     expect(dayNumbers).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
   });
 
-  test('days 1-7 have content after merge', async () => {
+  test('days 1-6 have content after merge and day 7 is a review placeholder', async () => {
     await seedSkillWithPlan();
     await learningPlanService.copyPlanForUser(USER_ID, SKILL_ID);
     await db.enrollPlan(USER_ID, SKILL_ID);
 
     const refreshed = await learningPlanService.refreshUserPlan(USER_ID, SKILL_ID);
 
-    for (let day = 1; day <= 7; day++) {
+    for (let day = 1; day <= 6; day++) {
       const entry = refreshed.find(d => d.day_number === day);
       expect(entry).toBeDefined();
       expect(entry.content_id).toBeTruthy();
     }
+
+    const reviewDay = refreshed.find(d => d.day_number === 7);
+    expect(reviewDay).toBeDefined();
+    expect(reviewDay.content_id).toBeNull();
+    expect(reviewDay.content_type).toBe('review');
   });
 
   test('does not reinsert chunks of a video already completed in full', async () => {

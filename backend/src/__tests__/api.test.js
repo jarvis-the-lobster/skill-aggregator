@@ -110,6 +110,113 @@ describe('GET /api/skills/search', () => {
   });
 });
 
+describe('GET/POST /api/admin/review-jobs', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  test('lists pending review jobs when authorized with CRON_SECRET', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+      payload: { focus: 'recap' },
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+    await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'different_job',
+      day_number: 8,
+    });
+
+    const res = await request(app)
+      .get('/api/admin/review-jobs')
+      .set('Authorization', 'Bearer test-cron-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.count).toBe(1);
+    expect(res.body.jobs[0]).toMatchObject({
+      skillId: 'python',
+      dayNumber: 7,
+      status: 'pending',
+      payload: { focus: 'recap' },
+    });
+  });
+
+  test('processes a review job, saves content, and marks it complete', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 14,
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({
+        title: 'Week 2 check-in',
+        body: { summary: 'You covered loops and functions.' },
+        reviewType: 'weekly_checkin',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      jobId: insertResult.id,
+      status: 'completed',
+      skillId: 'python',
+      dayNumber: 14,
+    });
+
+    const storedReview = await db.getReviewContent('python', 14, null);
+    expect(storedReview).toBeTruthy();
+    expect(storedReview.title).toBe('Week 2 check-in');
+    expect(JSON.parse(storedReview.body)).toEqual({ summary: 'You covered loops and functions.' });
+
+    const [jobRow] = await db.query('SELECT status, completed_at FROM plan_jobs WHERE id = ?', [insertResult.id]);
+    expect(jobRow.status).toBe('completed');
+    expect(jobRow.completed_at).toBeTruthy();
+  });
+
+  test('rejects processing when required content fields are missing', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 21,
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ body: { summary: 'Missing title should fail.' } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/title is required/i);
+
+    const [jobRow] = await db.query('SELECT status, error_message FROM plan_jobs WHERE id = ?', [insertResult.id]);
+    expect(jobRow.status).toBe('pending');
+    expect(jobRow.error_message).toMatch(/title is required/i);
+  });
+});
+
 describe('POST /api/admin/skills/:id/category', () => {
   const originalCronSecret = process.env.CRON_SECRET;
 

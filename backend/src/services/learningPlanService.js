@@ -6,6 +6,7 @@ const CHUNK_THRESHOLD_SECONDS = 40 * 60; // only chunk videos > 40 min
 const MAX_CHUNKS = 7;                   // max chunks per video
 const EARLY_DAYS_MAX = 7;              // only chunk in days 1-7
 const SHARED_PLAN_STALE_DAYS = 7;      // regenerate shared plans older than this
+const REVIEW_DAY_NUMBERS = new Set([7, 14, 21, 28]);
 
 // Parse "M:SS" or "H:MM:SS" duration string to total seconds
 function parseDuration(duration) {
@@ -96,7 +97,36 @@ function buildEntry(day, item, reason) {
   };
 }
 
+function buildReviewPlaceholder(day) {
+  return {
+    day_number: day,
+    content_id: null,
+    content_type: 'review',
+    reason: 'Weekly check-in and review day',
+  };
+}
+
 class LearningPlanService {
+  async ensureReviewJobs(skillId) {
+    const existingJobs = await db.getPlanJobs(skillId, 'review_content');
+    const existingByDay = new Map(existingJobs.map((job) => [job.day_number, job]));
+    const planCreatedAt = await db.getSharedPlanCreatedAt(skillId);
+
+    for (const dayNumber of REVIEW_DAY_NUMBERS) {
+      const job = existingByDay.get(dayNumber);
+      const hasReviewContent = await db.getReviewContent(skillId, dayNumber, null);
+
+      if (!job && !hasReviewContent) {
+        await db.createPlanJob({
+          skill_id: skillId,
+          job_type: 'review_content',
+          day_number: dayNumber,
+          plan_created_at: planCreatedAt,
+        });
+      }
+    }
+  }
+
   pickNext(candidates, usedIds) {
     const item = candidates.find(candidate => candidate && !usedIds.has(candidate.id)) || null;
     if (item) usedIds.add(item.id);
@@ -134,6 +164,10 @@ class LearningPlanService {
 
     // Days 1–7: prefer sane-length videos or properly chunkable videos, avoid giant unchunked videos
     for (let day = 1; day <= 7; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const remainingEarlyDays = 8 - day;
       const candidateVideo = videos.find((video) => {
         if (usedIds.has(video.id)) return false;
@@ -165,18 +199,30 @@ class LearningPlanService {
 
     // Days 8–14: prefer articles, fallback to best remaining content
     for (let day = 8; day <= 14; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const item = this.pickNext(articles, usedIds) || this.pickNext(allRanked, usedIds);
       plan.push(buildEntry(day, item, 'Key content to reinforce week 1 concepts'));
     }
 
     // Days 15–21: prefer remaining videos, fallback to best remaining content
     for (let day = 15; day <= 21; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const item = this.pickNext(videos, usedIds) || this.pickNext(allRanked, usedIds);
       plan.push(buildEntry(day, item, 'Intermediate content to deepen understanding'));
     }
 
     // Days 22–28: prefer remaining articles, fallback to videos, then anything left
     for (let day = 22; day <= 28; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const item = this.pickNext(articles, usedIds)
         || this.pickNext(videos, usedIds)
         || this.pickNext(allRanked, usedIds);
@@ -190,6 +236,18 @@ class LearningPlanService {
     }
 
     await db.saveLearningPlan(skillId, plan);
+
+    const planCreatedAt = await db.getSharedPlanCreatedAt(skillId);
+    await db.cancelJobsForSkill(skillId, 'review_content');
+    for (const dayNumber of [7, 14, 21, 28]) {
+      await db.createPlanJob({
+        skill_id: skillId,
+        job_type: 'review_content',
+        day_number: dayNumber,
+        plan_created_at: planCreatedAt,
+      });
+    }
+
     return db.getLearningPlan(skillId);
   }
 
@@ -217,6 +275,27 @@ class LearningPlanService {
     return this.generatePlan(skillId);
   }
 
+  async getPlanWithReadiness(skillId) {
+    const plan = await this.getPlan(skillId);
+    await this.ensureReviewJobs(skillId);
+    const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
+    const reviewContentRows = await db.getReviewContentForPlan(skillId, null);
+    const reviewContent = {};
+    for (const row of reviewContentRows) {
+      let body = row.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch { /* leave as-is */ }
+      }
+      reviewContent[row.day_number] = {
+        title: row.title,
+        body,
+        review_type: row.review_type,
+        day_number: row.day_number,
+      };
+    }
+    return { plan, planReady, reviewContent };
+  }
+
   // Get or generate the shared plan, then copy it into user_learning_plans
   async copyPlanForUser(userId, skillId) {
     // Ensure shared plan exists
@@ -237,30 +316,51 @@ class LearningPlanService {
 
   // Get user's personal plan, flagging if a refresh is available
   async getUserPlanWithRefresh(userId, skillId) {
+    const progress = await db.getPlanProgress(userId, skillId);
+    if (!progress) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
+
     let userPlan = await db.getUserLearningPlan(userId, skillId);
 
-    // Self-heal inconsistent states where enrollment/progress exists but the copied user plan rows are missing.
+    // Self-heal only when the enrolled user has no personal plan rows at all.
     if (userPlan.length === 0) {
-      const progress = await db.getPlanProgress(userId, skillId);
-      if (progress) {
-        userPlan = await this.copyPlanForUser(userId, skillId);
+      userPlan = await this.copyPlanForUser(userId, skillId);
+    }
+
+    if (userPlan.length === 0) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
+
+    await this.ensureReviewJobs(skillId);
+    const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
+
+    // Only flag refresh when the shared plan is fully ready (review content generated)
+    // and the shared plan is newer than the user's copy. This prevents the double-update
+    // problem where a user sees "Update Plan" before review content is finished.
+    let refreshAvailable = false;
+    if (planReady) {
+      const sharedCreatedAt = await db.getSharedPlanCreatedAt(skillId);
+      const userMaxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
+      if (sharedCreatedAt && userMaxCreatedAt) {
+        const sharedDate = new Date(sharedCreatedAt.replace(' ', 'T') + 'Z');
+        const userDate = new Date(userMaxCreatedAt.replace(' ', 'T') + 'Z');
+        refreshAvailable = sharedDate > userDate;
       }
     }
 
-    if (userPlan.length === 0) return { plan: [], refreshAvailable: false };
-
-    // Flag refresh when the shared plan has been regenerated since the user plan was last synced
-    const sharedCreatedAt = await db.getSharedPlanCreatedAt(skillId);
-    const userMaxCreatedAt = await db.getUserPlanMaxCreatedAt(userId, skillId);
-
-    let refreshAvailable = false;
-    if (sharedCreatedAt && userMaxCreatedAt) {
-      const sharedDate = new Date(sharedCreatedAt.replace(' ', 'T') + 'Z');
-      const userDate = new Date(userMaxCreatedAt.replace(' ', 'T') + 'Z');
-      refreshAvailable = sharedDate > userDate;
+    const reviewContentRows = await db.getReviewContentForPlan(skillId, null);
+    const reviewContent = {};
+    for (const row of reviewContentRows) {
+      let body = row.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch { /* leave as-is */ }
+      }
+      reviewContent[row.day_number] = {
+        title: row.title,
+        body,
+        review_type: row.review_type,
+        day_number: row.day_number,
+      };
     }
 
-    return { plan: userPlan, refreshAvailable };
+    return { plan: userPlan, refreshAvailable, planReady, reviewContent };
   }
 
   // Actually apply the refresh — called when user opts in.
@@ -392,6 +492,8 @@ class LearningPlanService {
             timestamp_end_seconds: userDay.timestamp_end_seconds,
           };
           usedContentIds.add(userDay.content_id);
+        } else if (REVIEW_DAY_NUMBERS.has(i + 1)) {
+          merged[i] = buildReviewPlaceholder(i + 1);
         } else {
           merged[i] = { day_number: i + 1, content_id: null, content_type: null, reason: null };
         }

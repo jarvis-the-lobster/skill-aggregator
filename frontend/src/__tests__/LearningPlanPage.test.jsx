@@ -96,12 +96,14 @@ describe('LearningPlanPage', () => {
 
   describe('enrolled user sees personal plan', () => {
     it('displays personal plan content instead of shared plan', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -112,34 +114,89 @@ describe('LearningPlanPage', () => {
     });
 
     it('shows completed days from progress', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
 
       await screen.findByText('My Resource 1');
 
-      // Completed days should not show "Mark complete" button
-      // Day 3 (incomplete) should show it
+      // Completed days should not show "Mark complete" button.
+      // In this fixture, day 7 still has personal content so it remains completable.
       const markCompleteButtons = screen.getAllByText('Mark complete');
-      // 30 days - 3 completed = 27 mark complete buttons
       expect(markCompleteButtons).toHaveLength(27);
+    });
+
+    it('does not fall back to shared plan when enrolled response returns an empty personal plan', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: false, reviewContent: { 7: { title: 'Shared review', body: { summary: 'shared' } } } });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[]' },
+        plan: [],
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      await waitFor(() => {
+        expect(mockGetPlanProgress).toHaveBeenCalled();
+      });
+
+      expect(screen.queryByText('Shared Resource 1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Generating review content. Check back within 24 hours.')).not.toBeInTheDocument();
+    });
+
+    it('renders real personal-plan content on day 7 instead of forcing a review card', async () => {
+      const personalPlan = PERSONAL_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: 'yt_J2j1yk-34OY',
+              content_type: 'video',
+              title: 'Complete React Native Tutorial #1 - Introduction & Setup (Expo)',
+              url: 'https://www.youtube.com/watch?v=J2j1yk-34OY',
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: false, reviewContent: {} });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[4,10,9]' },
+        plan: personalPlan,
+        refreshAvailable: false,
+        planReady: false,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      expect(await screen.findByText('Complete React Native Tutorial #1 - Introduction & Setup (Expo)')).toBeInTheDocument();
+      expect(screen.queryByText('Generating review content. Check back within 24 hours.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Your plan is being finalized')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Day 7.*Check-in/)).not.toBeInTheDocument();
     });
   });
 
   describe('non-enrolled user sees shared plan', () => {
     it('displays shared plan when not enrolled', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: false,
         progress: null,
         plan: null,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -152,12 +209,14 @@ describe('LearningPlanPage', () => {
 
   describe('refresh banner', () => {
     it('shows refresh banner when new content is available', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: true,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -167,12 +226,14 @@ describe('LearningPlanPage', () => {
     });
 
     it('does not show refresh banner when no new content', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
       });
 
       renderPlanPage();
@@ -182,12 +243,14 @@ describe('LearningPlanPage', () => {
     });
 
     it('clicking Update Plan refreshes with preserved completed content', async () => {
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN });
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[1, 2, 8]' },
         plan: PERSONAL_PLAN,
         refreshAvailable: true,
+        planReady: true,
+        reviewContent: {},
       });
       mockRefreshPlan.mockResolvedValue({
         refreshed: true,
@@ -214,6 +277,35 @@ describe('LearningPlanPage', () => {
 
       // Banner should be gone
       expect(screen.queryByText('New resources available!')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('review day placeholders', () => {
+    it('shows review generation copy instead of stale content on pending review days', async () => {
+      const sharedPlanWithReviewPlaceholder = SHARED_PLAN.map((day) =>
+        day.day_number === 7
+          ? { ...day, content_id: null, content_type: 'review', title: null, url: null }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: sharedPlanWithReviewPlaceholder,
+        planReady: false,
+        reviewContent: {},
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: false,
+        progress: null,
+        plan: null,
+        refreshAvailable: false,
+        planReady: false,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      expect(await screen.findByText('Generating review content. Check back within 24 hours.')).toBeInTheDocument();
+      expect(screen.queryByText('Shared Resource 7')).not.toBeInTheDocument();
     });
   });
 
