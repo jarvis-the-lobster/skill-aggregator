@@ -6,6 +6,7 @@ const CHUNK_THRESHOLD_SECONDS = 40 * 60; // only chunk videos > 40 min
 const MAX_CHUNKS = 7;                   // max chunks per video
 const EARLY_DAYS_MAX = 7;              // only chunk in days 1-7
 const SHARED_PLAN_STALE_DAYS = 7;      // regenerate shared plans older than this
+const REVIEW_DAY_NUMBERS = new Set([7, 14, 21, 28]);
 
 // Parse "M:SS" or "H:MM:SS" duration string to total seconds
 function parseDuration(duration) {
@@ -96,7 +97,36 @@ function buildEntry(day, item, reason) {
   };
 }
 
+function buildReviewPlaceholder(day) {
+  return {
+    day_number: day,
+    content_id: null,
+    content_type: 'review',
+    reason: 'Weekly check-in and review day',
+  };
+}
+
 class LearningPlanService {
+  async ensureReviewJobs(skillId) {
+    const existingJobs = await db.getPlanJobs(skillId, 'review_content');
+    const existingByDay = new Map(existingJobs.map((job) => [job.day_number, job]));
+    const planCreatedAt = await db.getSharedPlanCreatedAt(skillId);
+
+    for (const dayNumber of REVIEW_DAY_NUMBERS) {
+      const job = existingByDay.get(dayNumber);
+      const hasReviewContent = await db.getReviewContent(skillId, dayNumber, null);
+
+      if (!job && !hasReviewContent) {
+        await db.createPlanJob({
+          skill_id: skillId,
+          job_type: 'review_content',
+          day_number: dayNumber,
+          plan_created_at: planCreatedAt,
+        });
+      }
+    }
+  }
+
   pickNext(candidates, usedIds) {
     const item = candidates.find(candidate => candidate && !usedIds.has(candidate.id)) || null;
     if (item) usedIds.add(item.id);
@@ -134,6 +164,10 @@ class LearningPlanService {
 
     // Days 1–7: prefer sane-length videos or properly chunkable videos, avoid giant unchunked videos
     for (let day = 1; day <= 7; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const remainingEarlyDays = 8 - day;
       const candidateVideo = videos.find((video) => {
         if (usedIds.has(video.id)) return false;
@@ -165,18 +199,30 @@ class LearningPlanService {
 
     // Days 8–14: prefer articles, fallback to best remaining content
     for (let day = 8; day <= 14; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const item = this.pickNext(articles, usedIds) || this.pickNext(allRanked, usedIds);
       plan.push(buildEntry(day, item, 'Key content to reinforce week 1 concepts'));
     }
 
     // Days 15–21: prefer remaining videos, fallback to best remaining content
     for (let day = 15; day <= 21; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const item = this.pickNext(videos, usedIds) || this.pickNext(allRanked, usedIds);
       plan.push(buildEntry(day, item, 'Intermediate content to deepen understanding'));
     }
 
     // Days 22–28: prefer remaining articles, fallback to videos, then anything left
     for (let day = 22; day <= 28; day++) {
+      if (REVIEW_DAY_NUMBERS.has(day)) {
+        plan.push(buildReviewPlaceholder(day));
+        continue;
+      }
       const item = this.pickNext(articles, usedIds)
         || this.pickNext(videos, usedIds)
         || this.pickNext(allRanked, usedIds);
@@ -231,6 +277,7 @@ class LearningPlanService {
 
   async getPlanWithReadiness(skillId) {
     const plan = await this.getPlan(skillId);
+    await this.ensureReviewJobs(skillId);
     const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
     const reviewContentRows = await db.getReviewContentForPlan(skillId, null);
     const reviewContent = {};
@@ -281,6 +328,23 @@ class LearningPlanService {
 
     if (userPlan.length === 0) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
 
+    userPlan = userPlan.map((day) => (
+      REVIEW_DAY_NUMBERS.has(day.day_number)
+        ? {
+            ...day,
+            content_id: null,
+            content_type: 'review',
+            title: null,
+            url: null,
+            thumbnail: null,
+            duration: null,
+            author: null,
+            source: null,
+          }
+        : day
+    ));
+
+    await this.ensureReviewJobs(skillId);
     const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
 
     // Only flag refresh when the shared plan is fully ready (review content generated)
@@ -444,6 +508,8 @@ class LearningPlanService {
             timestamp_end_seconds: userDay.timestamp_end_seconds,
           };
           usedContentIds.add(userDay.content_id);
+        } else if (REVIEW_DAY_NUMBERS.has(i + 1)) {
+          merged[i] = buildReviewPlaceholder(i + 1);
         } else {
           merged[i] = { day_number: i + 1, content_id: null, content_type: null, reason: null };
         }

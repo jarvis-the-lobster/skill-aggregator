@@ -300,8 +300,18 @@ export function LearningPlanPage() {
                         <Loader className="w-3 h-3 text-purple-400/50 animate-spin flex-shrink-0" />
                         <span className="text-xs text-purple-400/50">check-in</span>
                       </div>
-                      <p className="text-xs text-slate-500 flex-grow flex items-center">
-                        Check-in generating...
+                      <p className="text-xs text-slate-500 flex-grow">
+                        Generating review content. Check back within 24 hours.
+                      </p>
+                    </div>
+                  ) : isReviewDay && unlocked && !review ? (
+                    <div className="flex flex-col flex-grow">
+                      <div className="flex items-center space-x-1 mb-1">
+                        <ClipboardCheck className="w-3 h-3 text-purple-400/50 flex-shrink-0" />
+                        <span className="text-xs text-purple-400/50">check-in</span>
+                      </div>
+                      <p className="text-xs text-slate-500 flex-grow">
+                        Review content will appear here once it&apos;s ready.
                       </p>
                     </div>
                   ) : unlocked && hasContent ? (

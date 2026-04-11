@@ -610,6 +610,17 @@ function createTestDb() {
           return (rows[0]?.count || 0) > 0;
         },
 
+        async getPlanJobs(skillId, jobType = null) {
+          let sql = `SELECT * FROM plan_jobs WHERE skill_id = ?`;
+          const params = [skillId];
+          if (jobType) {
+            sql += ' AND job_type = ?';
+            params.push(jobType);
+          }
+          sql += ' ORDER BY day_number ASC, id ASC';
+          return query(sql, params);
+        },
+
         async saveReviewContent({ skill_id, user_id = null, day_number, review_type, title, body, plan_created_at }) {
           await insert(
             `DELETE FROM plan_review_content WHERE skill_id = ? AND day_number = ? AND user_id IS ?`,

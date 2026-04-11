@@ -128,11 +128,10 @@ describe('LearningPlanPage', () => {
 
       await screen.findByText('My Resource 1');
 
-      // Completed days should not show "Mark complete" button
-      // Day 3 (incomplete) should show it
+      // Completed days should not show "Mark complete" button.
+      // Review placeholder days (7, 14, 21, 28) also do not show it.
       const markCompleteButtons = screen.getAllByText('Mark complete');
-      // 30 days - 3 completed = 27 mark complete buttons
-      expect(markCompleteButtons).toHaveLength(27);
+      expect(markCompleteButtons).toHaveLength(23);
     });
   });
 
@@ -226,6 +225,35 @@ describe('LearningPlanPage', () => {
 
       // Banner should be gone
       expect(screen.queryByText('New resources available!')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('review day placeholders', () => {
+    it('shows review generation copy instead of stale content on pending review days', async () => {
+      const sharedPlanWithReviewPlaceholder = SHARED_PLAN.map((day) =>
+        day.day_number === 7
+          ? { ...day, content_id: null, content_type: 'review', title: null, url: null }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: sharedPlanWithReviewPlaceholder,
+        planReady: false,
+        reviewContent: {},
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: false,
+        progress: null,
+        plan: null,
+        refreshAvailable: false,
+        planReady: false,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      expect(await screen.findByText('Generating review content. Check back within 24 hours.')).toBeInTheDocument();
+      expect(screen.queryByText('Shared Resource 7')).not.toBeInTheDocument();
     });
   });
 

@@ -951,6 +951,17 @@ class Database {
     return (rows[0]?.count || 0) > 0;
   }
 
+  async getPlanJobs(skillId, jobType = null) {
+    let sql = `SELECT * FROM plan_jobs WHERE skill_id = ?`;
+    const params = [skillId];
+    if (jobType) {
+      sql += ' AND job_type = ?';
+      params.push(jobType);
+    }
+    sql += ' ORDER BY day_number ASC, id ASC';
+    return this.query(sql, params);
+  }
+
   // --- Plan review content methods ---
 
   async saveReviewContent({ skill_id, user_id = null, day_number, review_type, title, body, plan_created_at }) {
