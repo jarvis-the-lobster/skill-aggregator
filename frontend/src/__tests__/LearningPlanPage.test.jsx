@@ -168,14 +168,18 @@ describe('LearningPlanPage', () => {
           : day
       );
 
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: false, reviewContent: {} });
+      mockGetLearningPlan.mockResolvedValue({
+        plan: SHARED_PLAN,
+        planReady: false,
+        reviewContent: { 7: { title: 'Shared review that should be ignored', body: { summary: 'shared' } } },
+      });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[4,10,9]' },
         plan: personalPlan,
         refreshAvailable: false,
         planReady: false,
-        reviewContent: {},
+        reviewContent: { 7: { title: 'Shared review that should be ignored', body: { summary: 'shared' } } },
       });
 
       renderPlanPage();
@@ -183,6 +187,7 @@ describe('LearningPlanPage', () => {
       expect(await screen.findByText('Complete React Native Tutorial #1 - Introduction & Setup (Expo)')).toBeInTheDocument();
       expect(screen.queryByText('Generating review content. Check back within 24 hours.')).not.toBeInTheDocument();
       expect(screen.queryByText('Your plan is being finalized')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shared review that should be ignored')).not.toBeInTheDocument();
       expect(screen.queryByText(/Day 7.*Check-in/)).not.toBeInTheDocument();
     });
   });
@@ -283,8 +288,17 @@ describe('LearningPlanPage', () => {
   describe('review day placeholders', () => {
     it('shows review generation copy instead of stale content on pending review days', async () => {
       const sharedPlanWithReviewPlaceholder = SHARED_PLAN.map((day) =>
-        day.day_number === 7
-          ? { ...day, content_id: null, content_type: 'review', title: null, url: null }
+        [7, 14, 21, 28].includes(day.day_number)
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              title: null,
+              url: null,
+              review_status: 'pending',
+              review_title: null,
+              review_body: null,
+            }
           : day
       );
 
@@ -304,7 +318,8 @@ describe('LearningPlanPage', () => {
 
       renderPlanPage();
 
-      expect(await screen.findByText('Generating review content. Check back within 24 hours.')).toBeInTheDocument();
+      expect(await screen.findByText('Your plan is being finalized')).toBeInTheDocument();
+      expect(screen.getByText('Weekly check-in content is still generating. Please check back within 24 hours.')).toBeInTheDocument();
       expect(screen.queryByText('Shared Resource 7')).not.toBeInTheDocument();
     });
   });

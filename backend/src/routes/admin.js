@@ -259,9 +259,8 @@ router.post('/review-jobs/:id/process', async (req, res) => {
       return res.status(400).json({ error: 'body is required' });
     }
 
-    await db.saveReviewContent({
+    await db.saveSharedReviewContent({
       skill_id: claimedJob.skill_id,
-      user_id: claimedJob.user_id,
       day_number: claimedJob.day_number,
       review_type: reviewType,
       title: title.trim(),

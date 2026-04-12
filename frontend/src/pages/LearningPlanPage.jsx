@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
+import { ReviewCheckInPanel } from '../components/ReviewCheckInPanel';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { RatingButtons } from '../components/RatingButtons';
@@ -45,6 +46,10 @@ export function LearningPlanPage() {
   const [planReady, setPlanReady] = useState(true);
   const [reviewContent, setReviewContent] = useState({});
   const [expandedReview, setExpandedReview] = useState(null);
+  const renderedReviewDays = useMemo(
+    () => new Set(plan.filter((entry) => entry.content_type === 'review').map((entry) => entry.day_number)),
+    [plan]
+  );
 
   useEffect(() => {
     // Wait for auth to resolve before loading — otherwise user is null
@@ -66,19 +71,28 @@ export function LearningPlanPage() {
 
       const hasPersonalPlan = Boolean(progressData?.enrolled && Array.isArray(progressData?.plan));
 
-      // If enrolled, always trust the personal plan payload, even when it's empty.
-      // Falling back to shared here can mask backend issues and makes the UI look like
-      // a personal plan was overwritten when it wasn't.
-      const displayPlan = hasPersonalPlan
-        ? progressData.plan
-        : (planData.plan || []);
+      // Rendering source of truth:
+      // - enrolled users render only their personal plan
+      // - everyone else renders the shared plan
+      const displayPlan = hasPersonalPlan ? progressData.plan : (planData.plan || []);
 
-      const selectedReviewContent = hasPersonalPlan ? (progressData?.reviewContent ?? {}) : (planData.reviewContent ?? {});
-      const selectedPlanReady = hasPersonalPlan ? (progressData?.planReady ?? true) : (planData.planReady ?? true);
-      const hasPendingRenderedReviewDays = displayPlan.some((entry) => REVIEW_DAYS.has(entry.day_number) && !entry.content_id);
+      // Review metadata must match the rendered plan source. Shared review state should never
+      // hijack a rendered personal plan unless the personal plan itself contains review entries.
+      const selectedReviewContent = hasPersonalPlan
+        ? (progressData?.reviewContent ?? {})
+        : (planData.reviewContent ?? {});
+      const renderedReviewDaySet = new Set(
+        displayPlan
+          .filter((entry) => entry.content_type === 'review')
+          .map((entry) => entry.day_number)
+      );
+      const filteredReviewContent = Object.fromEntries(
+        Object.entries(selectedReviewContent).filter(([day]) => renderedReviewDaySet.has(Number(day)))
+      );
+      const hasPendingRenderedReviewDays = displayPlan.some((entry) => entry.content_type === 'review' && !filteredReviewContent[entry.day_number]);
 
-      setPlanReady(hasPendingRenderedReviewDays ? selectedPlanReady : true);
-      setReviewContent(selectedReviewContent);
+      setPlanReady(hasPendingRenderedReviewDays ? (progressData?.planReady ?? planData.planReady ?? true) : true);
+      setReviewContent(filteredReviewContent);
 
       // Fetch ratings in parallel with nothing — we have the IDs now, before any setState
       const ids = displayPlan.map(e => e.content_id).filter(Boolean);
@@ -92,6 +106,7 @@ export function LearningPlanPage() {
       setRatings(ratingsData);
 
       setEnrolled(Boolean(progressData?.enrolled));
+
       if (progressData?.enrolled) {
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
         setCompletedDays(new Set(days));
@@ -245,9 +260,19 @@ export function LearningPlanPage() {
               const unlocked = entry.day_number <= FREE_DAYS || enrolled;
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
-              const isReviewDay = REVIEW_DAYS.has(entry.day_number);
-              const review = reviewContent[entry.day_number];
-              const shouldRenderReviewCard = isReviewDay && (!hasContent || Boolean(review));
+              const inlineReview = entry.content_type === 'review'
+                ? {
+                    day_number: entry.day_number,
+                    title: entry.review_title,
+                    body: typeof entry.review_body === 'string'
+                      ? (() => { try { return JSON.parse(entry.review_body); } catch { return entry.review_body; } })()
+                      : entry.review_body,
+                    review_type: 'weekly_checkin',
+                  }
+                : null;
+              const isReviewDay = Boolean(inlineReview);
+              const review = inlineReview || reviewContent[entry.day_number];
+              const shouldRenderReviewCard = isReviewDay;
 
               return (
                 <div
@@ -393,54 +418,13 @@ export function LearningPlanPage() {
           </div>
 
           {expandedReview && reviewContent[expandedReview]?.body && (
-            <div className="mt-6 bg-purple-500/5 border border-purple-500/20 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-purple-300">
-                  {reviewContent[expandedReview].title}
-                </h3>
-                <button
-                  onClick={() => setExpandedReview(null)}
-                  className="text-xs text-slate-400 hover:text-slate-300"
-                >
-                  Close
-                </button>
-              </div>
-              {reviewContent[expandedReview].body.summary && (
-                <p className="text-sm text-slate-300 mb-4">
-                  {reviewContent[expandedReview].body.summary}
-                </p>
-              )}
-              {reviewContent[expandedReview].body.content_covered?.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">What you covered</h4>
-                  <ul className="space-y-1">
-                    {reviewContent[expandedReview].body.content_covered.map((item, i) => (
-                      <li key={i} className="text-sm text-slate-300 flex items-center gap-2">
-                        {item.type === 'video' ? (
-                          <Play className="w-3 h-3 text-teal flex-shrink-0" />
-                        ) : (
-                          <BookOpen className="w-3 h-3 text-blue-400 flex-shrink-0" />
-                        )}
-                        <span>Day {item.day}: {item.title}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {reviewContent[expandedReview].body.reflection_prompts?.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">Reflect on your learning</h4>
-                  <ul className="space-y-2">
-                    {reviewContent[expandedReview].body.reflection_prompts.map((prompt, i) => (
-                      <li key={i} className="text-sm text-slate-300 pl-4 border-l-2 border-purple-500/30">
-                        {prompt}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            <ReviewCheckInPanel
+              review={reviewContent[expandedReview]}
+              dayNumber={expandedReview}
+              onClose={() => setExpandedReview(null)}
+            />
           )}
+
           </>
         )}
 
