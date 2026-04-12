@@ -260,8 +260,18 @@ export function LearningPlanPage() {
               const unlocked = entry.day_number <= FREE_DAYS || enrolled;
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
-              const isReviewDay = renderedReviewDays.has(entry.day_number);
-              const review = reviewContent[entry.day_number];
+              const inlineReview = entry.content_type === 'review'
+                ? {
+                    day_number: entry.day_number,
+                    title: entry.review_title,
+                    body: typeof entry.review_body === 'string'
+                      ? (() => { try { return JSON.parse(entry.review_body); } catch { return entry.review_body; } })()
+                      : entry.review_body,
+                    review_type: 'weekly_checkin',
+                  }
+                : null;
+              const isReviewDay = Boolean(inlineReview);
+              const review = inlineReview || reviewContent[entry.day_number];
               const shouldRenderReviewCard = isReviewDay;
 
               return (

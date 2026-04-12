@@ -139,6 +139,9 @@ class Database {
         content_id TEXT,
         content_type TEXT,
         reason TEXT,
+        review_status TEXT DEFAULT 'ready',
+        review_title TEXT,
+        review_body TEXT,
         timestamp_start_seconds INTEGER,
         timestamp_end_seconds INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -204,6 +207,9 @@ class Database {
         content_id TEXT,
         content_type TEXT,
         reason TEXT,
+        review_status TEXT DEFAULT 'ready',
+        review_title TEXT,
+        review_body TEXT,
         timestamp_start_seconds INTEGER,
         timestamp_end_seconds INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -266,8 +272,14 @@ class Database {
         'ALTER TABLE user_interactions ADD COLUMN user_id INTEGER REFERENCES users(id)',
         'ALTER TABLE learning_plans ADD COLUMN timestamp_start_seconds INTEGER',
         'ALTER TABLE learning_plans ADD COLUMN timestamp_end_seconds INTEGER',
+        "ALTER TABLE learning_plans ADD COLUMN review_status TEXT DEFAULT 'ready'",
+        'ALTER TABLE learning_plans ADD COLUMN review_title TEXT',
+        'ALTER TABLE learning_plans ADD COLUMN review_body TEXT',
         'ALTER TABLE user_learning_plans ADD COLUMN timestamp_start_seconds INTEGER',
-        'ALTER TABLE user_learning_plans ADD COLUMN timestamp_end_seconds INTEGER'
+        'ALTER TABLE user_learning_plans ADD COLUMN timestamp_end_seconds INTEGER',
+        "ALTER TABLE user_learning_plans ADD COLUMN review_status TEXT DEFAULT 'ready'",
+        'ALTER TABLE user_learning_plans ADD COLUMN review_title TEXT',
+        'ALTER TABLE user_learning_plans ADD COLUMN review_body TEXT'
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -735,6 +747,7 @@ class Database {
   async getLearningPlan(skillId) {
     return this.query(
       `SELECT lp.day_number, lp.content_id, lp.content_type, lp.reason,
+              lp.review_status, lp.review_title, lp.review_body,
               lp.timestamp_start_seconds, lp.timestamp_end_seconds,
               c.title, c.url, c.thumbnail, c.duration, c.author, c.source
        FROM learning_plans lp
@@ -749,9 +762,10 @@ class Database {
     await this.insert('DELETE FROM learning_plans WHERE skill_id = ?', [skillId]);
     for (const entry of days) {
       await this.insert(
-        `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, timestamp_start_seconds, timestamp_end_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+         entry.review_status || 'ready', entry.review_title || null, entry.review_body ? JSON.stringify(entry.review_body) : null,
          entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
       );
     }
@@ -762,6 +776,7 @@ class Database {
   async getUserLearningPlan(userId, skillId) {
     return this.query(
       `SELECT ulp.day_number, ulp.content_id, ulp.content_type, ulp.reason, ulp.created_at,
+              ulp.review_status, ulp.review_title, ulp.review_body,
               ulp.timestamp_start_seconds, ulp.timestamp_end_seconds,
               c.title, c.url, c.thumbnail, c.duration, c.author, c.source
        FROM user_learning_plans ulp
@@ -779,9 +794,10 @@ class Database {
     );
     for (const entry of days) {
       await this.insert(
-        `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, timestamp_start_seconds, timestamp_end_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+         entry.review_status || 'ready', entry.review_title || null, entry.review_body ? JSON.stringify(entry.review_body) : null,
          entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
       );
     }
@@ -804,18 +820,33 @@ class Database {
 
   async getSharedPlanCreatedAt(skillId) {
     const rows = await this.query(
-      'SELECT MAX(created_at) as created_at FROM learning_plans WHERE skill_id = ?',
+      `SELECT MAX(created_at) as created_at
+       FROM learning_plans
+       WHERE skill_id = ?`,
       [skillId]
     );
     return rows[0]?.created_at || null;
   }
 
+  async saveSharedReviewContent({ skill_id, day_number, review_type, title, body, plan_created_at }) {
+    return this.insert(
+      `UPDATE learning_plans
+       SET review_status = 'ready',
+           review_title = ?,
+           review_body = ?,
+           created_at = CURRENT_TIMESTAMP
+       WHERE skill_id = ? AND day_number = ? AND content_type = 'review'`,
+      [title, body ? JSON.stringify(body) : null, skill_id, day_number]
+    );
+  }
+
   async refreshUserPlanDays(userId, skillId, days) {
     for (const entry of days) {
       await this.insert(
-        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, timestamp_start_seconds, timestamp_end_seconds, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
+         entry.review_status || 'ready', entry.review_title || null, entry.review_body ? JSON.stringify(entry.review_body) : null,
          entry.timestamp_start_seconds ?? null, entry.timestamp_end_seconds ?? null]
       );
     }

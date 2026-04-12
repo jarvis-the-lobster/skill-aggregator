@@ -103,6 +103,9 @@ function buildReviewPlaceholder(day) {
     content_id: null,
     content_type: 'review',
     reason: 'Weekly check-in and review day',
+    review_status: 'pending',
+    review_title: null,
+    review_body: null,
   };
 }
 
@@ -114,7 +117,9 @@ class LearningPlanService {
 
     for (const dayNumber of REVIEW_DAY_NUMBERS) {
       const job = existingByDay.get(dayNumber);
-      const hasReviewContent = await db.getReviewContent(skillId, dayNumber, null);
+      const planRows = await db.getLearningPlan(skillId);
+      const reviewRow = planRows.find((row) => row.day_number === dayNumber && row.content_type === 'review');
+      const hasReviewContent = Boolean(reviewRow?.review_body && reviewRow?.review_status === 'ready');
 
       if (!job && !hasReviewContent) {
         await db.createPlanJob({
@@ -141,7 +146,12 @@ class LearningPlanService {
       if (!dayNumbers.has(day)) return true;
     }
 
-    return plan.some(day => !day.content_id);
+    return plan.some((day) => {
+      if (day.content_type === 'review') {
+        return !day.review_status || day.review_status === 'none';
+      }
+      return !day.content_id;
+    });
   }
 
   // Generate and persist a 30-day plan for a skill based on existing content
@@ -168,7 +178,7 @@ class LearningPlanService {
         plan.push(buildReviewPlaceholder(day));
         continue;
       }
-      const remainingEarlyDays = 8 - day;
+      const remainingEarlyDays = 7 - day;
       const candidateVideo = videos.find((video) => {
         if (usedIds.has(video.id)) return false;
 
@@ -278,18 +288,18 @@ class LearningPlanService {
   async getPlanWithReadiness(skillId) {
     const plan = await this.getPlan(skillId);
     await this.ensureReviewJobs(skillId);
-    const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
-    const reviewContentRows = await db.getReviewContentForPlan(skillId, null);
+    const planReady = !plan.some((row) => row.content_type === 'review' && row.review_status !== 'ready');
     const reviewContent = {};
-    for (const row of reviewContentRows) {
-      let body = row.body;
+    for (const row of plan) {
+      if (row.content_type !== 'review' || row.review_status !== 'ready' || !row.review_body) continue;
+      let body = row.review_body;
       if (typeof body === 'string') {
         try { body = JSON.parse(body); } catch { /* leave as-is */ }
       }
       reviewContent[row.day_number] = {
-        title: row.title,
+        title: row.review_title,
         body,
-        review_type: row.review_type,
+        review_type: 'weekly_checkin',
         day_number: row.day_number,
       };
     }
@@ -307,6 +317,9 @@ class LearningPlanService {
       content_id: day.content_id,
       content_type: day.content_type,
       reason: day.reason,
+      review_status: day.review_status,
+      review_title: day.review_title,
+      review_body: day.review_body,
       timestamp_start_seconds: day.timestamp_start_seconds,
       timestamp_end_seconds: day.timestamp_end_seconds,
     })));
@@ -329,7 +342,8 @@ class LearningPlanService {
     if (userPlan.length === 0) return { plan: [], refreshAvailable: false, planReady: true, reviewContent: {} };
 
     await this.ensureReviewJobs(skillId);
-    const planReady = !(await db.hasIncompleteJobs(skillId, 'review_content'));
+    const sharedPlan = await db.getLearningPlan(skillId);
+    const planReady = !sharedPlan.some((row) => row.content_type === 'review' && row.review_status !== 'ready');
 
     // Only flag refresh when the shared plan is fully ready (review content generated)
     // and the shared plan is newer than the user's copy. This prevents the double-update
@@ -345,17 +359,17 @@ class LearningPlanService {
       }
     }
 
-    const reviewContentRows = await db.getReviewContentForPlan(skillId, null);
     const reviewContent = {};
-    for (const row of reviewContentRows) {
-      let body = row.body;
+    for (const row of sharedPlan) {
+      if (row.content_type !== 'review' || row.review_status !== 'ready' || !row.review_body) continue;
+      let body = row.review_body;
       if (typeof body === 'string') {
         try { body = JSON.parse(body); } catch { /* leave as-is */ }
       }
       reviewContent[row.day_number] = {
-        title: row.title,
+        title: row.review_title,
         body,
-        review_type: row.review_type,
+        review_type: 'weekly_checkin',
         day_number: row.day_number,
       };
     }
@@ -390,7 +404,7 @@ class LearningPlanService {
 
     // Existing chunked runs (timestamped entries) are immutable
     for (const day of userPlan) {
-      if (day.timestamp_start_seconds != null && day.content_id) {
+      if (day.timestamp_start_seconds != null && day.content_id && !REVIEW_DAY_NUMBERS.has(day.day_number)) {
         immutableDays.add(day.day_number);
         usedContentIds.add(day.content_id);
       }
@@ -434,10 +448,26 @@ class LearningPlanService {
       }
     }
 
-    // Fill mutable days from shared plan (non-chunk, single-day entries)
+    // Fill mutable days from shared plan (non-chunk, single-day entries, including review rows)
     for (const day of sharedPlan) {
       const idx = day.day_number - 1;
       if (merged[idx]) continue;
+
+      if (day.content_type === 'review') {
+        merged[idx] = {
+          day_number: day.day_number,
+          content_id: null,
+          content_type: 'review',
+          reason: day.reason,
+          review_status: day.review_status,
+          review_title: day.review_title,
+          review_body: typeof day.review_body === 'string' ? (() => { try { return JSON.parse(day.review_body); } catch { return day.review_body; } })() : day.review_body,
+          timestamp_start_seconds: null,
+          timestamp_end_seconds: null,
+        };
+        continue;
+      }
+
       if (!day.content_id || usedContentIds.has(day.content_id)) continue;
       if (sharedChunkRuns.has(day.content_id)) continue; // already handled above
 
@@ -456,7 +486,7 @@ class LearningPlanService {
     const unusedShared = [];
     const seenIds = new Set();
     for (const d of sharedPlan) {
-      if (d.content_id && !usedContentIds.has(d.content_id)
+      if (d.content_type !== 'review' && d.content_id && !usedContentIds.has(d.content_id)
           && !sharedChunkRuns.has(d.content_id) && !seenIds.has(d.content_id)) {
         unusedShared.push(d);
         seenIds.add(d.content_id);
@@ -482,7 +512,9 @@ class LearningPlanService {
       } else {
         // Fall back to existing user plan content if not a duplicate
         const userDay = userPlan.find(d => d.day_number === i + 1);
-        if (userDay?.content_id && !usedContentIds.has(userDay.content_id)) {
+        if (REVIEW_DAY_NUMBERS.has(i + 1)) {
+          merged[i] = buildReviewPlaceholder(i + 1);
+        } else if (userDay?.content_id && !usedContentIds.has(userDay.content_id)) {
           merged[i] = {
             day_number: i + 1,
             content_id: userDay.content_id,
@@ -492,8 +524,6 @@ class LearningPlanService {
             timestamp_end_seconds: userDay.timestamp_end_seconds,
           };
           usedContentIds.add(userDay.content_id);
-        } else if (REVIEW_DAY_NUMBERS.has(i + 1)) {
-          merged[i] = buildReviewPlaceholder(i + 1);
         } else {
           merged[i] = { day_number: i + 1, content_id: null, content_type: null, reason: null };
         }

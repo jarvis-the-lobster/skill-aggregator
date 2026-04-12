@@ -288,8 +288,17 @@ describe('LearningPlanPage', () => {
   describe('review day placeholders', () => {
     it('shows review generation copy instead of stale content on pending review days', async () => {
       const sharedPlanWithReviewPlaceholder = SHARED_PLAN.map((day) =>
-        day.day_number === 7
-          ? { ...day, content_id: null, content_type: 'review', title: null, url: null }
+        [7, 14, 21, 28].includes(day.day_number)
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              title: null,
+              url: null,
+              review_status: 'pending',
+              review_title: null,
+              review_body: null,
+            }
           : day
       );
 
@@ -309,7 +318,8 @@ describe('LearningPlanPage', () => {
 
       renderPlanPage();
 
-      expect(await screen.findByText('Generating review content. Check back within 24 hours.')).toBeInTheDocument();
+      expect(await screen.findByText('Your plan is being finalized')).toBeInTheDocument();
+      expect(screen.getByText('Weekly check-in content is still generating. Please check back within 24 hours.')).toBeInTheDocument();
       expect(screen.queryByText('Shared Resource 7')).not.toBeInTheDocument();
     });
   });
