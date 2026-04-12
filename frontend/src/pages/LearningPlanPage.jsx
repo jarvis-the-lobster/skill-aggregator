@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
+import { ReviewCheckInPanel } from '../components/ReviewCheckInPanel';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { RatingButtons } from '../components/RatingButtons';
@@ -393,6 +394,14 @@ export function LearningPlanPage() {
           </div>
 
           {expandedReview && reviewContent[expandedReview]?.body && (
+            <ReviewCheckInPanel
+              review={reviewContent[expandedReview]}
+              dayNumber={expandedReview}
+              onClose={() => setExpandedReview(null)}
+            />
+          )}
+
+          {false && expandedReview && reviewContent[expandedReview]?.body && (
             <div className="mt-6 bg-purple-500/5 border border-purple-500/20 rounded-xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-purple-300">
