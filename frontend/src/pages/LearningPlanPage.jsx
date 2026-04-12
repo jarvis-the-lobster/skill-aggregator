@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
@@ -46,6 +46,10 @@ export function LearningPlanPage() {
   const [planReady, setPlanReady] = useState(true);
   const [reviewContent, setReviewContent] = useState({});
   const [expandedReview, setExpandedReview] = useState(null);
+  const renderedReviewDays = useMemo(
+    () => new Set(plan.filter((entry) => entry.content_type === 'review').map((entry) => entry.day_number)),
+    [plan]
+  );
 
   useEffect(() => {
     // Wait for auth to resolve before loading — otherwise user is null
@@ -67,19 +71,28 @@ export function LearningPlanPage() {
 
       const hasPersonalPlan = Boolean(progressData?.enrolled && Array.isArray(progressData?.plan));
 
-      // If enrolled, always trust the personal plan payload, even when it's empty.
-      // Falling back to shared here can mask backend issues and makes the UI look like
-      // a personal plan was overwritten when it wasn't.
-      const displayPlan = hasPersonalPlan
-        ? progressData.plan
-        : (planData.plan || []);
+      // Rendering source of truth:
+      // - enrolled users render only their personal plan
+      // - everyone else renders the shared plan
+      const displayPlan = hasPersonalPlan ? progressData.plan : (planData.plan || []);
 
-      const selectedReviewContent = hasPersonalPlan ? (progressData?.reviewContent ?? {}) : (planData.reviewContent ?? {});
-      const selectedPlanReady = hasPersonalPlan ? (progressData?.planReady ?? true) : (planData.planReady ?? true);
-      const hasPendingRenderedReviewDays = displayPlan.some((entry) => REVIEW_DAYS.has(entry.day_number) && !entry.content_id);
+      // Review metadata must match the rendered plan source. Shared review state should never
+      // hijack a rendered personal plan unless the personal plan itself contains review entries.
+      const selectedReviewContent = hasPersonalPlan
+        ? (progressData?.reviewContent ?? {})
+        : (planData.reviewContent ?? {});
+      const renderedReviewDaySet = new Set(
+        displayPlan
+          .filter((entry) => entry.content_type === 'review')
+          .map((entry) => entry.day_number)
+      );
+      const filteredReviewContent = Object.fromEntries(
+        Object.entries(selectedReviewContent).filter(([day]) => renderedReviewDaySet.has(Number(day)))
+      );
+      const hasPendingRenderedReviewDays = displayPlan.some((entry) => entry.content_type === 'review' && !filteredReviewContent[entry.day_number]);
 
-      setPlanReady(hasPendingRenderedReviewDays ? selectedPlanReady : true);
-      setReviewContent(selectedReviewContent);
+      setPlanReady(hasPendingRenderedReviewDays ? (progressData?.planReady ?? planData.planReady ?? true) : true);
+      setReviewContent(filteredReviewContent);
 
       // Fetch ratings in parallel with nothing — we have the IDs now, before any setState
       const ids = displayPlan.map(e => e.content_id).filter(Boolean);
@@ -93,6 +106,7 @@ export function LearningPlanPage() {
       setRatings(ratingsData);
 
       setEnrolled(Boolean(progressData?.enrolled));
+      console.log({progressData})
       if (progressData?.enrolled) {
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
         setCompletedDays(new Set(days));
@@ -246,9 +260,9 @@ export function LearningPlanPage() {
               const unlocked = entry.day_number <= FREE_DAYS || enrolled;
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
-              const isReviewDay = REVIEW_DAYS.has(entry.day_number);
+              const isReviewDay = renderedReviewDays.has(entry.day_number);
               const review = reviewContent[entry.day_number];
-              const shouldRenderReviewCard = isReviewDay && (!hasContent || Boolean(review));
+              const shouldRenderReviewCard = isReviewDay;
 
               return (
                 <div

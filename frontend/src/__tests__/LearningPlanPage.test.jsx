@@ -168,14 +168,18 @@ describe('LearningPlanPage', () => {
           : day
       );
 
-      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: false, reviewContent: {} });
+      mockGetLearningPlan.mockResolvedValue({
+        plan: SHARED_PLAN,
+        planReady: false,
+        reviewContent: { 7: { title: 'Shared review that should be ignored', body: { summary: 'shared' } } },
+      });
       mockGetPlanProgress.mockResolvedValue({
         enrolled: true,
         progress: { completed_days: '[4,10,9]' },
         plan: personalPlan,
         refreshAvailable: false,
         planReady: false,
-        reviewContent: {},
+        reviewContent: { 7: { title: 'Shared review that should be ignored', body: { summary: 'shared' } } },
       });
 
       renderPlanPage();
@@ -183,6 +187,7 @@ describe('LearningPlanPage', () => {
       expect(await screen.findByText('Complete React Native Tutorial #1 - Introduction & Setup (Expo)')).toBeInTheDocument();
       expect(screen.queryByText('Generating review content. Check back within 24 hours.')).not.toBeInTheDocument();
       expect(screen.queryByText('Your plan is being finalized')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shared review that should be ignored')).not.toBeInTheDocument();
       expect(screen.queryByText(/Day 7.*Check-in/)).not.toBeInTheDocument();
     });
   });
