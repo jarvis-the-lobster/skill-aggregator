@@ -106,7 +106,7 @@ export function LearningPlanPage() {
       setRatings(ratingsData);
 
       setEnrolled(Boolean(progressData?.enrolled));
-      console.log({progressData})
+
       if (progressData?.enrolled) {
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
         setCompletedDays(new Set(days));
