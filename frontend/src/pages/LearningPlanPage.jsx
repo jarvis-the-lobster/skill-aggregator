@@ -425,55 +425,6 @@ export function LearningPlanPage() {
             />
           )}
 
-          {false && expandedReview && reviewContent[expandedReview]?.body && (
-            <div className="mt-6 bg-purple-500/5 border border-purple-500/20 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-purple-300">
-                  {reviewContent[expandedReview].title}
-                </h3>
-                <button
-                  onClick={() => setExpandedReview(null)}
-                  className="text-xs text-slate-400 hover:text-slate-300"
-                >
-                  Close
-                </button>
-              </div>
-              {reviewContent[expandedReview].body.summary && (
-                <p className="text-sm text-slate-300 mb-4">
-                  {reviewContent[expandedReview].body.summary}
-                </p>
-              )}
-              {reviewContent[expandedReview].body.content_covered?.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">What you covered</h4>
-                  <ul className="space-y-1">
-                    {reviewContent[expandedReview].body.content_covered.map((item, i) => (
-                      <li key={i} className="text-sm text-slate-300 flex items-center gap-2">
-                        {item.type === 'video' ? (
-                          <Play className="w-3 h-3 text-teal flex-shrink-0" />
-                        ) : (
-                          <BookOpen className="w-3 h-3 text-blue-400 flex-shrink-0" />
-                        )}
-                        <span>Day {item.day}: {item.title}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {reviewContent[expandedReview].body.reflection_prompts?.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase mb-2">Reflect on your learning</h4>
-                  <ul className="space-y-2">
-                    {reviewContent[expandedReview].body.reflection_prompts.map((prompt, i) => (
-                      <li key={i} className="text-sm text-slate-300 pl-4 border-l-2 border-purple-500/30">
-                        {prompt}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
           </>
         )}
 
