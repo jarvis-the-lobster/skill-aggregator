@@ -322,6 +322,83 @@ describe('LearningPlanPage', () => {
       expect(screen.getByText('Weekly check-in content is still generating. Please check back within 24 hours.')).toBeInTheDocument();
       expect(screen.queryByText('Shared Resource 7')).not.toBeInTheDocument();
     });
+
+    it('opens review content in a modal with recall inputs instead of rendering below the grid', async () => {
+      const sharedPlanWithReadyReview = SHARED_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              review_status: 'ready',
+              review_title: 'Week 1 review',
+              review_body: JSON.stringify({
+                summary: 'Quick recap before you move on.',
+                content_covered: [
+                  { day: 1, type: 'video', title: 'Intro to Python' },
+                ],
+                knowledge_checks: [
+                  {
+                    id: 'k1',
+                    question: 'What is a variable and when would you use one?',
+                    helper_text: 'Answer in your own words.',
+                    expected_points: ['Stores a value', 'Lets you reuse/update data'],
+                    placeholder: 'Explain it like you actually learned it',
+                  },
+                ],
+                reflection_prompts: ['What still feels fuzzy after this week?'],
+              }),
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: sharedPlanWithReadyReview,
+        planReady: true,
+        reviewContent: {
+          7: {
+            title: 'Week 1 review',
+            body: {
+              summary: 'Quick recap before you move on.',
+              content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+              knowledge_checks: [
+                {
+                  id: 'k1',
+                  question: 'What is a variable and when would you use one?',
+                  helper_text: 'Answer in your own words.',
+                  expected_points: ['Stores a value', 'Lets you reuse/update data'],
+                  placeholder: 'Explain it like you actually learned it',
+                },
+              ],
+              reflection_prompts: ['What still feels fuzzy after this week?'],
+            },
+          },
+        },
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: false,
+        progress: null,
+        plan: null,
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      const user = userEvent.setup();
+      const openButton = await screen.findByRole('button', { name: /week 1 review/i });
+      await user.click(openButton);
+
+      expect(await screen.findByRole('dialog', { name: /day 7 review/i })).toBeInTheDocument();
+      expect(screen.getByText('Start review')).toBeInTheDocument();
+      expect(screen.queryByText('Open review')).toBeInTheDocument();
+
+      await user.click(screen.getByText('Start review'));
+      expect(await screen.findByText('What is a variable and when would you use one?')).toBeInTheDocument();
+      expect(screen.getByLabelText('Your answer')).toBeInTheDocument();
+      expect(screen.getByText('Stores a value')).toBeInTheDocument();
+    });
   });
 
   describe('auth loading race condition', () => {
