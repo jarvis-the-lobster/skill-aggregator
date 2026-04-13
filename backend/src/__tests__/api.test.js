@@ -171,6 +171,7 @@ describe('GET/POST /api/admin/review-jobs', () => {
       knowledge_checks: [
         {
           question: 'What is the difference between a for loop and a while loop?',
+          topic: 'loops',
           helper_text: 'Answer in plain English.',
           expected_points: ['for loops iterate over a sequence', 'while loops run until a condition changes'],
           placeholder: 'Describe the difference',
@@ -247,6 +248,7 @@ describe('GET/POST /api/admin/review-jobs', () => {
         title: 'Week 1 check-in',
         body: {
           summary: 'Reflection only is not enough.',
+          content_covered: [{ day: 1, type: 'video', title: 'Intro' }],
           reflection_prompts: ['What felt easy this week?'],
         },
       });
@@ -280,7 +282,9 @@ describe('GET/POST /api/admin/review-jobs', () => {
         {
           type: 'multiple_choice',
           question: 'Which keyword declares a variable in Python?',
+          topic: 'variables-and-assignment',
           options: ['var', 'let', 'Neither — just assign it', 'const'],
+          correct_option: 2,
           helper_text: 'Think about how Python differs from JavaScript.',
         },
       ],
@@ -320,10 +324,12 @@ describe('GET/POST /api/admin/review-jobs', () => {
         body: {
           summary: 'Test.',
           content_covered: [{ day: 1, type: 'video', title: 'Python variables' }],
+          reflection_prompts: ['reflect'],
           knowledge_checks: [
             {
               type: 'multiple_choice',
               question: 'Pick one',
+              topic: 'basics',
               options: ['Only one option'],
             },
           ],
@@ -332,6 +338,262 @@ describe('GET/POST /api/admin/review-jobs', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/options must be an array of at least 2/i);
+  });
+
+  test('rejects multiple_choice without correct_option', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({
+        title: 'Week 1 check-in',
+        body: {
+          summary: 'Test.',
+          content_covered: [{ day: 1, type: 'video', title: 'Python variables' }],
+          reflection_prompts: ['reflect'],
+          knowledge_checks: [
+            {
+              type: 'multiple_choice',
+              question: 'Pick one',
+              topic: 'basics',
+              options: ['A', 'B'],
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/correct_option/i);
+  });
+
+  test('rejects correct_option that does not match any option', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({
+        title: 'Week 1 check-in',
+        body: {
+          summary: 'Test.',
+          content_covered: [{ day: 1, type: 'video', title: 'Python variables' }],
+          reflection_prompts: ['reflect'],
+          knowledge_checks: [
+            {
+              type: 'multiple_choice',
+              question: 'Pick one',
+              topic: 'basics',
+              options: ['A', 'B'],
+              correct_option: 5,
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/correct_option must be an integer index/i);
+  });
+
+  describe('review body schema rigidity', () => {
+    async function setupJob() {
+      await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+      return db.createPlanJob({ skill_id: 'python', job_type: 'review_content', day_number: 7 });
+    }
+
+    const baseValidBody = () => ({
+      summary: 'Week 1 summary',
+      content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+      reflection_prompts: ['What clicked?'],
+      knowledge_checks: [
+        {
+          id: 'kc-1',
+          type: 'multiple_choice',
+          question: 'Q?',
+          topic: 'variables',
+          options: ['A', 'B'],
+          correct_option: 0,
+        },
+      ],
+    });
+
+    async function post(jobId, body) {
+      return request(app)
+        .post(`/api/admin/review-jobs/${jobId}/process`)
+        .set('Authorization', 'Bearer test-cron-secret')
+        .send({ title: 'Week 1', body, reviewType: 'weekly_checkin' });
+    }
+
+    test('accepts a fully-formed review body', async () => {
+      const job = await setupJob();
+      const res = await post(job.id, baseValidBody());
+      expect(res.status).toBe(200);
+    });
+
+    test('rejects body missing summary', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      delete body.summary;
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/summary/i);
+    });
+
+    test('rejects body missing content_covered', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      delete body.content_covered;
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/content_covered/i);
+    });
+
+    test('rejects content_covered entry missing day', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      body.content_covered = [{ type: 'video', title: 'Intro' }];
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/content_covered\.day/i);
+    });
+
+    test('rejects content_covered entry missing title', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      body.content_covered = [{ day: 1, type: 'video' }];
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/content_covered\.title/i);
+    });
+
+    test('rejects content_covered entry missing type', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      body.content_covered = [{ day: 1, title: 'Intro' }];
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/content_covered\.type/i);
+    });
+
+    test('accepts body without reflection_prompts', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      delete body.reflection_prompts;
+      const res = await post(job.id, body);
+      expect(res.status).toBe(200);
+    });
+
+    test('rejects reflection_prompts with non-string entries', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      body.reflection_prompts = ['valid', 42];
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/reflection_prompts/i);
+    });
+
+    test('rejects knowledge_check missing topic', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      delete body.knowledge_checks[0].topic;
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/topic/i);
+    });
+
+    test('rejects multiple_choice correct_option as a string', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      body.knowledge_checks[0].correct_option = 'A';
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/integer index/i);
+    });
+
+    test('rejects multiple_choice correct_option out of range', async () => {
+      const job = await setupJob();
+      const body = baseValidBody();
+      body.knowledge_checks[0].correct_option = 99;
+      const res = await post(job.id, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/integer index/i);
+    });
+
+    test('db.saveReviewContent throws on invalid body', async () => {
+      await expect(
+        db.saveReviewContent({
+          skill_id: 'python',
+          day_number: 7,
+          review_type: 'weekly_checkin',
+          title: 'Week 1',
+          body: { summary: 'missing everything else' },
+        })
+      ).rejects.toThrow(/Invalid review body/);
+    });
+
+    test('db.saveSharedReviewContent throws on invalid body', async () => {
+      await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+      await db.insert(
+        "INSERT INTO learning_plans (skill_id, day_number, content_type, review_status) VALUES ('python', 7, 'review', 'pending')"
+      );
+      await expect(
+        db.saveSharedReviewContent({
+          skill_id: 'python',
+          day_number: 7,
+          review_type: 'weekly_checkin',
+          title: 'Week 1',
+          body: { knowledge_checks: [] },
+        })
+      ).rejects.toThrow(/Invalid review body/);
+    });
+  });
+});
+
+describe('GET /api/learning-plans/:skillId — answer key sanitization', () => {
+  test('does not expose correct_option in reviewContent', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+
+    const reviewBody = JSON.stringify({
+      summary: 'Week 1 recap',
+      content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+      knowledge_checks: [
+        { id: 'kc-1', type: 'multiple_choice', question: 'What is Python?', topic: 'intro', options: ['A language', 'A snake'], correct_option: 0 },
+      ],
+      reflection_prompts: ['What clicked this week?'],
+    });
+
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, review_status, review_title, review_body) VALUES (?, 7, NULL, 'review', 'ready', 'Week 1', ?)",
+      ['python', reviewBody]
+    );
+
+    const res = await request(app).get('/api/learning-plans/python');
+
+    expect(res.status).toBe(200);
+    const rc = res.body.reviewContent;
+    expect(rc).toBeDefined();
+    expect(rc['7']).toBeDefined();
+    const checks = rc['7'].body.knowledge_checks;
+    expect(checks[0].options).toBeDefined();
+    expect(checks[0].correct_option).toBeUndefined();
   });
 });
 
@@ -348,10 +610,13 @@ describe('POST /api/learning-plans/:skillId/review/:dayNumber/submit', () => {
 
     const reviewBody = {
       summary: 'Week 1 recap',
-      content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+      content_covered: [
+        { day: 1, type: 'video', title: 'Intro to Python' },
+        { day: 2, type: 'video', title: 'Intro to Python' },
+      ],
       knowledge_checks: [
-        { id: 'kc-1', type: 'multiple_choice', question: 'What is Python?', options: ['A language', 'A snake', 'A framework'] },
-        { id: 'kc-2', type: 'short_answer', question: 'Explain variables', placeholder: 'Your answer' },
+        { id: 'kc-1', type: 'multiple_choice', question: 'What is Python?', topic: 'python-intro', options: ['A language', 'A snake', 'A framework'], correct_option: 0 },
+        { id: 'kc-2', type: 'short_answer', question: 'Explain variables', topic: 'variables', placeholder: 'Your answer' },
       ],
       reflection_prompts: ['What clicked this week?'],
     };
@@ -458,6 +723,51 @@ describe('POST /api/learning-plans/:skillId/review/:dayNumber/submit', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty array/i);
+  });
+
+  test('free user: scores using correct_option index, not a string match', async () => {
+    const { token } = await setupEnrolledUser();
+
+    const res = await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [
+          { check_id: 'kc-1', question: 'What is Python?', check_type: 'multiple_choice', answer: 'A language' },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.multiple_choice).toEqual({ total: 1, correct: 1 });
+  });
+
+  test('notification after missed answers references topics and days', async () => {
+    const { token, userId } = await setupEnrolledUser();
+
+    await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [
+          { check_id: 'kc-1', question: 'What is Python?', check_type: 'multiple_choice', answer: 'A snake' },
+        ],
+      });
+
+    const notifications = await db.query(
+      "SELECT * FROM notifications WHERE user_id = ? AND type = 'review_result'",
+      [userId]
+    );
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].title).toMatch(/Review Day 7: 0\/1/);
+    expect(notifications[0].body).toMatch(/python intro/);
+    expect(notifications[0].body).not.toMatch(/python-intro/);
+    expect(notifications[0].body).toMatch(/Days? 1/);
+    const payload = JSON.parse(notifications[0].data);
+    expect(payload.result.missed_topics).toContain('python-intro');
+    expect(payload.result.content_to_review).toEqual([
+      { day: 1, type: 'video', title: 'Intro to Python' },
+      { day: 2, type: 'video', title: 'Intro to Python' },
+    ]);
   });
 
   test('rejects unenrolled user', async () => {

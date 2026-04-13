@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { StreakBadge } from './StreakBadge';
+import { NotificationBell } from './NotificationBell';
 import { Logo } from './Logo';
 
 export function Header() {
@@ -70,6 +71,7 @@ export function Header() {
             {user ? (
               <div className="flex items-center gap-3">
                 <StreakBadge />
+                <NotificationBell />
                 <div className="flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.08] py-1.5 pl-4 pr-2">
                   <span className="text-sm font-medium text-slate-200">
                     {user.name || user.email}

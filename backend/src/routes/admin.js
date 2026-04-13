@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const { requireAuth } = require('../middleware/auth');
+const { validateReviewBody } = require('../utils/reviewBodySchema');
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
@@ -217,81 +218,6 @@ router.get('/review-jobs', async (req, res) => {
 });
 
 // POST /api/admin/review-jobs/:id/process — save generated review content and mark job complete (Bearer CRON_SECRET)
-function normalizeReviewBody(body) {
-  if (typeof body === 'string') {
-    try {
-      return JSON.parse(body);
-    } catch {
-      return null;
-    }
-  }
-  return body && typeof body === 'object' ? body : null;
-}
-
-function validateKnowledgeChecks(knowledgeChecks) {
-  if (!Array.isArray(knowledgeChecks) || knowledgeChecks.length === 0) {
-    return 'knowledge_checks must be a non-empty array';
-  }
-
-  for (const check of knowledgeChecks) {
-    if (!check || typeof check !== 'object') {
-      return 'each knowledge_check must be an object';
-    }
-    if (typeof check.question !== 'string' || !check.question.trim()) {
-      return 'each knowledge_check needs a question';
-    }
-    if (check.helper_text != null && typeof check.helper_text !== 'string') {
-      return 'knowledge_check helper_text must be a string';
-    }
-    if (check.placeholder != null && typeof check.placeholder !== 'string') {
-      return 'knowledge_check placeholder must be a string';
-    }
-    if (check.type != null && typeof check.type !== 'string') {
-      return 'knowledge_check type must be a string';
-    }
-    if (check.expected_points != null) {
-      if (!Array.isArray(check.expected_points) || check.expected_points.some((point) => typeof point !== 'string' || !point.trim())) {
-        return 'knowledge_check expected_points must be an array of non-empty strings';
-      }
-    }
-    if (check.options != null) {
-      if (!Array.isArray(check.options) || check.options.length < 2 || check.options.some((opt) => typeof opt !== 'string' || !opt.trim())) {
-        return 'knowledge_check options must be an array of at least 2 non-empty strings';
-      }
-    }
-  }
-
-  return null;
-}
-
-function validateReviewBody(body) {
-  const normalized = normalizeReviewBody(body);
-  if (!normalized) {
-    return { error: 'body must be a valid JSON object' };
-  }
-
-  if (normalized.summary != null && typeof normalized.summary !== 'string') {
-    return { error: 'summary must be a string' };
-  }
-
-  if (normalized.content_covered != null && !Array.isArray(normalized.content_covered)) {
-    return { error: 'content_covered must be an array' };
-  }
-
-  if (normalized.reflection_prompts != null) {
-    if (!Array.isArray(normalized.reflection_prompts) || normalized.reflection_prompts.some((prompt) => typeof prompt !== 'string' || !prompt.trim())) {
-      return { error: 'reflection_prompts must be an array of non-empty strings' };
-    }
-  }
-
-  const knowledgeCheckError = validateKnowledgeChecks(normalized.knowledge_checks);
-  if (knowledgeCheckError) {
-    return { error: knowledgeCheckError };
-  }
-
-  return { value: normalized };
-}
-
 router.post('/review-jobs/:id/process', async (req, res) => {
   if (!requireCronSecret(req, res)) return;
 

@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { getApplicableSources } = require('../constants/sourceApplicability');
+const { assertValidReviewBody } = require('../utils/reviewBodySchema');
 
 function getPacificDayWindow(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -270,6 +271,19 @@ class Database {
         UNIQUE(user_id, skill_id, day_number)
       )`,
 
+      // In-app notifications
+      `CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT,
+        data TEXT,
+        read_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+
       // Individual answers within a review submission
       `CREATE TABLE IF NOT EXISTS review_submission_answers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -355,6 +369,8 @@ class Database {
         'CREATE INDEX IF NOT EXISTS idx_review_submissions_user_skill ON review_submissions(user_id, skill_id)',
         // Review submission answers by submission (fetching answers)
         'CREATE INDEX IF NOT EXISTS idx_review_answers_submission ON review_submission_answers(submission_id)',
+        // Notifications by user (listing user notifications)
+        'CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)',
       ];
       indexes.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -863,6 +879,7 @@ class Database {
   }
 
   async saveSharedReviewContent({ skill_id, day_number, review_type, title, body, plan_created_at }) {
+    const validated = assertValidReviewBody(body);
     return this.insert(
       `UPDATE learning_plans
        SET review_status = 'ready',
@@ -870,7 +887,7 @@ class Database {
            review_body = ?,
            created_at = CURRENT_TIMESTAMP
        WHERE skill_id = ? AND day_number = ? AND content_type = 'review'`,
-      [title, body ? JSON.stringify(body) : null, skill_id, day_number]
+      [title, JSON.stringify(validated), skill_id, day_number]
     );
   }
 
@@ -1030,6 +1047,7 @@ class Database {
   // --- Plan review content methods ---
 
   async saveReviewContent({ skill_id, user_id = null, day_number, review_type, title, body, plan_created_at }) {
+    const validated = assertValidReviewBody(body);
     await this.insert(
       `DELETE FROM plan_review_content WHERE skill_id = ? AND day_number = ? AND user_id IS ?`,
       [skill_id, day_number, user_id]
@@ -1037,7 +1055,7 @@ class Database {
     return this.insert(
       `INSERT INTO plan_review_content (skill_id, user_id, day_number, review_type, title, body, plan_created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [skill_id, user_id, day_number, review_type, title, body ? JSON.stringify(body) : null, plan_created_at]
+      [skill_id, user_id, day_number, review_type, title, JSON.stringify(validated), plan_created_at]
     );
   }
 
@@ -1113,6 +1131,46 @@ class Database {
   async getUserPlanTier(userId) {
     const rows = await this.query('SELECT plan_tier FROM users WHERE id = ?', [userId]);
     return rows[0]?.plan_tier || 'free';
+  }
+
+  // --- Notification methods ---
+
+  async createNotification({ user_id, type, title, body = null, data = null }) {
+    const dataStr = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : null;
+    const result = await this.insert(
+      `INSERT INTO notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?)`,
+      [user_id, type, title, body, dataStr]
+    );
+    return { id: result.id, user_id, type, title, body, data: dataStr, read_at: null };
+  }
+
+  async getNotifications(userId, { limit = 20, offset = 0 } = {}) {
+    return this.query(
+      `SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [userId, limit, offset]
+    );
+  }
+
+  async getUnreadNotificationCount(userId) {
+    const rows = await this.query(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read_at IS NULL',
+      [userId]
+    );
+    return rows[0]?.count || 0;
+  }
+
+  async markNotificationRead(notificationId, userId) {
+    await this.insert(
+      'UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+      [notificationId, userId]
+    );
+  }
+
+  async markAllNotificationsRead(userId) {
+    await this.insert(
+      'UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND read_at IS NULL',
+      [userId]
+    );
   }
 
   // Close database connection
