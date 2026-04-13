@@ -396,8 +396,8 @@ describe('LearningPlanPage', () => {
 
       await user.click(screen.getByText('Start review'));
       expect(await screen.findByText('What is a variable and when would you use one?')).toBeInTheDocument();
-      expect(screen.getByLabelText('Your answer')).toBeInTheDocument();
-      expect(screen.getByText('Stores a value')).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /your answer/i })).toBeInTheDocument();
+      expect(screen.queryByText('What a solid answer should touch')).not.toBeInTheDocument();
     });
   });
 
