@@ -431,6 +431,7 @@ export function LearningPlanPage() {
               dayNumber={expandedReview}
               skillId={skillId}
               enrolled={enrolled}
+              onSubmitted={() => handleCompleteDay(expandedReview)}
               onClose={() => {
                 const trigger = reviewButtonRefs.current[expandedReview];
                 setExpandedReview(null);
