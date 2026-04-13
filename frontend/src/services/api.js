@@ -179,6 +179,22 @@ export const apiService = {
     return response.data;
   },
 
+  // Notification endpoints
+  async getNotifications({ limit = 20, offset = 0 } = {}) {
+    const response = await api.get(`/notifications?limit=${limit}&offset=${offset}`);
+    return response.data;
+  },
+
+  async markNotificationRead(id) {
+    const response = await api.post(`/notifications/${id}/read`);
+    return response.data;
+  },
+
+  async markAllNotificationsRead() {
+    const response = await api.post('/notifications/read-all');
+    return response.data;
+  },
+
   async getSkillContentCounts(ids) {
     const response = await api.get(`/skills/counts?ids=${ids.join(',')}`);
     return response.data.counts;

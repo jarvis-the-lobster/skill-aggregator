@@ -270,6 +270,19 @@ class Database {
         UNIQUE(user_id, skill_id, day_number)
       )`,
 
+      // In-app notifications
+      `CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT,
+        data TEXT,
+        read_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+
       // Individual answers within a review submission
       `CREATE TABLE IF NOT EXISTS review_submission_answers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -355,6 +368,8 @@ class Database {
         'CREATE INDEX IF NOT EXISTS idx_review_submissions_user_skill ON review_submissions(user_id, skill_id)',
         // Review submission answers by submission (fetching answers)
         'CREATE INDEX IF NOT EXISTS idx_review_answers_submission ON review_submission_answers(submission_id)',
+        // Notifications by user (listing user notifications)
+        'CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)',
       ];
       indexes.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -1113,6 +1128,46 @@ class Database {
   async getUserPlanTier(userId) {
     const rows = await this.query('SELECT plan_tier FROM users WHERE id = ?', [userId]);
     return rows[0]?.plan_tier || 'free';
+  }
+
+  // --- Notification methods ---
+
+  async createNotification({ user_id, type, title, body = null, data = null }) {
+    const dataStr = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : null;
+    const result = await this.insert(
+      `INSERT INTO notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?)`,
+      [user_id, type, title, body, dataStr]
+    );
+    return { id: result.id, user_id, type, title, body, data: dataStr, read_at: null };
+  }
+
+  async getNotifications(userId, { limit = 20, offset = 0 } = {}) {
+    return this.query(
+      `SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [userId, limit, offset]
+    );
+  }
+
+  async getUnreadNotificationCount(userId) {
+    const rows = await this.query(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read_at IS NULL',
+      [userId]
+    );
+    return rows[0]?.count || 0;
+  }
+
+  async markNotificationRead(notificationId, userId) {
+    await this.insert(
+      'UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+      [notificationId, userId]
+    );
+  }
+
+  async markAllNotificationsRead(userId) {
+    await this.insert(
+      'UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND read_at IS NULL',
+      [userId]
+    );
   }
 
   // Close database connection

@@ -206,11 +206,24 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
     });
     await db.saveReviewSubmissionAnswers(submission.id, gradedAnswers);
 
+    const parsedResult = JSON.parse(resultSummary);
+    const mc = parsedResult.multiple_choice;
+    const scoreText = mc.total > 0 ? `${mc.correct}/${mc.total} correct` : 'Completed';
+    db.createNotification({
+      user_id: req.user.id,
+      type: 'review_result',
+      title: `Review Day ${dayNumber}: ${scoreText}`,
+      body: mc.total > 0
+        ? `You scored ${mc.correct} out of ${mc.total} on your knowledge check.`
+        : 'Your review has been submitted successfully.',
+      data: { submissionId: submission.id, skillId, dayNumber, result: parsedResult },
+    }).catch(err => console.error('Notification creation error:', err));
+
     return res.json({
       ok: true,
       submissionId: submission.id,
       status: 'completed',
-      result: JSON.parse(resultSummary),
+      result: parsedResult,
     });
   } catch (err) {
     console.error('Review submit error:', err);

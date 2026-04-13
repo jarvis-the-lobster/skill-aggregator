@@ -236,6 +236,17 @@ const TABLE_SQL = [
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (submission_id) REFERENCES review_submissions(id)
   )`,
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    data TEXT,
+    read_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  )`,
 ];
 
 const INDEX_SQL = [
@@ -867,6 +878,44 @@ function createTestDb() {
           };
         },
 
+        async createNotification({ user_id, type, title, body = null, data = null }) {
+          const dataStr = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : null;
+          const result = await insert(
+            'INSERT INTO notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?)',
+            [user_id, type, title, body, dataStr]
+          );
+          return { id: result.id, user_id, type, title, body, data: dataStr, read_at: null };
+        },
+
+        async getNotifications(userId, { limit = 20, offset = 0 } = {}) {
+          return query(
+            'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
+            [userId, limit, offset]
+          );
+        },
+
+        async getUnreadNotificationCount(userId) {
+          const rows = await query(
+            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read_at IS NULL',
+            [userId]
+          );
+          return rows[0]?.count || 0;
+        },
+
+        async markNotificationRead(notificationId, userId) {
+          await insert(
+            'UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+            [notificationId, userId]
+          );
+        },
+
+        async markAllNotificationsRead(userId) {
+          await insert(
+            'UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND read_at IS NULL',
+            [userId]
+          );
+        },
+
         close() {
           return new Promise((res) => raw.close(() => res()));
         },
@@ -889,6 +938,7 @@ async function clearTables(db) {
     'user_plan_progress', 'scrape_log', 'user_onboarding', 'user_learning_plans',
     'plan_jobs', 'plan_review_content',
     'review_submission_answers', 'review_submissions',
+    'notifications',
   ];
   for (const t of tables) {
     await db.insert(`DELETE FROM ${t}`);
