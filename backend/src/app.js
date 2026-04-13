@@ -32,6 +32,7 @@ const ratingsRoutes = require('./routes/ratings');
 const streakRoutes = require('./routes/streaks');
 const pushRoutes = require('./routes/push');
 const onboardingRoutes = require('./routes/onboarding');
+const notificationRoutes = require('./routes/notifications');
 app.use('/api/skills', skillRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -42,6 +43,7 @@ app.use('/api/ratings', ratingsRoutes);
 app.use('/api/streaks', streakRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Global rate limit on /api (applied after specific route limiters)
 app.use('/api', apiLimiter);

@@ -172,28 +172,33 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
 
     const reviewContent = await db.getReviewContent(skillId, dayNumber, null);
     let knowledgeChecks = [];
+    let contentCovered = [];
     if (reviewContent?.body) {
       const body = typeof reviewContent.body === 'string' ? JSON.parse(reviewContent.body) : reviewContent.body;
       knowledgeChecks = body.knowledge_checks || [];
+      contentCovered = Array.isArray(body.content_covered) ? body.content_covered : [];
     }
 
     const gradedAnswers = answers.map((ans) => {
       const check = knowledgeChecks.find((kc) => kc.id === ans.check_id);
       let correct = null;
-      if (check?.type === 'multiple_choice' && Array.isArray(check.options)) {
-        const correctOption = check.options[0];
-        correct = ans.answer === correctOption ? 1 : 0;
+      if (check?.type === 'multiple_choice' && Number.isInteger(check.correct_option)) {
+        const correctText = check.options?.[check.correct_option];
+        correct = ans.answer === correctText ? 1 : 0;
       }
-      return { ...ans, correct };
+      return { ...ans, correct, topic: check?.topic || null };
     });
 
     const missed = gradedAnswers.filter((a) => a.correct === 0);
     const mcTotal = gradedAnswers.filter((a) => a.correct !== null).length;
     const mcCorrect = gradedAnswers.filter((a) => a.correct === 1).length;
+    const missedTopics = [...new Set(missed.map((m) => m.topic).filter(Boolean))];
     const resultSummary = JSON.stringify({
       total_checks: gradedAnswers.length,
       multiple_choice: { total: mcTotal, correct: mcCorrect },
-      missed: missed.map((m) => ({ check_id: m.check_id, question: m.question })),
+      missed: missed.map((m) => ({ check_id: m.check_id, question: m.question, topic: m.topic })),
+      missed_topics: missedTopics,
+      content_to_review: contentCovered,
     });
 
     const submission = await db.createReviewSubmission({
@@ -206,11 +211,44 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
     });
     await db.saveReviewSubmissionAnswers(submission.id, gradedAnswers);
 
+    const parsedResult = JSON.parse(resultSummary);
+    const mc = parsedResult.multiple_choice;
+    const scoreText = mc.total > 0 ? `${mc.correct}/${mc.total} correct` : 'Completed';
+
+    let notificationBody;
+    if (mc.total === 0) {
+      notificationBody = 'Your review has been submitted successfully.';
+    } else if (missed.length === 0) {
+      notificationBody = `Perfect — ${mc.correct} out of ${mc.total} on your knowledge check.`;
+    } else {
+      const days = contentCovered.map((c) => c.day).filter((d) => Number.isInteger(d));
+      const dayRange = days.length > 0
+        ? (days.length === 1 ? `Day ${days[0]}` : `Days ${Math.min(...days)}–${Math.max(...days)}`)
+        : null;
+      const topicsText = missedTopics.length > 0
+        ? ` — topics: ${missedTopics.map((t) => t.replace(/-/g, ' ')).join(', ')}`
+        : '';
+      const dayText = dayRange ? ` Revisit ${dayRange}` : ' Revisit the covered material';
+      notificationBody = `You scored ${mc.correct} out of ${mc.total}.${dayText}${topicsText}.`;
+    }
+
+    try {
+      await db.createNotification({
+        user_id: req.user.id,
+        type: 'review_result',
+        title: `Review Day ${dayNumber}: ${scoreText}`,
+        body: notificationBody,
+        data: { submissionId: submission.id, skillId, dayNumber, result: parsedResult },
+      });
+    } catch (err) {
+      console.error('Notification creation error:', err);
+    }
+
     return res.json({
       ok: true,
       submissionId: submission.id,
       status: 'completed',
-      result: JSON.parse(resultSummary),
+      result: parsedResult,
     });
   } catch (err) {
     console.error('Review submit error:', err);

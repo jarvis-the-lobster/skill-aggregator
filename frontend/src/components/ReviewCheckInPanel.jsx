@@ -149,7 +149,10 @@ export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClo
       }
       setSubmitted(true);
       onSubmitted?.();
-      setTimeout(() => onClose(), 800);
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('notifications:refresh'));
+        onClose();
+      }, 800);
     } catch {
       onClose();
     }
