@@ -38,6 +38,7 @@ function normalizeKnowledgeChecks(review) {
 
 function ReviewStepCard({ check, answer, onAnswerChange }) {
   const answerId = check?.id ? `${check.id}-answer` : 'review-answer';
+  const isMultipleChoice = check?.type === 'multiple_choice' && Array.isArray(check.options) && check.options.length > 0;
 
   return (
     <div className="flex flex-1 flex-col gap-4 sm:max-h-[420px] sm:justify-start sm:gap-6">
@@ -49,20 +50,62 @@ function ReviewStepCard({ check, answer, onAnswerChange }) {
         )}
       </div>
 
-      <label htmlFor={answerId} className="block space-y-2.5">
-        <span className="text-sm font-medium text-slate-200">Your answer</span>
-        <p className="text-sm leading-6 text-slate-400">
-          Answer with as much as you can honestly recall. If you are unsure or blanking, just say &ldquo;I don&apos;t remember.&rdquo;
-        </p>
-        <textarea
-          id={answerId}
-          value={answer}
-          onChange={(event) => onAnswerChange(event.target.value)}
-          rows={4}
-          placeholder={check?.placeholder || 'Give a short answer in your own words'}
-          className="w-full rounded-2xl border border-white/[0.08] bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-400/20 sm:min-h-[170px]"
-        />
-      </label>
+      {isMultipleChoice ? (
+        <fieldset className="space-y-2.5">
+          <legend className="text-sm font-medium text-slate-200">Choose one</legend>
+          <div className="space-y-2">
+            {check.options.map((option, index) => {
+              const optionId = `${answerId}-option-${index}`;
+              const isSelected = answer === option;
+              return (
+                <label
+                  key={optionId}
+                  htmlFor={optionId}
+                  className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                    isSelected
+                      ? 'border-purple-400/60 bg-purple-500/15 text-white'
+                      : 'border-white/[0.08] bg-slate-950/50 text-slate-300 hover:border-white/[0.16] hover:text-white'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    id={optionId}
+                    name={answerId}
+                    value={option}
+                    checked={isSelected}
+                    onChange={() => onAnswerChange(option)}
+                    className="sr-only"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
+                      isSelected ? 'border-purple-400 bg-purple-400' : 'border-slate-500'
+                    }`}
+                  >
+                    {isSelected && <span className="h-2 w-2 rounded-full bg-white" />}
+                  </span>
+                  <span>{option}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      ) : (
+        <label htmlFor={answerId} className="block space-y-2.5">
+          <span className="text-sm font-medium text-slate-200">Your answer</span>
+          <p className="text-sm leading-6 text-slate-400">
+            Answer with as much as you can honestly recall. If you are unsure or blanking, just say &ldquo;I don&apos;t remember.&rdquo;
+          </p>
+          <textarea
+            id={answerId}
+            value={answer}
+            onChange={(event) => onAnswerChange(event.target.value)}
+            rows={4}
+            placeholder={check?.placeholder || 'Give a short answer in your own words'}
+            className="w-full rounded-2xl border border-white/[0.08] bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-400/20 sm:min-h-[170px]"
+          />
+        </label>
+      )}
     </div>
   );
 }

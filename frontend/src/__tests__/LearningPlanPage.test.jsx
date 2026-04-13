@@ -399,6 +399,162 @@ describe('LearningPlanPage', () => {
       expect(screen.getByRole('textbox', { name: /your answer/i })).toBeInTheDocument();
       expect(screen.queryByText('What a solid answer should touch')).not.toBeInTheDocument();
     });
+
+    it('renders multiple-choice options as radio-style UI for multiple_choice knowledge checks', async () => {
+      const sharedPlanWithMCReview = SHARED_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              review_status: 'ready',
+              review_title: 'Week 1 review',
+              review_body: JSON.stringify({
+                summary: 'Quick recap before you move on.',
+                content_covered: [
+                  { day: 1, type: 'video', title: 'Intro to Python' },
+                ],
+                knowledge_checks: [
+                  {
+                    id: 'mc1',
+                    type: 'multiple_choice',
+                    question: 'Which keyword declares a variable in Python?',
+                    options: ['var', 'let', 'Neither — just assign it', 'const'],
+                    helper_text: 'Think about how Python differs from JavaScript.',
+                  },
+                ],
+                reflection_prompts: ['What still feels fuzzy after this week?'],
+              }),
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: sharedPlanWithMCReview,
+        planReady: true,
+        reviewContent: {
+          7: {
+            title: 'Week 1 review',
+            body: {
+              summary: 'Quick recap before you move on.',
+              content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+              knowledge_checks: [
+                {
+                  id: 'mc1',
+                  type: 'multiple_choice',
+                  question: 'Which keyword declares a variable in Python?',
+                  options: ['var', 'let', 'Neither — just assign it', 'const'],
+                  helper_text: 'Think about how Python differs from JavaScript.',
+                },
+              ],
+              reflection_prompts: ['What still feels fuzzy after this week?'],
+            },
+          },
+        },
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: false,
+        progress: null,
+        plan: null,
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      const user = userEvent.setup();
+      const openButton = await screen.findByRole('button', { name: /week 1 review/i });
+      await user.click(openButton);
+
+      expect(await screen.findByRole('dialog', { name: /day 7 review/i })).toBeInTheDocument();
+      await user.click(screen.getByText('Start review'));
+
+      expect(await screen.findByText('Which keyword declares a variable in Python?')).toBeInTheDocument();
+      expect(screen.getByText('Think about how Python differs from JavaScript.')).toBeInTheDocument();
+      expect(screen.getByText('Choose one')).toBeInTheDocument();
+
+      const radios = screen.getAllByRole('radio');
+      expect(radios).toHaveLength(4);
+      expect(screen.getByText('var')).toBeInTheDocument();
+      expect(screen.getByText('let')).toBeInTheDocument();
+      expect(screen.getByText('Neither — just assign it')).toBeInTheDocument();
+      expect(screen.getByText('const')).toBeInTheDocument();
+
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+      await user.click(screen.getByLabelText('Neither — just assign it'));
+      expect(screen.getByLabelText('Neither — just assign it')).toBeChecked();
+    });
+
+    it('renders short-answer textarea when type is not multiple_choice', async () => {
+      const sharedPlanWithSAReview = SHARED_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              review_status: 'ready',
+              review_title: 'Week 1 review',
+              review_body: JSON.stringify({
+                summary: 'Quick recap.',
+                content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+                knowledge_checks: [
+                  {
+                    id: 'sa1',
+                    type: 'short_answer',
+                    question: 'Explain what a list is in Python.',
+                    placeholder: 'Your explanation here',
+                  },
+                ],
+                reflection_prompts: [],
+              }),
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: sharedPlanWithSAReview,
+        planReady: true,
+        reviewContent: {
+          7: {
+            title: 'Week 1 review',
+            body: {
+              summary: 'Quick recap.',
+              content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+              knowledge_checks: [
+                {
+                  id: 'sa1',
+                  type: 'short_answer',
+                  question: 'Explain what a list is in Python.',
+                  placeholder: 'Your explanation here',
+                },
+              ],
+              reflection_prompts: [],
+            },
+          },
+        },
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: false,
+        progress: null,
+        plan: null,
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      const user = userEvent.setup();
+      const openButton = await screen.findByRole('button', { name: /week 1 review/i });
+      await user.click(openButton);
+      await user.click(screen.getByText('Start review'));
+
+      expect(await screen.findByText('Explain what a list is in Python.')).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /your answer/i })).toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    });
   });
 
   describe('auth loading race condition', () => {
