@@ -259,6 +259,14 @@ function validateKnowledgeChecks(knowledgeChecks) {
         return 'knowledge_check options must be an array of at least 2 non-empty strings';
       }
     }
+    if (check.type === 'multiple_choice') {
+      if (typeof check.correct_option !== 'string' || !check.correct_option.trim()) {
+        return 'multiple_choice knowledge_check must include a non-empty correct_option';
+      }
+      if (!Array.isArray(check.options) || !check.options.includes(check.correct_option)) {
+        return 'correct_option must match one of the provided options';
+      }
+    }
   }
 
   return null;

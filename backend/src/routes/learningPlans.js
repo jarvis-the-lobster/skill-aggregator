@@ -180,9 +180,8 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
     const gradedAnswers = answers.map((ans) => {
       const check = knowledgeChecks.find((kc) => kc.id === ans.check_id);
       let correct = null;
-      if (check?.type === 'multiple_choice' && Array.isArray(check.options)) {
-        const correctOption = check.options[0];
-        correct = ans.answer === correctOption ? 1 : 0;
+      if (check?.type === 'multiple_choice' && check.correct_option) {
+        correct = ans.answer === check.correct_option ? 1 : 0;
       }
       return { ...ans, correct };
     });

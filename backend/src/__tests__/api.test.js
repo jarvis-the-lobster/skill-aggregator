@@ -281,6 +281,7 @@ describe('GET/POST /api/admin/review-jobs', () => {
           type: 'multiple_choice',
           question: 'Which keyword declares a variable in Python?',
           options: ['var', 'let', 'Neither — just assign it', 'const'],
+          correct_option: 'Neither — just assign it',
           helper_text: 'Think about how Python differs from JavaScript.',
         },
       ],
@@ -333,6 +334,105 @@ describe('GET/POST /api/admin/review-jobs', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/options must be an array of at least 2/i);
   });
+
+  test('rejects multiple_choice without correct_option', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({
+        title: 'Week 1 check-in',
+        body: {
+          summary: 'Test.',
+          content_covered: [{ day: 1, type: 'video', title: 'Python variables' }],
+          knowledge_checks: [
+            {
+              type: 'multiple_choice',
+              question: 'Pick one',
+              options: ['A', 'B'],
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/correct_option/i);
+  });
+
+  test('rejects correct_option that does not match any option', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({
+        title: 'Week 1 check-in',
+        body: {
+          summary: 'Test.',
+          content_covered: [{ day: 1, type: 'video', title: 'Python variables' }],
+          knowledge_checks: [
+            {
+              type: 'multiple_choice',
+              question: 'Pick one',
+              options: ['A', 'B'],
+              correct_option: 'C',
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/correct_option must match/i);
+  });
+});
+
+describe('GET /api/learning-plans/:skillId — answer key sanitization', () => {
+  test('does not expose correct_option in reviewContent', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+
+    const reviewBody = JSON.stringify({
+      summary: 'Week 1 recap',
+      content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+      knowledge_checks: [
+        { id: 'kc-1', type: 'multiple_choice', question: 'What is Python?', options: ['A language', 'A snake'], correct_option: 'A language' },
+      ],
+      reflection_prompts: ['What clicked this week?'],
+    });
+
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, review_status, review_title, review_body) VALUES (?, 7, NULL, 'review', 'ready', 'Week 1', ?)",
+      ['python', reviewBody]
+    );
+
+    const res = await request(app).get('/api/learning-plans/python');
+
+    expect(res.status).toBe(200);
+    const rc = res.body.reviewContent;
+    expect(rc).toBeDefined();
+    expect(rc['7']).toBeDefined();
+    const checks = rc['7'].body.knowledge_checks;
+    expect(checks[0].options).toBeDefined();
+    expect(checks[0].correct_option).toBeUndefined();
+  });
 });
 
 describe('POST /api/learning-plans/:skillId/review/:dayNumber/submit', () => {
@@ -350,7 +450,7 @@ describe('POST /api/learning-plans/:skillId/review/:dayNumber/submit', () => {
       summary: 'Week 1 recap',
       content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
       knowledge_checks: [
-        { id: 'kc-1', type: 'multiple_choice', question: 'What is Python?', options: ['A language', 'A snake', 'A framework'] },
+        { id: 'kc-1', type: 'multiple_choice', question: 'What is Python?', options: ['A language', 'A snake', 'A framework'], correct_option: 'A language' },
         { id: 'kc-2', type: 'short_answer', question: 'Explain variables', placeholder: 'Your answer' },
       ],
       reflection_prompts: ['What clicked this week?'],
@@ -458,6 +558,24 @@ describe('POST /api/learning-plans/:skillId/review/:dayNumber/submit', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/non-empty array/i);
+  });
+
+  test('free user: scores using correct_option field, not first option', async () => {
+    const { token } = await setupEnrolledUser();
+
+    // 'A language' is correct_option but NOT options[0] if the fixture had a different order
+    // The stored fixture has correct_option: 'A language' — answer correctly
+    const res = await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [
+          { check_id: 'kc-1', question: 'What is Python?', check_type: 'multiple_choice', answer: 'A language' },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.multiple_choice).toEqual({ total: 1, correct: 1 });
   });
 
   test('rejects unenrolled user', async () => {

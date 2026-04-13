@@ -285,6 +285,15 @@ class LearningPlanService {
     return this.generatePlan(skillId);
   }
 
+  _sanitizeReviewBody(body) {
+    if (!body || typeof body !== 'object') return body;
+    if (!Array.isArray(body.knowledge_checks)) return body;
+    return {
+      ...body,
+      knowledge_checks: body.knowledge_checks.map(({ correct_option, ...rest }) => rest),
+    };
+  }
+
   async getPlanWithReadiness(skillId) {
     const plan = await this.getPlan(skillId);
     await this.ensureReviewJobs(skillId);
@@ -298,7 +307,7 @@ class LearningPlanService {
       }
       reviewContent[row.day_number] = {
         title: row.review_title,
-        body,
+        body: this._sanitizeReviewBody(body),
         review_type: 'weekly_checkin',
         day_number: row.day_number,
       };
@@ -368,7 +377,7 @@ class LearningPlanService {
       }
       reviewContent[row.day_number] = {
         title: row.review_title,
-        body,
+        body: this._sanitizeReviewBody(body),
         review_type: 'weekly_checkin',
         day_number: row.day_number,
       };
