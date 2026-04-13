@@ -261,6 +261,78 @@ describe('GET/POST /api/admin/review-jobs', () => {
     expect(jobRow.status).toBe('pending');
     expect(jobRow.error_message).toMatch(/knowledge_checks must be a non-empty array/i);
   });
+
+  test('accepts multiple_choice knowledge checks with valid options', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+
+    const payload = {
+      summary: 'You covered variables and assignment.',
+      content_covered: [{ day: 1, type: 'video', title: 'Python variables' }],
+      knowledge_checks: [
+        {
+          type: 'multiple_choice',
+          question: 'Which keyword declares a variable in Python?',
+          options: ['var', 'let', 'Neither — just assign it', 'const'],
+          helper_text: 'Think about how Python differs from JavaScript.',
+        },
+      ],
+      reflection_prompts: ['What clicked this week?'],
+    };
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ title: 'Week 1 check-in', body: payload, reviewType: 'weekly_checkin' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    const storedReview = await db.getReviewContent('python', 7, null);
+    expect(JSON.parse(storedReview.body).knowledge_checks[0].options).toEqual([
+      'var', 'let', 'Neither — just assign it', 'const',
+    ]);
+  });
+
+  test('rejects knowledge checks with fewer than 2 options', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+      plan_created_at: '2026-04-11 12:00:00',
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({
+        title: 'Week 1 check-in',
+        body: {
+          summary: 'Test.',
+          content_covered: [{ day: 1, type: 'video', title: 'Python variables' }],
+          knowledge_checks: [
+            {
+              type: 'multiple_choice',
+              question: 'Pick one',
+              options: ['Only one option'],
+            },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/options must be an array of at least 2/i);
+  });
 });
 
 describe('POST /api/admin/skills/:id/category', () => {

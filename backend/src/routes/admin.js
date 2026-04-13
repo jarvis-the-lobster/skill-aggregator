@@ -254,6 +254,11 @@ function validateKnowledgeChecks(knowledgeChecks) {
         return 'knowledge_check expected_points must be an array of non-empty strings';
       }
     }
+    if (check.options != null) {
+      if (!Array.isArray(check.options) || check.options.length < 2 || check.options.some((opt) => typeof opt !== 'string' || !opt.trim())) {
+        return 'knowledge_check options must be an array of at least 2 non-empty strings';
+      }
+    }
   }
 
   return null;
