@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BookOpen, ClipboardCheck, Play, Sparkles, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowRight, BookOpen, Check, ClipboardCheck, Loader, Play, Sparkles, X } from 'lucide-react';
+import { apiService } from '../services/api';
 
 function ProgressPill({ current, total }) {
   const percent = total > 0 ? Math.round((current / total) * 100) : 0;
@@ -110,7 +111,7 @@ function ReviewStepCard({ check, answer, onAnswerChange }) {
   );
 }
 
-export function ReviewCheckInPanel({ review, dayNumber, onClose }) {
+export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClose, onSubmitted }) {
   const prompts = review?.body?.reflection_prompts || [];
   const covered = review?.body?.content_covered || [];
   const knowledgeChecks = normalizeKnowledgeChecks(review);
@@ -124,6 +125,35 @@ export function ReviewCheckInPanel({ review, dayNumber, onClose }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [reflection, setReflection] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = useCallback(async () => {
+    if (!enrolled || !skillId || submitting) {
+      onClose();
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const formattedAnswers = knowledgeChecks.map((check, index) => ({
+        check_id: check.id || `knowledge-${index + 1}`,
+        question: check.question,
+        check_type: check.type || 'short_answer',
+        answer: answers[check.id || `knowledge-${index + 1}`] || '',
+      }));
+      if (formattedAnswers.length > 0) {
+        await apiService.submitReview(skillId, dayNumber, {
+          answers: formattedAnswers,
+          reflection: reflection || undefined,
+        });
+      }
+      setSubmitted(true);
+      onSubmitted?.();
+      setTimeout(() => onClose(), 800);
+    } catch {
+      onClose();
+    }
+  }, [enrolled, skillId, submitting, knowledgeChecks, answers, reflection, dayNumber, onClose, onSubmitted]);
 
   const currentStep = steps[stepIndex];
   const totalSteps = steps.length;
@@ -261,11 +291,19 @@ export function ReviewCheckInPanel({ review, dayNumber, onClose }) {
             Back
           </button>
           <button
-            onClick={currentStep?.type === 'reflection' || stepIndex === totalSteps - 1 ? onClose : advance}
-            className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:scale-[1.02]"
+            onClick={currentStep?.type === 'reflection' || stepIndex === totalSteps - 1 ? handleSubmit : advance}
+            disabled={submitting}
+            className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:scale-[1.02] disabled:opacity-60"
           >
-            {currentStep?.type === 'reflection' || stepIndex === totalSteps - 1 ? 'Finish review' : stepIndex === 0 ? 'Start review' : 'Next'}
-            <ArrowRight className="h-4 w-4" />
+            {submitted ? (
+              <>Saved <Check className="h-4 w-4" /></>
+            ) : submitting ? (
+              <>Saving… <Loader className="h-4 w-4 animate-spin" /></>
+            ) : currentStep?.type === 'reflection' || stepIndex === totalSteps - 1 ? (
+              <>Finish review <ArrowRight className="h-4 w-4" /></>
+            ) : (
+              <>{stepIndex === 0 ? 'Start review' : 'Next'} <ArrowRight className="h-4 w-4" /></>
+            )}
           </button>
         </div>
       </div>

@@ -71,6 +71,7 @@ const TABLE_SQL = [
     google_id TEXT UNIQUE,
     name TEXT,
     avatar_url TEXT,
+    plan_tier TEXT DEFAULT 'free',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME
   )`,
@@ -209,6 +210,31 @@ const TABLE_SQL = [
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (skill_id) REFERENCES skills(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS review_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    skill_id TEXT NOT NULL,
+    day_number INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'completed',
+    result_summary TEXT,
+    reflection TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (skill_id) REFERENCES skills(id),
+    UNIQUE(user_id, skill_id, day_number)
+  )`,
+  `CREATE TABLE IF NOT EXISTS review_submission_answers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    submission_id INTEGER NOT NULL,
+    check_id TEXT NOT NULL,
+    question TEXT NOT NULL,
+    check_type TEXT NOT NULL DEFAULT 'short_answer',
+    answer TEXT,
+    correct INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (submission_id) REFERENCES review_submissions(id)
   )`,
 ];
 
@@ -684,6 +710,55 @@ function createTestDb() {
           return insert('DELETE FROM plan_review_content WHERE skill_id = ?', [skillId]);
         },
 
+        async createReviewSubmission({ user_id, skill_id, day_number, status, result_summary = null, reflection = null }) {
+          const result = await insert(
+            `INSERT INTO review_submissions (user_id, skill_id, day_number, status, result_summary, reflection)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(user_id, skill_id, day_number) DO UPDATE SET
+               status = excluded.status,
+               result_summary = excluded.result_summary,
+               reflection = excluded.reflection,
+               updated_at = CURRENT_TIMESTAMP`,
+            [user_id, skill_id, day_number, status, result_summary, reflection]
+          );
+          const rows = await query(
+            'SELECT * FROM review_submissions WHERE user_id = ? AND skill_id = ? AND day_number = ?',
+            [user_id, skill_id, day_number]
+          );
+          return rows[0] || null;
+        },
+
+        async saveReviewSubmissionAnswers(submissionId, answers) {
+          await insert('DELETE FROM review_submission_answers WHERE submission_id = ?', [submissionId]);
+          for (const ans of answers) {
+            await insert(
+              `INSERT INTO review_submission_answers (submission_id, check_id, question, check_type, answer, correct)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [submissionId, ans.check_id, ans.question, ans.check_type || 'short_answer', ans.answer, ans.correct ?? null]
+            );
+          }
+        },
+
+        async getReviewSubmission(userId, skillId, dayNumber) {
+          const rows = await query(
+            'SELECT * FROM review_submissions WHERE user_id = ? AND skill_id = ? AND day_number = ?',
+            [userId, skillId, dayNumber]
+          );
+          return rows[0] || null;
+        },
+
+        async getReviewSubmissionAnswers(submissionId) {
+          return query(
+            'SELECT * FROM review_submission_answers WHERE submission_id = ? ORDER BY id ASC',
+            [submissionId]
+          );
+        },
+
+        async getUserPlanTier(userId) {
+          const rows = await query('SELECT plan_tier FROM users WHERE id = ?', [userId]);
+          return rows[0]?.plan_tier || 'free';
+        },
+
         async getMetrics() {
           const { start: pacificDayStart, end: pacificDayEnd } = getPacificDayWindow();
 
@@ -813,6 +888,7 @@ async function clearTables(db) {
     'user_courses', 'push_subscriptions', 'subscribers', 'learning_plans',
     'user_plan_progress', 'scrape_log', 'user_onboarding', 'user_learning_plans',
     'plan_jobs', 'plan_review_content',
+    'review_submission_answers', 'review_submissions',
   ];
   for (const t of tables) {
     await db.insert(`DELETE FROM ${t}`);

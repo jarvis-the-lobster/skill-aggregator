@@ -124,6 +124,11 @@ export const apiService = {
     return response.data;
   },
 
+  async submitReview(skillId, dayNumber, { answers, reflection }) {
+    const response = await api.post(`/learning-plans/${skillId}/review/${dayNumber}/submit`, { answers, reflection });
+    return response.data;
+  },
+
   // Ratings endpoints
   async rateContent(contentId, rating) {
     const response = await api.post(`/ratings/${contentId}`, { rating });

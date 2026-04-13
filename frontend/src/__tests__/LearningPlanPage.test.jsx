@@ -22,6 +22,7 @@ vi.mock('../services/api', () => ({
     enrollLearningPlan: (...args) => mockEnrollLearningPlan(...args),
     refreshPlan: (...args) => mockRefreshPlan(...args),
     completePlanDay: (...args) => mockCompletePlanDay(...args),
+    submitReview: vi.fn().mockResolvedValue({ ok: true }),
   },
 }));
 

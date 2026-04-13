@@ -429,6 +429,8 @@ export function LearningPlanPage() {
             <ReviewCheckInPanel
               review={reviewContent[expandedReview]}
               dayNumber={expandedReview}
+              skillId={skillId}
+              enrolled={enrolled}
               onClose={() => {
                 const trigger = reviewButtonRefs.current[expandedReview];
                 setExpandedReview(null);

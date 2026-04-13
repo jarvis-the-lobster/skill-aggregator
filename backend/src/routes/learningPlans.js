@@ -135,4 +135,87 @@ router.post('/:skillId/complete-day', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/learning-plans/:skillId/review/:dayNumber/submit — submit review answers
+router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) => {
+  try {
+    const { skillId } = req.params;
+    const dayNumber = Number(req.params.dayNumber);
+    const { answers, reflection } = req.body;
+
+    if (!Array.isArray(answers) || answers.length === 0) {
+      return res.status(400).json({ error: 'answers must be a non-empty array' });
+    }
+    for (const ans of answers) {
+      if (!ans.check_id || !ans.question || ans.answer === undefined) {
+        return res.status(400).json({ error: 'Each answer must have check_id, question, and answer' });
+      }
+    }
+
+    const progress = await db.getPlanProgress(req.user.id, skillId);
+    if (!progress) {
+      return res.status(403).json({ error: 'Not enrolled in this plan' });
+    }
+
+    const planTier = await db.getUserPlanTier(req.user.id);
+
+    if (planTier === 'premium') {
+      const submission = await db.createReviewSubmission({
+        user_id: req.user.id,
+        skill_id: skillId,
+        day_number: dayNumber,
+        status: 'pending',
+        reflection: reflection || null,
+      });
+      await db.saveReviewSubmissionAnswers(submission.id, answers);
+      return res.json({ ok: true, submissionId: submission.id, status: 'pending' });
+    }
+
+    const reviewContent = await db.getReviewContent(skillId, dayNumber, null);
+    let knowledgeChecks = [];
+    if (reviewContent?.body) {
+      const body = typeof reviewContent.body === 'string' ? JSON.parse(reviewContent.body) : reviewContent.body;
+      knowledgeChecks = body.knowledge_checks || [];
+    }
+
+    const gradedAnswers = answers.map((ans) => {
+      const check = knowledgeChecks.find((kc) => kc.id === ans.check_id);
+      let correct = null;
+      if (check?.type === 'multiple_choice' && Array.isArray(check.options)) {
+        const correctOption = check.options[0];
+        correct = ans.answer === correctOption ? 1 : 0;
+      }
+      return { ...ans, correct };
+    });
+
+    const missed = gradedAnswers.filter((a) => a.correct === 0);
+    const mcTotal = gradedAnswers.filter((a) => a.correct !== null).length;
+    const mcCorrect = gradedAnswers.filter((a) => a.correct === 1).length;
+    const resultSummary = JSON.stringify({
+      total_checks: gradedAnswers.length,
+      multiple_choice: { total: mcTotal, correct: mcCorrect },
+      missed: missed.map((m) => ({ check_id: m.check_id, question: m.question })),
+    });
+
+    const submission = await db.createReviewSubmission({
+      user_id: req.user.id,
+      skill_id: skillId,
+      day_number: dayNumber,
+      status: 'completed',
+      result_summary: resultSummary,
+      reflection: reflection || null,
+    });
+    await db.saveReviewSubmissionAnswers(submission.id, gradedAnswers);
+
+    return res.json({
+      ok: true,
+      submissionId: submission.id,
+      status: 'completed',
+      result: JSON.parse(resultSummary),
+    });
+  } catch (err) {
+    console.error('Review submit error:', err);
+    res.status(500).json({ error: 'Failed to submit review' });
+  }
+});
+
 module.exports = router;

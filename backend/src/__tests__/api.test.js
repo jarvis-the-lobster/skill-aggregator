@@ -335,6 +335,148 @@ describe('GET/POST /api/admin/review-jobs', () => {
   });
 });
 
+describe('POST /api/learning-plans/:skillId/review/:dayNumber/submit', () => {
+  async function setupEnrolledUser() {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'reviewer@example.com', password: 'password123' });
+    const token = res.body.token;
+    const userId = res.body.user.id;
+
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.enrollPlan(userId, 'python');
+
+    const reviewBody = {
+      summary: 'Week 1 recap',
+      content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+      knowledge_checks: [
+        { id: 'kc-1', type: 'multiple_choice', question: 'What is Python?', options: ['A language', 'A snake', 'A framework'] },
+        { id: 'kc-2', type: 'short_answer', question: 'Explain variables', placeholder: 'Your answer' },
+      ],
+      reflection_prompts: ['What clicked this week?'],
+    };
+    await db.saveReviewContent({
+      skill_id: 'python', user_id: null, day_number: 7,
+      review_type: 'weekly_checkin', title: 'Week 1 check-in',
+      body: reviewBody, plan_created_at: null,
+    });
+
+    return { token, userId };
+  }
+
+  test('free user: stores submission with result summary', async () => {
+    const { token } = await setupEnrolledUser();
+
+    const res = await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [
+          { check_id: 'kc-1', question: 'What is Python?', check_type: 'multiple_choice', answer: 'A language' },
+          { check_id: 'kc-2', question: 'Explain variables', check_type: 'short_answer', answer: 'They store data' },
+        ],
+        reflection: 'Variables make sense now.',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.status).toBe('completed');
+    expect(res.body.result.multiple_choice).toEqual({ total: 1, correct: 1 });
+    expect(res.body.result.missed).toEqual([]);
+
+    const submissionRows = await db.query('SELECT * FROM review_submissions WHERE id = ?', [res.body.submissionId]);
+    expect(submissionRows).toHaveLength(1);
+    expect(submissionRows[0].status).toBe('completed');
+    expect(submissionRows[0].reflection).toBe('Variables make sense now.');
+
+    const storedAnswers = await db.getReviewSubmissionAnswers(res.body.submissionId);
+    expect(storedAnswers).toHaveLength(2);
+    expect(storedAnswers[0].correct).toBe(1);
+    expect(storedAnswers[1].correct).toBeNull();
+  });
+
+  test('free user: missed MC questions appear in result', async () => {
+    const { token } = await setupEnrolledUser();
+
+    const res = await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [
+          { check_id: 'kc-1', question: 'What is Python?', check_type: 'multiple_choice', answer: 'A snake' },
+          { check_id: 'kc-2', question: 'Explain variables', check_type: 'short_answer', answer: 'Not sure' },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('completed');
+    expect(res.body.result.multiple_choice).toEqual({ total: 1, correct: 0 });
+    expect(res.body.result.missed).toHaveLength(1);
+    expect(res.body.result.missed[0].check_id).toBe('kc-1');
+  });
+
+  test('premium user: stores submission as pending without result summary', async () => {
+    const { token, userId } = await setupEnrolledUser();
+    await db.insert("UPDATE users SET plan_tier = 'premium' WHERE id = ?", [userId]);
+
+    const res = await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [
+          { check_id: 'kc-1', question: 'What is Python?', check_type: 'multiple_choice', answer: 'A language' },
+          { check_id: 'kc-2', question: 'Explain variables', check_type: 'short_answer', answer: 'They hold values' },
+        ],
+        reflection: 'Feeling good.',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.status).toBe('pending');
+    expect(res.body.result).toBeUndefined();
+
+    const submissionRow = await db.query('SELECT * FROM review_submissions WHERE id = ?', [res.body.submissionId]);
+    expect(submissionRow[0].status).toBe('pending');
+    expect(submissionRow[0].result_summary).toBeNull();
+  });
+
+  test('rejects unauthenticated requests', async () => {
+    const res = await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .send({ answers: [{ check_id: 'kc-1', question: 'Q', answer: 'A' }] });
+
+    expect(res.status).toBe(401);
+  });
+
+  test('rejects empty answers array', async () => {
+    const { token } = await setupEnrolledUser();
+
+    const res = await request(app)
+      .post('/api/learning-plans/python/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: [] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty array/i);
+  });
+
+  test('rejects unenrolled user', async () => {
+    const res = await request(app)
+      .post('/api/auth/register')
+      .send({ email: 'outsider@example.com', password: 'password123' });
+
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('javascript', 'JavaScript', 'ready')");
+
+    const submitRes = await request(app)
+      .post('/api/learning-plans/javascript/review/7/submit')
+      .set('Authorization', `Bearer ${res.body.token}`)
+      .send({ answers: [{ check_id: 'kc-1', question: 'Q', answer: 'A' }] });
+
+    expect(submitRes.status).toBe(403);
+    expect(submitRes.body.error).toMatch(/not enrolled/i);
+  });
+});
+
 describe('POST /api/admin/skills/:id/category', () => {
   const originalCronSecret = process.env.CRON_SECRET;
 
