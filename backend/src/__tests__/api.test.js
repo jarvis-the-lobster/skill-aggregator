@@ -19,6 +19,7 @@ jest.mock('../services/pushService', () => ({
   saveSubscription: jest.fn(),
   removeSubscription: jest.fn(),
   sendPushToUser: jest.fn(),
+  sendStreakReminder: jest.fn().mockResolvedValue({ sent: 1, failed: 0 }),
 }));
 
 const scraperService = require('../services/scraperService');
@@ -1052,5 +1053,148 @@ describe('GET /api/push/vapid-key', () => {
     expect(res.status).toBe(503);
 
     if (original !== undefined) process.env.VAPID_PUBLIC_KEY = original;
+  });
+});
+
+describe('POST /api/admin/send-streak-reminders', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+  const pushService = require('../services/pushService');
+
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  const yesterday = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  })();
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+    pushService.sendStreakReminder.mockClear();
+    pushService.sendStreakReminder.mockResolvedValue({ sent: 1, failed: 0 });
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  async function createUserWithStreak({ email, currentStreak, lastActivityDate, withPush = false }) {
+    const user = await db.insert(
+      'INSERT INTO users (email, password_hash) VALUES (?, ?)',
+      [email, 'hash']
+    );
+    await db.insert(
+      'INSERT INTO user_streaks (user_id, current_streak, last_activity_date) VALUES (?, ?, ?)',
+      [user.id, currentStreak, lastActivityDate]
+    );
+    if (withPush) {
+      await db.insert(
+        'INSERT INTO push_subscriptions (user_id, endpoint, keys_p256dh, keys_auth) VALUES (?, ?, ?, ?)',
+        [user.id, `https://push.example.com/${user.id}`, 'p256', 'auth']
+      );
+    }
+    return user.id;
+  }
+
+  test('rejects unauthorized requests', async () => {
+    const res = await request(app).post('/api/admin/send-streak-reminders');
+    expect(res.status).toBe(401);
+  });
+
+  test('creates in-app notifications for all at-risk users regardless of push subscription', async () => {
+    const pushUserId = await createUserWithStreak({
+      email: 'push@example.com',
+      currentStreak: 5,
+      lastActivityDate: yesterday,
+      withPush: true,
+    });
+    const noPushUserId = await createUserWithStreak({
+      email: 'nopush@example.com',
+      currentStreak: 3,
+      lastActivityDate: yesterday,
+      withPush: false,
+    });
+
+    const res = await request(app)
+      .post('/api/admin/send-streak-reminders')
+      .set('Authorization', 'Bearer test-cron-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.usersTargeted).toBe(2);
+    expect(res.body.inAppCreated).toBe(2);
+
+    const pushUserNotifs = await db.getNotifications(pushUserId, { limit: 10, offset: 0 });
+    const noPushUserNotifs = await db.getNotifications(noPushUserId, { limit: 10, offset: 0 });
+
+    expect(pushUserNotifs).toHaveLength(1);
+    expect(pushUserNotifs[0]).toMatchObject({
+      type: 'streak_reminder',
+      title: 'Your streak is at risk!',
+    });
+    expect(pushUserNotifs[0].body).toContain('5-day streak');
+
+    expect(noPushUserNotifs).toHaveLength(1);
+    expect(noPushUserNotifs[0]).toMatchObject({
+      type: 'streak_reminder',
+    });
+    expect(noPushUserNotifs[0].body).toContain('3-day streak');
+  });
+
+  test('skips users who already completed today', async () => {
+    const completedUserId = await createUserWithStreak({
+      email: 'done@example.com',
+      currentStreak: 10,
+      lastActivityDate: today,
+      withPush: true,
+    });
+    const atRiskUserId = await createUserWithStreak({
+      email: 'atrisk@example.com',
+      currentStreak: 2,
+      lastActivityDate: yesterday,
+      withPush: false,
+    });
+
+    const res = await request(app)
+      .post('/api/admin/send-streak-reminders')
+      .set('Authorization', 'Bearer test-cron-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.usersTargeted).toBe(1);
+    expect(res.body.inAppCreated).toBe(1);
+
+    const completedUserNotifs = await db.getNotifications(completedUserId, { limit: 10, offset: 0 });
+    const atRiskUserNotifs = await db.getNotifications(atRiskUserId, { limit: 10, offset: 0 });
+
+    expect(completedUserNotifs).toHaveLength(0);
+    expect(atRiskUserNotifs).toHaveLength(1);
+    expect(pushService.sendStreakReminder).not.toHaveBeenCalledWith(completedUserId, expect.anything());
+  });
+
+  test('sends push only to users with a push subscription', async () => {
+    const pushUserId = await createUserWithStreak({
+      email: 'push2@example.com',
+      currentStreak: 4,
+      lastActivityDate: yesterday,
+      withPush: true,
+    });
+    const noPushUserId = await createUserWithStreak({
+      email: 'nopush2@example.com',
+      currentStreak: 6,
+      lastActivityDate: yesterday,
+      withPush: false,
+    });
+
+    const res = await request(app)
+      .post('/api/admin/send-streak-reminders')
+      .set('Authorization', 'Bearer test-cron-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.inAppCreated).toBe(2);
+    expect(res.body.sent).toBe(1);
+
+    expect(pushService.sendStreakReminder).toHaveBeenCalledTimes(1);
+    expect(pushService.sendStreakReminder).toHaveBeenCalledWith(pushUserId, 4);
+    expect(pushService.sendStreakReminder).not.toHaveBeenCalledWith(noPushUserId, expect.anything());
   });
 });

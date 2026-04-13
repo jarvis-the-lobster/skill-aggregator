@@ -128,32 +128,51 @@ router.post('/send-streak-reminders', async (req, res) => {
     // Get today's date in Pacific time (matches streak system)
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 
-    // Users with active streaks who haven't completed today
+    // Users with active streaks who haven't completed today.
+    // LEFT JOIN so we target all at-risk streaks for in-app notifications,
+    // not just those opted into browser push.
     const users = await db.query(
-      `SELECT us.user_id, us.current_streak
+      `SELECT us.user_id, us.current_streak,
+              MAX(CASE WHEN ps.user_id IS NOT NULL THEN 1 ELSE 0 END) AS has_push
        FROM user_streaks us
-       INNER JOIN push_subscriptions ps ON ps.user_id = us.user_id
+       LEFT JOIN push_subscriptions ps ON ps.user_id = us.user_id
        WHERE us.current_streak > 0
          AND (us.last_activity_date IS NULL OR us.last_activity_date != ?)
-       GROUP BY us.user_id`,
+       GROUP BY us.user_id, us.current_streak`,
       [today]
     );
 
     let sent = 0;
     let failed = 0;
+    let inAppCreated = 0;
     for (const user of users) {
       try {
-        const result = await pushService.sendStreakReminder(user.user_id, user.current_streak);
-        sent += result.sent;
-        failed += result.failed;
+        await db.createNotification({
+          user_id: user.user_id,
+          type: 'streak_reminder',
+          title: 'Your streak is at risk!',
+          body: `Complete today's lesson to keep your ${user.current_streak}-day streak alive.`,
+          data: { currentStreak: user.current_streak, url: '/my-courses' },
+        });
+        inAppCreated++;
       } catch (err) {
-        failed++;
-        console.error(`[streak-reminders] Failed for user ${user.user_id}:`, err.message);
+        console.error(`[streak-reminders] In-app notification failed for user ${user.user_id}:`, err.message);
+      }
+
+      if (user.has_push) {
+        try {
+          const result = await pushService.sendStreakReminder(user.user_id, user.current_streak);
+          sent += result.sent;
+          failed += result.failed;
+        } catch (err) {
+          failed++;
+          console.error(`[streak-reminders] Push failed for user ${user.user_id}:`, err.message);
+        }
       }
     }
 
-    console.log(`[streak-reminders] Sent ${sent}, failed ${failed}, users targeted ${users.length}`);
-    res.json({ ok: true, usersTargeted: users.length, sent, failed });
+    console.log(`[streak-reminders] Push sent ${sent}, push failed ${failed}, in-app ${inAppCreated}, users targeted ${users.length}`);
+    res.json({ ok: true, usersTargeted: users.length, sent, failed, inAppCreated });
   } catch (err) {
     console.error('[streak-reminders] error:', err.message);
     res.status(500).json({ error: err.message });
