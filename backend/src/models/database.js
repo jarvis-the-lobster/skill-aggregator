@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const { getApplicableSources } = require('../constants/sourceApplicability');
+const { assertValidReviewBody } = require('../utils/reviewBodySchema');
 
 function getPacificDayWindow(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -878,6 +879,7 @@ class Database {
   }
 
   async saveSharedReviewContent({ skill_id, day_number, review_type, title, body, plan_created_at }) {
+    const validated = assertValidReviewBody(body);
     return this.insert(
       `UPDATE learning_plans
        SET review_status = 'ready',
@@ -885,7 +887,7 @@ class Database {
            review_body = ?,
            created_at = CURRENT_TIMESTAMP
        WHERE skill_id = ? AND day_number = ? AND content_type = 'review'`,
-      [title, body ? JSON.stringify(body) : null, skill_id, day_number]
+      [title, JSON.stringify(validated), skill_id, day_number]
     );
   }
 
@@ -1045,6 +1047,7 @@ class Database {
   // --- Plan review content methods ---
 
   async saveReviewContent({ skill_id, user_id = null, day_number, review_type, title, body, plan_created_at }) {
+    const validated = assertValidReviewBody(body);
     await this.insert(
       `DELETE FROM plan_review_content WHERE skill_id = ? AND day_number = ? AND user_id IS ?`,
       [skill_id, day_number, user_id]
@@ -1052,7 +1055,7 @@ class Database {
     return this.insert(
       `INSERT INTO plan_review_content (skill_id, user_id, day_number, review_type, title, body, plan_created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [skill_id, user_id, day_number, review_type, title, body ? JSON.stringify(body) : null, plan_created_at]
+      [skill_id, user_id, day_number, review_type, title, JSON.stringify(validated), plan_created_at]
     );
   }
 

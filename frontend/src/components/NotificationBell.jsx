@@ -33,7 +33,12 @@ export function NotificationBell() {
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60000);
-    return () => clearInterval(interval);
+    const handleRefresh = () => fetchNotifications();
+    window.addEventListener('notifications:refresh', handleRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notifications:refresh', handleRefresh);
+    };
   }, [fetchNotifications]);
 
   useEffect(() => {

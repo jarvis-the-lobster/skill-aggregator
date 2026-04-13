@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const { getApplicableSources } = require('../../constants/sourceApplicability');
+const { assertValidReviewBody } = require('../../utils/reviewBodySchema');
 
 function getPacificDayWindow(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -670,6 +671,7 @@ function createTestDb() {
         },
 
         async saveReviewContent({ skill_id, user_id = null, day_number, review_type, title, body, plan_created_at }) {
+          const validated = assertValidReviewBody(body);
           await insert(
             `DELETE FROM plan_review_content WHERE skill_id = ? AND day_number = ? AND user_id IS ?`,
             [skill_id, day_number, user_id]
@@ -677,11 +679,13 @@ function createTestDb() {
           return insert(
             `INSERT INTO plan_review_content (skill_id, user_id, day_number, review_type, title, body, plan_created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [skill_id, user_id, day_number, review_type, title, body ? JSON.stringify(body) : null, plan_created_at]
+            [skill_id, user_id, day_number, review_type, title, JSON.stringify(validated), plan_created_at]
           );
         },
 
         async saveSharedReviewContent({ skill_id, day_number, review_type, title, body, plan_created_at }) {
+          const validated = assertValidReviewBody(body);
+          const serialized = JSON.stringify(validated);
           await insert(
             `UPDATE learning_plans
              SET review_status = 'ready',
@@ -689,12 +693,12 @@ function createTestDb() {
                  review_body = ?,
                  created_at = CURRENT_TIMESTAMP
              WHERE skill_id = ? AND day_number = ? AND content_type = 'review'`,
-            [title, body ? JSON.stringify(body) : null, skill_id, day_number]
+            [title, serialized, skill_id, day_number]
           );
           return insert(
             `INSERT INTO plan_review_content (skill_id, user_id, day_number, review_type, title, body, plan_created_at)
              VALUES (?, NULL, ?, ?, ?, ?, ?)`,
-            [skill_id, day_number, review_type, title, body ? JSON.stringify(body) : null, plan_created_at]
+            [skill_id, day_number, review_type, title, serialized, plan_created_at]
           );
         },
 
