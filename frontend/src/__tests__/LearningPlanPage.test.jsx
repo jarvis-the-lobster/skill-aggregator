@@ -12,6 +12,7 @@ const mockGetRatings = vi.fn();
 const mockEnrollLearningPlan = vi.fn();
 const mockRefreshPlan = vi.fn();
 const mockCompletePlanDay = vi.fn();
+const mockSubmitReview = vi.fn();
 
 vi.mock('../services/api', () => ({
   apiService: {
@@ -22,6 +23,7 @@ vi.mock('../services/api', () => ({
     enrollLearningPlan: (...args) => mockEnrollLearningPlan(...args),
     refreshPlan: (...args) => mockRefreshPlan(...args),
     completePlanDay: (...args) => mockCompletePlanDay(...args),
+    submitReview: (...args) => mockSubmitReview(...args),
   },
 }));
 
@@ -554,6 +556,97 @@ describe('LearningPlanPage', () => {
       expect(await screen.findByText('Explain what a list is in Python.')).toBeInTheDocument();
       expect(screen.getByRole('textbox', { name: /your answer/i })).toBeInTheDocument();
       expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('review submission marks day complete', () => {
+    it('calls completePlanDay after successful review submission', async () => {
+      const planWithReview = PERSONAL_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              review_status: 'ready',
+              review_title: 'Week 1 review',
+              review_body: JSON.stringify({
+                summary: 'Quick recap.',
+                content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+                knowledge_checks: [
+                  {
+                    id: 'sa1',
+                    type: 'short_answer',
+                    question: 'What is a variable?',
+                    placeholder: 'Your answer',
+                  },
+                ],
+                reflection_prompts: ['What felt fuzzy?'],
+              }),
+            }
+          : day
+      );
+
+      const reviewBody = {
+        summary: 'Quick recap.',
+        content_covered: [{ day: 1, type: 'video', title: 'Intro to Python' }],
+        knowledge_checks: [
+          {
+            id: 'sa1',
+            type: 'short_answer',
+            question: 'What is a variable?',
+            placeholder: 'Your answer',
+          },
+        ],
+        reflection_prompts: ['What felt fuzzy?'],
+      };
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: SHARED_PLAN,
+        planReady: true,
+        reviewContent: { 7: { title: 'Week 1 review', body: reviewBody } },
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[]' },
+        plan: planWithReview,
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: { 7: { title: 'Week 1 review', body: reviewBody } },
+      });
+      mockSubmitReview.mockResolvedValue({ ok: true, status: 'completed' });
+      mockCompletePlanDay.mockResolvedValue({
+        progress: { completed_days: '[7]' },
+      });
+
+      renderPlanPage();
+
+      const user = userEvent.setup();
+      const openButton = await screen.findByRole('button', { name: /week 1 review/i });
+      await user.click(openButton);
+
+      expect(await screen.findByRole('dialog', { name: /day 7 review/i })).toBeInTheDocument();
+
+      // Step through: intro → knowledge check → reflection
+      await user.click(screen.getByText('Start review'));
+      const textbox = await screen.findByRole('textbox', { name: /your answer/i });
+      await user.type(textbox, 'A named container for data');
+      await user.click(screen.getByText('Next'));
+
+      // Reflection step — submit
+      await screen.findByText('What felt fuzzy?');
+      await user.click(screen.getByText('Finish review'));
+
+      await waitFor(() => {
+        expect(mockSubmitReview).toHaveBeenCalledWith('python', 7, expect.objectContaining({
+          answers: expect.arrayContaining([
+            expect.objectContaining({ check_id: 'sa1', answer: 'A named container for data' }),
+          ]),
+        }));
+      });
+
+      await waitFor(() => {
+        expect(mockCompletePlanDay).toHaveBeenCalledWith('python', 7);
+      });
     });
   });
 

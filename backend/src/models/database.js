@@ -252,6 +252,35 @@ class Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (skill_id) REFERENCES skills(id),
         FOREIGN KEY (user_id) REFERENCES users(id)
+      )`,
+
+      // User review submissions (one per user + skill + day)
+      `CREATE TABLE IF NOT EXISTS review_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        skill_id TEXT NOT NULL,
+        day_number INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'completed',
+        result_summary TEXT,
+        reflection TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (skill_id) REFERENCES skills(id),
+        UNIQUE(user_id, skill_id, day_number)
+      )`,
+
+      // Individual answers within a review submission
+      `CREATE TABLE IF NOT EXISTS review_submission_answers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        submission_id INTEGER NOT NULL,
+        check_id TEXT NOT NULL,
+        question TEXT NOT NULL,
+        check_type TEXT NOT NULL DEFAULT 'short_answer',
+        answer TEXT,
+        correct INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (submission_id) REFERENCES review_submissions(id)
       )`
     ];
 
@@ -279,7 +308,8 @@ class Database {
         'ALTER TABLE user_learning_plans ADD COLUMN timestamp_end_seconds INTEGER',
         "ALTER TABLE user_learning_plans ADD COLUMN review_status TEXT DEFAULT 'ready'",
         'ALTER TABLE user_learning_plans ADD COLUMN review_title TEXT',
-        'ALTER TABLE user_learning_plans ADD COLUMN review_body TEXT'
+        'ALTER TABLE user_learning_plans ADD COLUMN review_body TEXT',
+        "ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'free'"
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -321,6 +351,10 @@ class Database {
         'CREATE INDEX IF NOT EXISTS idx_plan_jobs_status ON plan_jobs(status)',
         // Review content by skill+day (serving review content)
         'CREATE INDEX IF NOT EXISTS idx_review_content_skill_day ON plan_review_content(skill_id, day_number)',
+        // Review submissions by user+skill (fetching user submissions)
+        'CREATE INDEX IF NOT EXISTS idx_review_submissions_user_skill ON review_submissions(user_id, skill_id)',
+        // Review submission answers by submission (fetching answers)
+        'CREATE INDEX IF NOT EXISTS idx_review_answers_submission ON review_submission_answers(submission_id)',
       ];
       indexes.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -1028,6 +1062,57 @@ class Database {
 
   async deleteReviewContentForSkill(skillId) {
     return this.insert('DELETE FROM plan_review_content WHERE skill_id = ?', [skillId]);
+  }
+
+  // --- Review submission methods ---
+
+  async createReviewSubmission({ user_id, skill_id, day_number, status, result_summary = null, reflection = null }) {
+    const result = await this.insert(
+      `INSERT INTO review_submissions (user_id, skill_id, day_number, status, result_summary, reflection)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, skill_id, day_number) DO UPDATE SET
+         status = excluded.status,
+         result_summary = excluded.result_summary,
+         reflection = excluded.reflection,
+         updated_at = CURRENT_TIMESTAMP`,
+      [user_id, skill_id, day_number, status, result_summary, reflection]
+    );
+    const rows = await this.query(
+      'SELECT * FROM review_submissions WHERE user_id = ? AND skill_id = ? AND day_number = ?',
+      [user_id, skill_id, day_number]
+    );
+    return rows[0] || null;
+  }
+
+  async saveReviewSubmissionAnswers(submissionId, answers) {
+    await this.insert('DELETE FROM review_submission_answers WHERE submission_id = ?', [submissionId]);
+    for (const ans of answers) {
+      await this.insert(
+        `INSERT INTO review_submission_answers (submission_id, check_id, question, check_type, answer, correct)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [submissionId, ans.check_id, ans.question, ans.check_type || 'short_answer', ans.answer, ans.correct ?? null]
+      );
+    }
+  }
+
+  async getReviewSubmission(userId, skillId, dayNumber) {
+    const rows = await this.query(
+      'SELECT * FROM review_submissions WHERE user_id = ? AND skill_id = ? AND day_number = ?',
+      [userId, skillId, dayNumber]
+    );
+    return rows[0] || null;
+  }
+
+  async getReviewSubmissionAnswers(submissionId) {
+    return this.query(
+      'SELECT * FROM review_submission_answers WHERE submission_id = ? ORDER BY id ASC',
+      [submissionId]
+    );
+  }
+
+  async getUserPlanTier(userId) {
+    const rows = await this.query('SELECT plan_tier FROM users WHERE id = ?', [userId]);
+    return rows[0]?.plan_tier || 'free';
   }
 
   // Close database connection
