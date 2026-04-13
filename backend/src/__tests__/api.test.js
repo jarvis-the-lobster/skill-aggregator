@@ -165,12 +165,26 @@ describe('GET/POST /api/admin/review-jobs', () => {
       plan_created_at: '2026-04-11 12:00:00',
     });
 
+    const payload = {
+      summary: 'You covered loops and functions.',
+      content_covered: [{ day: 8, type: 'video', title: 'Python loops' }],
+      knowledge_checks: [
+        {
+          question: 'What is the difference between a for loop and a while loop?',
+          helper_text: 'Answer in plain English.',
+          expected_points: ['for loops iterate over a sequence', 'while loops run until a condition changes'],
+          placeholder: 'Describe the difference',
+        },
+      ],
+      reflection_prompts: ['What still feels fuzzy after this week?'],
+    };
+
     const res = await request(app)
       .post(`/api/admin/review-jobs/${insertResult.id}/process`)
       .set('Authorization', 'Bearer test-cron-secret')
       .send({
         title: 'Week 2 check-in',
-        body: { summary: 'You covered loops and functions.' },
+        body: payload,
         reviewType: 'weekly_checkin',
       });
 
@@ -186,7 +200,7 @@ describe('GET/POST /api/admin/review-jobs', () => {
     const storedReview = await db.getReviewContent('python', 14, null);
     expect(storedReview).toBeTruthy();
     expect(storedReview.title).toBe('Week 2 check-in');
-    expect(JSON.parse(storedReview.body)).toEqual({ summary: 'You covered loops and functions.' });
+    expect(JSON.parse(storedReview.body)).toEqual(payload);
 
     const [jobRow] = await db.query('SELECT status, completed_at FROM plan_jobs WHERE id = ?', [insertResult.id]);
     expect(jobRow.status).toBe('completed');
@@ -214,6 +228,38 @@ describe('GET/POST /api/admin/review-jobs', () => {
     const [jobRow] = await db.query('SELECT status, error_message FROM plan_jobs WHERE id = ?', [insertResult.id]);
     expect(jobRow.status).toBe('pending');
     expect(jobRow.error_message).toMatch(/title is required/i);
+  });
+
+  test('rejects review payloads without structured knowledge checks', async () => {
+    await db.insert(
+      "INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')"
+    );
+    const insertResult = await db.createPlanJob({
+      skill_id: 'python',
+      job_type: 'review_content',
+      day_number: 7,
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/review-jobs/${insertResult.id}/process`)
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({
+        title: 'Week 1 check-in',
+        body: {
+          summary: 'Reflection only is not enough.',
+          reflection_prompts: ['What felt easy this week?'],
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/knowledge_checks must be a non-empty array/i);
+
+    const storedReview = await db.getReviewContent('python', 7, null);
+    expect(storedReview).toBeNull();
+
+    const [jobRow] = await db.query('SELECT status, error_message FROM plan_jobs WHERE id = ?', [insertResult.id]);
+    expect(jobRow.status).toBe('pending');
+    expect(jobRow.error_message).toMatch(/knowledge_checks must be a non-empty array/i);
   });
 });
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
@@ -46,6 +46,7 @@ export function LearningPlanPage() {
   const [planReady, setPlanReady] = useState(true);
   const [reviewContent, setReviewContent] = useState({});
   const [expandedReview, setExpandedReview] = useState(null);
+  const reviewButtonRefs = useRef({});
   const renderedReviewDays = useMemo(
     () => new Set(plan.filter((entry) => entry.content_type === 'review').map((entry) => entry.day_number)),
     [plan]
@@ -307,16 +308,23 @@ export function LearningPlanPage() {
                     <div className="flex flex-col flex-grow">
                       <div className="flex items-center space-x-1 mb-1">
                         <ClipboardCheck className="w-3 h-3 text-purple-400 flex-shrink-0" />
-                        <span className="text-xs text-purple-400">check-in</span>
+                        <span className="text-xs text-purple-400">review</span>
                       </div>
                       <button
-                        onClick={() => setExpandedReview(expandedReview === entry.day_number ? null : entry.day_number)}
-                        className="text-sm font-medium text-slate-200 hover:text-purple-300 text-left line-clamp-2 flex-grow"
+                        ref={(node) => {
+                          if (node) reviewButtonRefs.current[entry.day_number] = node;
+                          else delete reviewButtonRefs.current[entry.day_number];
+                        }}
+                        onClick={() => setExpandedReview(entry.day_number)}
+                        className="flex-grow rounded-xl border border-purple-400/20 bg-purple-400/8 px-3 py-3 text-left text-sm font-medium text-slate-100 transition hover:border-purple-400/40 hover:bg-purple-400/12 hover:text-white"
                       >
-                        {review.title || 'Weekly Check-in'}
+                        <span className="block line-clamp-2">{review.title || 'Weekly Review'}</span>
+                        <span className="mt-2 block text-xs font-normal text-purple-200/70">
+                          Open review
+                        </span>
                       </button>
                       {review.body?.stats && (
-                        <p className="text-xs text-purple-400/60 mt-1">
+                        <p className="text-xs text-purple-400/60 mt-2">
                           {review.body.stats.videos > 0 && `${review.body.stats.videos} videos`}
                           {review.body.stats.videos > 0 && review.body.stats.articles > 0 && ', '}
                           {review.body.stats.articles > 0 && `${review.body.stats.articles} articles`}
@@ -421,7 +429,11 @@ export function LearningPlanPage() {
             <ReviewCheckInPanel
               review={reviewContent[expandedReview]}
               dayNumber={expandedReview}
-              onClose={() => setExpandedReview(null)}
+              onClose={() => {
+                const trigger = reviewButtonRefs.current[expandedReview];
+                setExpandedReview(null);
+                trigger?.focus?.();
+              }}
             />
           )}
 
