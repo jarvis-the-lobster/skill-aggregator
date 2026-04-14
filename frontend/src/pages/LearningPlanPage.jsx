@@ -259,8 +259,8 @@ export function LearningPlanPage() {
         ) : (
           <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {((enrolled && isPremium) ? plan : plan.slice(0, FREE_DAYS)).map((entry) => {
-              const unlocked = entry.day_number <= FREE_DAYS || (enrolled && isPremium);
+            {(enrolled ? plan : plan.slice(0, FREE_DAYS)).map((entry) => {
+              const unlocked = entry.day_number <= FREE_DAYS || enrolled;
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
               const inlineReview = entry.content_type === 'review'
@@ -443,27 +443,6 @@ export function LearningPlanPage() {
           )}
 
           </>
-        )}
-
-        {enrolled && !isPremium && plan.length > FREE_DAYS && (
-          <div className="mt-8 bg-gradient-to-br from-teal/15 via-teal/5 to-transparent rounded-xl p-8 text-center border border-teal/25">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal/15 text-teal mb-4">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-100 mb-2">
-              Unlock days 8–30 with Premium
-            </h2>
-            <p className="text-slate-400 mb-6 max-w-md mx-auto">
-              You've got the first week. Keep the momentum going with the full 30-day roadmap, streak freezes, and more.
-            </p>
-            <Link
-              to="/premium"
-              className="inline-flex items-center gap-2 rounded-xl bg-teal px-6 py-3 text-sm font-semibold text-dark-bg transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)]"
-            >
-              <Sparkles className="w-4 h-4" />
-              Upgrade to Premium — $9/month
-            </Link>
-          </div>
         )}
 
         {!enrolled && plan.length > 0 && (

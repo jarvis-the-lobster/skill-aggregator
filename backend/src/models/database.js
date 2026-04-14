@@ -706,6 +706,14 @@ class Database {
 
   // --- Course enrollment methods ---
 
+  async getActiveEnrollmentCount(userId) {
+    const rows = await this.query(
+      `SELECT COUNT(*) as count FROM user_courses WHERE user_id = ? AND status = 'active'`,
+      [userId]
+    );
+    return rows[0]?.count || 0;
+  }
+
   async enrollCourse(userId, skillId) {
     await this.insert(
       `INSERT OR IGNORE INTO user_courses (user_id, skill_id) VALUES (?, ?)`,

@@ -6,12 +6,32 @@ const { requireAuth } = require('../middleware/auth');
 
 const VALID_STATUSES = ['active', 'completed'];
 
+const FREE_PLAN_LIMIT = 1;
+
 // POST /api/courses/enroll/:skillId — enroll current user in course + plan
 router.post('/enroll/:skillId', requireAuth, async (req, res) => {
   try {
     const { skillId } = req.params;
     const skill = await db.getSkillById(skillId);
     if (!skill) return res.status(404).json({ error: 'Skill not found' });
+
+    // Free users limited to 1 active enrollment at a time.
+    // Premium users (subscription_status = 'active') get unlimited.
+    // Existing enrollments over the limit are grandfathered — only block new ones.
+    const isPremium = req.user.subscription_status === 'active';
+    if (!isPremium) {
+      // Check if already enrolled in this skill (re-enrolling is fine)
+      const existing = await db.getCourseEnrollment(req.user.id, skillId);
+      if (!existing) {
+        const activeCount = await db.getActiveEnrollmentCount(req.user.id);
+        if (activeCount >= FREE_PLAN_LIMIT) {
+          return res.status(403).json({
+            error: 'Free accounts are limited to 1 active learning plan at a time. Complete your current plan or upgrade to Premium for unlimited plans.',
+            code: 'FREE_PLAN_LIMIT_REACHED',
+          });
+        }
+      }
+    }
 
     const course = await db.enrollCourse(req.user.id, skillId);
     // Also enroll in the 30-day plan automatically
