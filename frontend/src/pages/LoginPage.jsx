@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiService } from '../services/api';
 import analytics from '../services/analytics';
 
 function GoogleIcon() {
@@ -37,7 +38,12 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
-      navigate('/');
+      try {
+        const { completed } = await apiService.getOnboardingStatus();
+        navigate(completed ? '/' : '/welcome');
+      } catch {
+        navigate('/');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
