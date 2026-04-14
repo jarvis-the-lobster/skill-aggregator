@@ -41,4 +41,14 @@ async function optionalAuth(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, optionalAuth };
+function requirePremium(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (req.user.subscription_status !== 'active') {
+    return res.status(403).json({ error: 'Premium subscription required' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, optionalAuth, requirePremium };

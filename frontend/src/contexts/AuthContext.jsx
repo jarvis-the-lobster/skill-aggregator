@@ -22,9 +22,34 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function withDerived(rawUser) {
+  if (!rawUser) return null;
+  return {
+    ...rawUser,
+    isPremium: rawUser.subscription_status === 'active',
+  };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUserState] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const setUser = (u) => setUserState(withDerived(u));
+
+  async function refreshUser() {
+    const token = getToken();
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, { headers: authHeaders() });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.user) {
+        setUser(data.user);
+        return data.user;
+      }
+    } catch {}
+    return null;
+  }
 
   // On mount, restore session from localStorage token
   useEffect(() => {
@@ -97,7 +122,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, loadUserFromToken, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, loadUserFromToken, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

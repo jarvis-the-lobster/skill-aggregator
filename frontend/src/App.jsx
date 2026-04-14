@@ -22,6 +22,9 @@ import { MyCoursesPage } from './pages/MyCoursesPage';
 import { EarlyAccessPage } from './pages/EarlyAccessPage';
 import { LearningPlanPage } from './pages/LearningPlanPage';
 import { WelcomePage } from './pages/WelcomePage';
+import { PremiumPage } from './pages/PremiumPage';
+import { PremiumSuccessPage } from './pages/PremiumSuccessPage';
+import { AccountPage } from './pages/AccountPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
@@ -69,6 +72,9 @@ export function AppContent() {
           <Route path="/my-courses" element={<MyCoursesPage />} />
           <Route path="/early-access" element={<EarlyAccessPage />} />
           <Route path="/welcome" element={<WelcomePage />} />
+          <Route path="/premium" element={<PremiumPage />} />
+          <Route path="/premium/success" element={<PremiumSuccessPage />} />
+          <Route path="/account" element={<AccountPage />} />
         </Routes>
       </LayoutShell>
     </AuthProvider>

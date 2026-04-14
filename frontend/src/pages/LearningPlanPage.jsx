@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
+import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader, Sparkles } from 'lucide-react';
 import { ReviewCheckInPanel } from '../components/ReviewCheckInPanel';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
 import { RatingButtons } from '../components/RatingButtons';
 import analytics from '../services/analytics';
 
@@ -34,6 +35,7 @@ function getEntryUrl(entry) {
 export function LearningPlanPage() {
   const { skillId } = useParams();
   const { user, loading: authLoading } = useAuth();
+  const { isPremium } = useSubscription();
   const [plan, setPlan] = useState([]);
   const [skillName, setSkillName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -257,8 +259,8 @@ export function LearningPlanPage() {
         ) : (
           <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {(enrolled ? plan : plan.slice(0, FREE_DAYS)).map((entry) => {
-              const unlocked = entry.day_number <= FREE_DAYS || enrolled;
+            {((enrolled && isPremium) ? plan : plan.slice(0, FREE_DAYS)).map((entry) => {
+              const unlocked = entry.day_number <= FREE_DAYS || (enrolled && isPremium);
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
               const inlineReview = entry.content_type === 'review'
@@ -441,6 +443,27 @@ export function LearningPlanPage() {
           )}
 
           </>
+        )}
+
+        {enrolled && !isPremium && plan.length > FREE_DAYS && (
+          <div className="mt-8 bg-gradient-to-br from-teal/15 via-teal/5 to-transparent rounded-xl p-8 text-center border border-teal/25">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal/15 text-teal mb-4">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-100 mb-2">
+              Unlock days 8–30 with Premium
+            </h2>
+            <p className="text-slate-400 mb-6 max-w-md mx-auto">
+              You've got the first week. Keep the momentum going with the full 30-day roadmap, streak freezes, and more.
+            </p>
+            <Link
+              to="/premium"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal px-6 py-3 text-sm font-semibold text-dark-bg transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)]"
+            >
+              <Sparkles className="w-4 h-4" />
+              Upgrade to Premium — $9/month
+            </Link>
+          </div>
         )}
 
         {!enrolled && plan.length > 0 && (

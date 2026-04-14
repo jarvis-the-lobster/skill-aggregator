@@ -323,7 +323,11 @@ class Database {
         "ALTER TABLE user_learning_plans ADD COLUMN review_status TEXT DEFAULT 'ready'",
         'ALTER TABLE user_learning_plans ADD COLUMN review_title TEXT',
         'ALTER TABLE user_learning_plans ADD COLUMN review_body TEXT',
-        "ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'free'"
+        "ALTER TABLE users ADD COLUMN plan_tier TEXT DEFAULT 'free'",
+        'ALTER TABLE users ADD COLUMN stripe_customer_id TEXT',
+        "ALTER TABLE users ADD COLUMN subscription_status TEXT DEFAULT 'free'",
+        'ALTER TABLE users ADD COLUMN subscription_id TEXT',
+        'ALTER TABLE users ADD COLUMN subscription_end_date TEXT'
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
@@ -680,6 +684,24 @@ class Database {
 
   async updateLastLogin(id) {
     return this.insert('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+  }
+
+  async setStripeCustomerId(userId, stripeCustomerId) {
+    return this.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', [stripeCustomerId, userId]);
+  }
+
+  async getUserByStripeCustomerId(stripeCustomerId) {
+    const rows = await this.query('SELECT * FROM users WHERE stripe_customer_id = ?', [stripeCustomerId]);
+    return rows[0] || null;
+  }
+
+  async updateUserSubscription(userId, { subscription_status, subscription_id, subscription_end_date }) {
+    return this.insert(
+      `UPDATE users
+       SET subscription_status = ?, subscription_id = ?, subscription_end_date = ?
+       WHERE id = ?`,
+      [subscription_status, subscription_id, subscription_end_date, userId]
+    );
   }
 
   // --- Course enrollment methods ---

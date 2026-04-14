@@ -17,6 +17,16 @@ app.use(cors({
   origin: allowedOrigins,
   credentials: true,
 }));
+
+// Stripe webhook must receive the raw body for signature verification,
+// so mount it BEFORE express.json().
+const { webhookHandler: stripeWebhookHandler } = require('./routes/billing');
+app.post(
+  '/api/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  stripeWebhookHandler
+);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
@@ -33,6 +43,7 @@ const streakRoutes = require('./routes/streaks');
 const pushRoutes = require('./routes/push');
 const onboardingRoutes = require('./routes/onboarding');
 const notificationRoutes = require('./routes/notifications');
+const { router: billingRoutes } = require('./routes/billing');
 app.use('/api/skills', skillRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -44,6 +55,7 @@ app.use('/api/streaks', streakRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/billing', billingRoutes);
 
 // Global rate limit on /api (applied after specific route limiters)
 app.use('/api', apiLimiter);
