@@ -26,7 +26,8 @@ function withDerived(rawUser) {
   if (!rawUser) return null;
   return {
     ...rawUser,
-    isPremium: rawUser.subscription_status === 'active',
+    isPremium: rawUser.subscription_status === 'active'
+      || (rawUser.subscription_status === 'cancelled' && !!rawUser.subscription_end_date && new Date(rawUser.subscription_end_date) > new Date()),
   };
 }
 
