@@ -208,8 +208,8 @@ function PremiumPitchScreen({ onSkip }) {
       {/* Perk list */}
       <div className="w-full bg-dark-card border border-white/[0.08] rounded-2xl p-6 mb-8 text-left space-y-4">
         {perks.map((perk, i) => (
-          <div key={i} className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-teal/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <div key={i} className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-teal/10 flex items-center justify-center flex-shrink-0">
               {perk.icon}
             </div>
             <span className="text-sm text-slate-200 leading-relaxed">{perk.text}</span>
