@@ -73,6 +73,10 @@ const TABLE_SQL = [
     name TEXT,
     avatar_url TEXT,
     plan_tier TEXT DEFAULT 'free',
+    subscription_status TEXT DEFAULT 'free',
+    subscription_id TEXT,
+    subscription_end_date TEXT,
+    stripe_customer_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME
   )`,
@@ -383,6 +387,30 @@ function createTestDb() {
 
         async updateLastLogin(id) {
           return insert('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+        },
+
+        async updateUserSubscription(userId, { subscription_status, subscription_id, subscription_end_date }) {
+          return insert(
+            `UPDATE users SET subscription_status = ?, subscription_id = ?, subscription_end_date = ? WHERE id = ?`,
+            [subscription_status, subscription_id, subscription_end_date, userId]
+          );
+        },
+
+        async setStripeCustomerId(userId, stripeCustomerId) {
+          return insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', [stripeCustomerId, userId]);
+        },
+
+        async getUserByStripeCustomerId(stripeCustomerId) {
+          const rows = await query('SELECT * FROM users WHERE stripe_customer_id = ?', [stripeCustomerId]);
+          return rows[0] || null;
+        },
+
+        async getActiveEnrollmentCount(userId) {
+          const rows = await query(
+            `SELECT COUNT(*) as count FROM user_courses WHERE user_id = ? AND status = 'active'`,
+            [userId]
+          );
+          return rows[0]?.count || 0;
         },
 
         async enrollCourse(userId, skillId) {

@@ -47,8 +47,11 @@ export function useSubscription() {
     setSubscriptionId(user.subscription_id || null);
   }, [user]);
 
+  const isPremium = status === 'active'
+    || (status === 'cancelled' && !!subscriptionEndDate && new Date(subscriptionEndDate) > new Date());
+
   return {
-    isPremium: status === 'active',
+    isPremium,
     status,
     subscriptionEndDate,
     subscriptionId,
