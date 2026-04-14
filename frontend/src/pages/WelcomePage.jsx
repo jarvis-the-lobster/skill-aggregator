@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, BookOpen, Zap, Shield, Star, Sparkles } from 'lucide-react';
+import { Search, BookOpen, Zap, Shield, Star, Sparkles, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
@@ -146,54 +146,106 @@ function SkillPickerCard({ skill, contentCount, onClick }) {
   );
 }
 
-function PremiumPitchScreen({ onContinue }) {
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
+function PremiumPitchScreen({ onSkip }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const perks = [
-    { icon: <Zap className="w-4 h-4 text-teal" />, text: 'Personalized learning plans' },
-    { icon: <BookOpen className="w-4 h-4 text-teal" />, text: 'Unlimited skills & content' },
-    { icon: <Shield className="w-4 h-4 text-teal" />, text: 'Streak protection' },
-    { icon: <Star className="w-4 h-4 text-teal" />, text: 'Priority new-content access' },
-    { icon: <Sparkles className="w-4 h-4 text-teal" />, text: 'AI-assisted learning — coming soon' },
+    { icon: <Sparkles className="w-4 h-4 text-teal" />, text: 'Personalized plans built around your goals and schedule' },
+    { icon: <BookOpen className="w-4 h-4 text-teal" />, text: 'Unlimited active learning plans' },
+    { icon: <Shield className="w-4 h-4 text-teal" />, text: 'Streak freeze every 48h' },
+    { icon: <Zap className="w-4 h-4 text-teal" />, text: 'Priority content updates' },
   ];
+
+  async function startTrial() {
+    analytics.track('onboarding_trial_started');
+    if (!user) {
+      navigate('/login?next=/premium');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/billing/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || 'Unable to start checkout');
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setError(err.message || "Something went wrong. You can try again or continue without Premium.");
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="flex flex-col items-center text-center max-w-md mx-auto">
       {/* Badge */}
-      <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-teal/30 rounded-full text-[13px] font-medium text-teal bg-teal/[0.06] mb-8">
+      <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-teal/30 rounded-full text-[13px] font-medium text-teal bg-teal/[0.06] mb-8 animate-fade-in">
         <Star className="w-3.5 h-3.5" />
-        LearnStack Pro
+        LearnStack Premium
       </div>
 
-      <h2 className="text-3xl font-extrabold text-slate-100 mb-3 leading-tight">
-        Start your <span className="text-teal">7-day free trial</span>
+      <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-100 mb-4 leading-tight tracking-tight">
+        Your plan.<br />
+        <span className="bg-gradient-to-r from-teal to-teal-light bg-clip-text text-transparent">Your pace.</span>
       </h2>
-      <p className="text-slate-400 text-base mb-8">
-        Personalized plans, unlimited skills, streak protection.
+      <p className="text-slate-400 text-base mb-8 leading-relaxed">
+        Get a plan built around the goal and daily time you just told us — so every session pushes you forward, not sideways.
       </p>
 
       {/* Perk list */}
-      <div className="w-full bg-[#141929] border border-white/[0.08] rounded-2xl p-5 mb-8 text-left space-y-3">
+      <div className="w-full bg-dark-card border border-white/[0.08] rounded-2xl p-6 mb-8 text-left space-y-4">
         {perks.map((perk, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-teal/10 flex items-center justify-center flex-shrink-0">
+          <div key={i} className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-teal/10 flex items-center justify-center flex-shrink-0 mt-0.5">
               {perk.icon}
             </div>
-            <span className="text-sm text-slate-200">{perk.text}</span>
+            <span className="text-sm text-slate-200 leading-relaxed">{perk.text}</span>
           </div>
         ))}
       </div>
 
-      {/* CTA — non-functional, advances like "Maybe later" */}
+      {/* Primary CTA — real Stripe checkout */}
       <button
-        onClick={onContinue}
-        className="w-full bg-teal text-dark-bg font-bold text-base py-4 rounded-xl hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] transition-all duration-200 mb-4"
+        type="button"
+        onClick={startTrial}
+        disabled={loading}
+        className="w-full inline-flex items-center justify-center gap-2 bg-teal text-dark-bg font-bold text-base py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:bg-teal-light hover:shadow-[0_12px_32px_rgba(0,191,166,0.4)] active:translate-y-0 active:scale-100 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:scale-100 mb-4"
       >
-        Start free trial
+        {loading ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Redirecting to Stripe…
+          </>
+        ) : (
+          <>
+            <Sparkles className="w-5 h-5" />
+            Start my free 7-day trial
+          </>
+        )}
       </button>
-      <p className="text-xs text-slate-600 mb-4">No credit card required · Cancel anytime</p>
+      <p className="text-xs text-slate-500 mb-6">$9/month after trial · Cancel anytime</p>
+
+      {error && (
+        <p className="text-sm text-red-400 mb-6 max-w-xs" role="alert">{error}</p>
+      )}
 
       <button
-        onClick={onContinue}
-        className="text-slate-500 hover:text-slate-300 text-sm font-medium underline underline-offset-2 transition-colors"
+        type="button"
+        onClick={onSkip}
+        className="text-slate-500 hover:text-slate-200 text-sm font-medium underline underline-offset-2 transition-colors duration-200"
       >
         Maybe later
       </button>
@@ -319,7 +371,7 @@ export function WelcomePage() {
     setEnrolling(null);
   }
 
-  function handlePremiumContinue() {
+  function handlePremiumSkip() {
     analytics.track('onboarding_premium_skipped');
     navigate(selectedSkillId ? `/skills/${selectedSkillId}/plan` : '/');
   }
@@ -455,7 +507,7 @@ export function WelcomePage() {
 
           {/* Step 5: Premium pitch */}
           {step === 4 && (
-            <PremiumPitchScreen onContinue={handlePremiumContinue} />
+            <PremiumPitchScreen onSkip={handlePremiumSkip} />
           )}
         </div>
       </div>
