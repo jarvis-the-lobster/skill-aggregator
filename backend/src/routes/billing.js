@@ -38,6 +38,20 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
 
     const user = req.user;
     let customerId = user.stripe_customer_id;
+    if (customerId) {
+      // Verify the customer still exists in Stripe (handles test→live mode switch)
+      try {
+        await stripeService.retrieveCustomer(customerId);
+      } catch (err) {
+        if (err.code === 'resource_missing') {
+          console.warn(`Stale Stripe customer ID for user ${user.id}, creating new customer`);
+          customerId = null;
+          await db.setStripeCustomerId(user.id, null);
+        } else {
+          throw err;
+        }
+      }
+    }
     if (!customerId) {
       customerId = await stripeService.getOrCreateCustomer({ user });
       await db.setStripeCustomerId(user.id, customerId);
