@@ -6,7 +6,7 @@ const db = require('../models/database');
 const VALID_USER_TYPES = ['student', 'self-learner', 'career-switcher', 'professional', 'freelancer-creator'];
 const VALID_GOALS = ['new-skill-for-work', 'school-coursework', 'interviews-certs', 'career-switch', 'personal-interest', 'side-project'];
 const VALID_DAILY_TIMES = ['10-min', '20-min', '30-plus-min'];
-const VALID_ATTRIBUTION_SOURCES = ['reddit', 'google-search', 'friend-referral', 'tiktok', 'twitter-x', 'other'];
+const VALID_ATTRIBUTION_SOURCES = ['reddit', 'google-search', 'friend-referral', 'tiktok', 'instagram', 'other'];
 
 // POST /api/onboarding — save onboarding answers
 router.post('/', requireAuth, async (req, res) => {

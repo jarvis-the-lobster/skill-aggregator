@@ -42,7 +42,7 @@ const ATTRIBUTION_SOURCES = [
   { value: 'google-search', label: 'Google' },
   { value: 'friend-referral', label: 'Friend / Referral' },
   { value: 'tiktok', label: 'TikTok' },
-  { value: 'twitter-x', label: 'Twitter / X' },
+  { value: 'instagram', label: 'Instagram' },
   { value: 'other', label: 'Other' },
 ];
 
