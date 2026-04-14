@@ -37,6 +37,11 @@ async function createCheckoutSession({ customerId, priceId, successUrl, cancelUr
   });
 }
 
+async function retrieveCustomer(customerId) {
+  assertConfigured();
+  return stripe.customers.retrieve(customerId);
+}
+
 async function retrieveSubscription(subscriptionId) {
   assertConfigured();
   return stripe.subscriptions.retrieve(subscriptionId);
@@ -63,6 +68,7 @@ function isConfigured() {
 module.exports = {
   getOrCreateCustomer,
   createCheckoutSession,
+  retrieveCustomer,
   retrieveSubscription,
   cancelSubscriptionAtPeriodEnd,
   constructWebhookEvent,
