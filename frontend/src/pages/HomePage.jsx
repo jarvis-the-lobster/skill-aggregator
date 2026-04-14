@@ -17,6 +17,10 @@ const FEATURED_SKILLS = [
   { id: 'photography', name: 'Photography', icon: '📷', category: 'Creative', catClass: 'bg-emerald-400/15 text-emerald-400' },
 ];
 
+const INITIAL_FEATURED_COUNTS = Object.fromEntries(
+  FEATURED_SKILLS.map((skill) => [skill.id, 0])
+);
+
 // Hook for IntersectionObserver scroll reveals
 function useScrollReveal() {
   const ref = useRef(null);
@@ -48,7 +52,7 @@ function useScrollReveal() {
 export function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [skills, setSkills] = useState([]);
-  const [featuredCounts, setFeaturedCounts] = useState({});
+  const [featuredCounts, setFeaturedCounts] = useState(INITIAL_FEATURED_COUNTS);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const revealRef = useScrollReveal();
@@ -247,7 +251,6 @@ export function HomePage() {
               <>DEV<span className="opacity-40">.to</span></>,
               <>Medium</>,
               <><span className="text-green-500/40">{'{ }'}</span> freeCodeCamp</>,
-              <><span className="text-red-500/40">TED</span><span className="opacity-40">x</span></>,
             ].map((logo, i) => (
               <div key={i} className="text-lg font-bold text-white/20 tracking-tight hover:text-white/40 transition-colors cursor-default">
                 {logo}
@@ -311,7 +314,9 @@ export function HomePage() {
                 <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium mb-4 ${skill.catClass}`}>
                   {skill.category}
                 </span>
-                <p className="text-[13px] text-slate-400 mb-2">{featuredCounts[skill.id] || '—'} resources curated</p>
+                <p className="text-[13px] text-slate-400 mb-2">
+                  {featuredCounts[skill.id] ?? 0} resources curated
+                </p>
                 <span className="skill-card-link-text inline-flex items-center gap-1 text-sm font-semibold text-teal">
                   Learn Now <ArrowRight className="w-3.5 h-3.5" />
                 </span>

@@ -195,6 +195,8 @@ class Database {
         user_type TEXT,
         goal TEXT,
         daily_time TEXT,
+        attribution_source TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
       )`,
@@ -327,7 +329,9 @@ class Database {
         'ALTER TABLE users ADD COLUMN stripe_customer_id TEXT',
         "ALTER TABLE users ADD COLUMN subscription_status TEXT DEFAULT 'free'",
         'ALTER TABLE users ADD COLUMN subscription_id TEXT',
-        'ALTER TABLE users ADD COLUMN subscription_end_date TEXT'
+        'ALTER TABLE users ADD COLUMN subscription_end_date TEXT',
+        'ALTER TABLE user_onboarding ADD COLUMN attribution_source TEXT',
+        'ALTER TABLE user_onboarding ADD COLUMN created_at DATETIME'
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {

@@ -33,6 +33,7 @@ async function createCheckoutSession({ customerId, priceId, successUrl, cancelUr
     allow_promotion_codes: true,
     client_reference_id: String(userId),
     metadata: { user_id: String(userId) },
+    subscription_data: { trial_period_days: 7 },
   });
 }
 

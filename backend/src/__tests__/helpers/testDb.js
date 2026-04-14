@@ -159,6 +159,8 @@ const TABLE_SQL = [
     user_type TEXT NOT NULL,
     goal TEXT NOT NULL,
     daily_time TEXT NOT NULL,
+    attribution_source TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`,

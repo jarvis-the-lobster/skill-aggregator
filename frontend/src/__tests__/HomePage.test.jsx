@@ -56,7 +56,14 @@ describe('HomePage', () => {
     vi.clearAllMocks();
     apiService.getSkills.mockResolvedValue({ skills: MOCK_SKILLS });
     apiService.getSkillStats.mockResolvedValue({ stats: { totalVideos: 10, totalArticles: 5 } });
-    apiService.getSkillContentCounts.mockResolvedValue({ counts: {} });
+    apiService.getSkillContentCounts.mockResolvedValue({
+      python: 55,
+      javascript: 42,
+      'ui-ux-design': 18,
+      'digital-marketing': 24,
+      'machine-learning': 31,
+      photography: 12,
+    });
   });
 
   it('renders homepage with updated hero copy', async () => {
@@ -70,6 +77,13 @@ describe('HomePage', () => {
     renderWithRouter(<HomePage />);
     expect(await screen.findByText('Python Programming')).toBeInTheDocument();
     expect(screen.getAllByText('JavaScript').length).toBeGreaterThan(0);
+    expect(screen.getByText('55 resources curated')).toBeInTheDocument();
+  });
+
+  it('does not show TED in the trust bar', async () => {
+    renderWithRouter(<HomePage />);
+    await screen.findByText('Python Programming');
+    expect(screen.queryByText('TED')).not.toBeInTheDocument();
   });
 
   it('search bar is visible and functional', async () => {
