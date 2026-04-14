@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
+import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader, Sparkles } from 'lucide-react';
 import { ReviewCheckInPanel } from '../components/ReviewCheckInPanel';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
 import { RatingButtons } from '../components/RatingButtons';
 import analytics from '../services/analytics';
 
@@ -34,6 +35,7 @@ function getEntryUrl(entry) {
 export function LearningPlanPage() {
   const { skillId } = useParams();
   const { user, loading: authLoading } = useAuth();
+  const { isPremium } = useSubscription();
   const [plan, setPlan] = useState([]);
   const [skillName, setSkillName] = useState('');
   const [loading, setLoading] = useState(true);

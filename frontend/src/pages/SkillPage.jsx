@@ -63,7 +63,7 @@ export function SkillPage() {
   const { id: skillId } = useParams();
   const { user } = useAuth();
   const { plan: initialPlan, planSkillId } = useInitialData();
-  const { isEnrolled, loading: enrollLoading, enroll, unenroll } = useEnrollment(skillId);
+  const { isEnrolled, loading: enrollLoading, enroll, unenroll, enrollError } = useEnrollment(skillId);
   const [skillData, setSkillData] = useState(null);
   const [content, setContent] = useState({ videos: [], articles: [] });
   const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
@@ -373,13 +373,26 @@ export function SkillPage() {
                     <span>✓ Enrolled</span>
                   </button>
                 ) : (
-                  <button
-                    onClick={enroll}
-                    disabled={enrollLoading}
-                    className="btn-primary text-sm disabled:opacity-50"
-                  >
-                    ＋ Enroll in this Course
-                  </button>
+                  <div className="flex flex-col items-start gap-2">
+                    <button
+                      onClick={enroll}
+                      disabled={enrollLoading}
+                      className="btn-primary text-sm disabled:opacity-50"
+                    >
+                      ＋ Enroll in this Course
+                    </button>
+                    {enrollError && (
+                      <p className="text-xs text-amber-400 max-w-xs">
+                        {enrollError.code === 'FREE_PLAN_LIMIT_REACHED' ? (
+                          <>
+                            Free accounts support one active learning plan at a time.{' '}
+                            <a href="/premium" className="underline hover:text-amber-300">Upgrade to Premium</a>{' '}
+                            for unlimited simultaneous plans, or complete your current one first.
+                          </>
+                        ) : enrollError.message}
+                      </p>
+                    )}
+                  </div>
                 )}
                 <button
                   onClick={handleRefreshContent}

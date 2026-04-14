@@ -8,6 +8,7 @@ export function useEnrollment(skillId) {
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [course, setCourse] = useState(null);
+  const [enrollError, setEnrollError] = useState(null);
 
   useEffect(() => {
     if (!user || !skillId) return;
@@ -27,11 +28,19 @@ export function useEnrollment(skillId) {
 
   const enroll = useCallback(async () => {
     setLoading(true);
+    setEnrollError(null);
     try {
       const data = await apiService.enrollCourse(skillId);
       setIsEnrolled(true);
       setCourse(data.course);
       analytics.track('course_enrolled', { skillId });
+    } catch (err) {
+      const serverError = err?.response?.data;
+      if (serverError?.code === 'FREE_PLAN_LIMIT_REACHED') {
+        setEnrollError({ code: 'FREE_PLAN_LIMIT_REACHED', message: serverError.error });
+      } else {
+        setEnrollError({ code: 'UNKNOWN', message: 'Failed to enroll. Please try again.' });
+      }
     } finally {
       setLoading(false);
     }
@@ -48,5 +57,5 @@ export function useEnrollment(skillId) {
     }
   }, [skillId]);
 
-  return { isEnrolled, loading, course, enroll, unenroll };
+  return { isEnrolled, loading, course, enroll, unenroll, enrollError };
 }

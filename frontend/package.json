@@ -14,6 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^9.2.0",
     "axios": "^1.6.0",
     "lucide-react": "^0.294.0",
     "posthog-js": "^1.360.1",

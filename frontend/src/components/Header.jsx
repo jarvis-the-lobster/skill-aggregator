@@ -67,6 +67,14 @@ export function Header() {
                 My Courses
               </Link>
             )}
+            {user && (
+              <Link
+                to="/account"
+                className="relative py-1 text-sm font-medium text-slate-400 transition-colors hover:text-slate-100 nav-link-premium"
+              >
+                Account
+              </Link>
+            )}
 
             {user ? (
               <div className="flex items-center gap-3">
@@ -141,6 +149,15 @@ export function Header() {
                   className="rounded-xl px-4 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.06]"
                 >
                   My Courses
+                </Link>
+              )}
+              {user && (
+                <Link
+                  to="/account"
+                  onClick={handleMobileNav}
+                  className="rounded-xl px-4 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.06]"
+                >
+                  Account
                 </Link>
               )}
 
