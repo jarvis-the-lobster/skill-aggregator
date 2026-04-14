@@ -79,6 +79,24 @@ describe('Onboarding API', () => {
     expect(res.body.success).toBe(true);
   });
 
+  test('POST /api/onboarding accepts instagram as attribution source', async () => {
+    const res = await request(app)
+      .post('/api/onboarding')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userType: 'student', goal: 'career-switch', dailyTime: '20-min', attributionSource: 'instagram' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  test('POST /api/onboarding rejects twitter-x (removed attribution source)', async () => {
+    const res = await request(app)
+      .post('/api/onboarding')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userType: 'student', goal: 'career-switch', dailyTime: '20-min', attributionSource: 'twitter-x' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid attribution source');
+  });
+
   test('POST /api/onboarding rejects invalid attribution source', async () => {
     const res = await request(app)
       .post('/api/onboarding')
