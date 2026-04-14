@@ -90,8 +90,10 @@ router.post('/cancel', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'No active subscription' });
     }
     const sub = await stripeService.cancelSubscriptionAtPeriodEnd(user.subscription_id);
+    // Keep status as 'active' — user still has access until period end.
+    // The webhook (customer.subscription.deleted) will flip to 'cancelled' when it actually expires.
     await db.updateUserSubscription(user.id, {
-      subscription_status: 'cancelled',
+      subscription_status: 'active',
       subscription_id: sub.id,
       subscription_end_date: toIsoOrNull(sub.current_period_end),
     });

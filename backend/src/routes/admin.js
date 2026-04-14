@@ -51,6 +51,36 @@ router.get('/metrics', requireCronSecretOrAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/users/:userId/sync-subscription — re-sync subscription from Stripe (CRON_SECRET or admin)
+router.post('/users/:userId/sync-subscription', requireCronSecretOrAdmin, async (req, res) => {
+  try {
+    const stripeService = require('../services/stripeService');
+    const user = await db.getUserById(Number(req.params.userId));
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.subscription_id) return res.status(400).json({ error: 'No subscription_id on this user' });
+
+    const sub = await stripeService.retrieveSubscription(user.subscription_id);
+    function toIsoOrNull(ts) { return ts ? new Date(ts * 1000).toISOString() : null; }
+    function mapStatus(s) {
+      if (s === 'active' || s === 'trialing') return 'active';
+      if (s === 'past_due' || s === 'unpaid') return 'past_due';
+      if (s === 'canceled' || s === 'incomplete_expired') return 'cancelled';
+      return 'free';
+    }
+    const newStatus = mapStatus(sub.status);
+    const endDate = toIsoOrNull(sub.trial_end || sub.current_period_end);
+    await db.updateUserSubscription(user.id, {
+      subscription_status: newStatus,
+      subscription_id: sub.id,
+      subscription_end_date: endDate,
+    });
+    res.json({ ok: true, subscription_status: newStatus, subscription_end_date: endDate, stripe_status: sub.status });
+  } catch (err) {
+    console.error('sync-subscription error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/users — list all users (admin only)
 router.get('/users', requireAuth, requireAdmin, async (req, res) => {
   try {
