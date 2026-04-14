@@ -202,7 +202,7 @@ export function AccountPage() {
           ) : (
             <div>
               <p className="text-slate-400 mb-6 leading-relaxed">
-                You're on the free plan. Upgrade to unlock all 30 plan days, streak freezes, and more.
+                You're on the free plan. Upgrade to Premium for personalized plans, unlimited active courses, streak freezes, and more.
               </p>
               <div className="flex flex-wrap items-center gap-4">
                 <button

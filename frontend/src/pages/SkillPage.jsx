@@ -385,9 +385,9 @@ export function SkillPage() {
                       <p className="text-xs text-amber-400 max-w-xs">
                         {enrollError.code === 'FREE_PLAN_LIMIT_REACHED' ? (
                           <>
-                            You already have an active learning plan.{' '}
+                            Free accounts support one active learning plan at a time.{' '}
                             <a href="/premium" className="underline hover:text-amber-300">Upgrade to Premium</a>{' '}
-                            for unlimited plans, or complete your current one first.
+                            for unlimited simultaneous plans, or complete your current one first.
                           </>
                         ) : enrollError.message}
                       </p>

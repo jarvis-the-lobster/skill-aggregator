@@ -10,9 +10,15 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 const FEATURES = [
   {
+    icon: Brain,
+    title: 'Personalized learning plans',
+    description: 'Plans built around your goals, schedule, and pace — not a one-size-fits-all template. (Coming soon.)',
+    soon: true,
+  },
+  {
     icon: Rocket,
-    title: 'All 30 plan days',
-    description: 'Unlock the full 30-day learning roadmap for every skill. No more day-7 cliff.',
+    title: 'Unlimited active plans',
+    description: 'Learn multiple skills at once. Switch between plans freely without losing your progress.',
   },
   {
     icon: Flame,
@@ -20,15 +26,9 @@ const FEATURES = [
     description: 'Life happens. Keep your streak alive with an automatic freeze every other day.',
   },
   {
-    icon: Brain,
-    title: 'AI Coach',
-    description: 'Personalized guidance, answers, and quick reviews. (Coming soon.)',
-    soon: true,
-  },
-  {
     icon: Zap,
     title: 'Priority content updates',
-    description: 'First access to new skills, curated drops, and weekly refreshes.',
+    description: 'First access to new skills, curated drops, and weekly content refreshes.',
   },
 ];
 
@@ -71,7 +71,7 @@ export function PremiumPage() {
     <div className="min-h-screen bg-dark-bg">
       <Helmet>
         <title>Premium — LearnStack</title>
-        <meta name="description" content="Unlock the full LearnStack experience: all 30 plan days, streak freezes, AI coach, and priority updates." />
+        <meta name="description" content="LearnStack Premium: personalized learning plans, unlimited active courses, streak freezes, and more." />
       </Helmet>
 
       {/* Hero */}
@@ -86,12 +86,12 @@ export function PremiumPage() {
           </div>
 
           <h1 className="text-5xl sm:text-6xl font-extrabold text-slate-100 mb-6 leading-[1.05] tracking-tight">
-            Go further,<br />
-            <span className="bg-gradient-to-r from-teal to-teal-light bg-clip-text text-transparent">faster.</span>
+            Learning that fits<br />
+            <span className="bg-gradient-to-r from-teal to-teal-light bg-clip-text text-transparent">you.</span>
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-400 max-w-xl mx-auto mb-12 leading-relaxed">
-            Unlock every day of every plan, keep your streak unbreakable, and get the tools serious learners need.
+            Personalized plans built around your goals and schedule, unlimited active courses, and the tools to stay consistent.
           </p>
 
           <div className="flex flex-col items-center gap-4">
@@ -178,7 +178,7 @@ export function PremiumPage() {
               Ready to level up?
             </h2>
             <p className="text-lg text-slate-400 mb-12 max-w-lg mx-auto">
-              $9/month. Cancel anytime. 100% of the content, 0% of the friction.
+              $9/month. Cancel anytime. Built for people who actually want to follow through.
             </p>
             <button
               type="button"
