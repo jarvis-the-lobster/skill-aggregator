@@ -4,7 +4,10 @@ const db = require('../models/database');
 const learningPlanService = require('../services/learningPlanService');
 const streakService = require('../services/streakService');
 const { requireAuth } = require('../middleware/auth');
+const { hasPremiumAccess } = require('../utils/subscriptionAccess');
 const { bulkLimiter } = require('../middleware/rateLimit');
+
+const FREE_PLAN_LIMIT = 1;
 
 function requireCronSecretOrAdmin(req, res, next) {
   const secret = process.env.CRON_SECRET;
@@ -69,6 +72,21 @@ router.post('/:skillId/enroll', requireAuth, async (req, res) => {
     const { skillId } = req.params;
     const skill = await db.getSkillById(skillId);
     if (!skill) return res.status(404).json({ error: 'Skill not found' });
+
+    const isPremium = hasPremiumAccess(req.user.subscription_status);
+    if (!isPremium) {
+      const existing = await db.getCourseEnrollment(req.user.id, skillId);
+      if (!existing) {
+        const activeCount = await db.getActiveEnrollmentCount(req.user.id);
+        if (activeCount >= FREE_PLAN_LIMIT) {
+          return res.status(403).json({
+            error: 'Free accounts are limited to 1 active learning plan at a time. Complete your current plan or upgrade to Premium for unlimited plans.',
+            code: 'FREE_PLAN_LIMIT_REACHED',
+          });
+        }
+      }
+    }
+
     const progress = await db.enrollPlan(req.user.id, skillId);
     // Also enroll in the course so it shows in my-courses
     await db.enrollCourse(req.user.id, skillId);

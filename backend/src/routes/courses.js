@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../models/database');
 const learningPlanService = require('../services/learningPlanService');
 const { requireAuth } = require('../middleware/auth');
+const { hasPremiumAccess } = require('../utils/subscriptionAccess');
 
 const VALID_STATUSES = ['active', 'completed'];
 
@@ -18,7 +19,7 @@ router.post('/enroll/:skillId', requireAuth, async (req, res) => {
     // Free users limited to 1 active enrollment at a time.
     // Premium users (subscription_status = 'active') get unlimited.
     // Existing enrollments over the limit are grandfathered — only block new ones.
-    const isPremium = req.user.subscription_status === 'active';
+    const isPremium = hasPremiumAccess(req.user.subscription_status);
     if (!isPremium) {
       // Check if already enrolled in this skill (re-enrolling is fine)
       const existing = await db.getCourseEnrollment(req.user.id, skillId);
