@@ -878,7 +878,7 @@ class Database {
     );
     for (const entry of days) {
       await this.insert(
-        `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, timestamp_start_seconds, timestamp_end_seconds)
+        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, timestamp_start_seconds, timestamp_end_seconds)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null,
          entry.review_status || 'ready', entry.review_title || null, entry.review_body ? JSON.stringify(entry.review_body) : null,
