@@ -130,6 +130,32 @@ router.post('/:skillId/refresh', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/learning-plans/:skillId/premium-pending — check if premium plan is pending
+router.get('/:skillId/premium-pending', requireAuth, async (req, res) => {
+  try {
+    const { skillId } = req.params;
+    const pending = await db.getPremiumPlanPending(req.user.id, skillId);
+    const hasPending = pending.length > 0;
+    res.json({ hasPending, dayCount: pending.length });
+  } catch (err) {
+    console.error('Premium pending check error:', err);
+    res.status(500).json({ error: 'Failed to check premium pending' });
+  }
+});
+
+// POST /api/learning-plans/:skillId/merge-premium — merge premium plan into user plan
+router.post('/:skillId/merge-premium', requireAuth, async (req, res) => {
+  try {
+    const { skillId } = req.params;
+    await db.mergePremiumPlan(req.user.id, skillId);
+    const plan = await db.getUserLearningPlan(req.user.id, skillId);
+    res.json({ merged: true, plan });
+  } catch (err) {
+    console.error('Premium merge error:', err);
+    res.status(500).json({ error: 'Failed to merge premium plan' });
+  }
+});
+
 // POST /api/learning-plans/:skillId/complete-day — mark a day complete
 router.post('/:skillId/complete-day', requireAuth, async (req, res) => {
   try {
@@ -137,16 +163,51 @@ router.post('/:skillId/complete-day', requireAuth, async (req, res) => {
     if (!day || typeof day !== 'number') {
       return res.status(400).json({ error: 'day must be a number' });
     }
-    const progress = await db.completePlanDay(req.user.id, req.params.skillId, day);
+    const { skillId } = req.params;
+    const progress = await db.completePlanDay(req.user.id, skillId, day);
     if (!progress) return res.status(404).json({ error: 'Not enrolled in this plan' });
     // Record streak activity on plan day completion
     await streakService.recordActivity(req.user.id);
     // Auto-complete course when all 30 days are done
     const completedDays = JSON.parse(progress.completed_days || '[]');
     if (completedDays.length >= 30) {
-      await db.updateCourseStatus(req.user.id, req.params.skillId, 'completed');
+      await db.updateCourseStatus(req.user.id, skillId, 'completed');
     }
-    res.json({ progress });
+
+    const REVIEW_DAYS = [7, 14, 21, 28];
+    let premiumGenerating = false;
+    let premiumMessage = null;
+    if (REVIEW_DAYS.includes(day) && hasPremiumAccess(req.user.subscription_status)) {
+      try {
+        // Upsert: if a pending job already exists for this user+skill+day, reset it
+        // so re-reviewing a day refreshes the job rather than stacking duplicates
+        const existingJobs = await db.query(
+          `SELECT id FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ? AND skill_id = ? AND day_number = ? AND status = 'pending'`,
+          [req.user.id, skillId, day]
+        );
+        if (existingJobs.length > 0) {
+          await db.insert(
+            `UPDATE plan_jobs SET payload = ?, attempts = 0, plan_created_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [JSON.stringify({ triggerDay: day }), new Date().toISOString(), existingJobs[0].id]
+          );
+        } else {
+          await db.createPlanJob({
+            skill_id: skillId,
+            user_id: req.user.id,
+            job_type: 'premium_plan_generation',
+            day_number: day,
+            payload: { triggerDay: day },
+            plan_created_at: new Date().toISOString(),
+          });
+        }
+        premiumGenerating = true;
+        premiumMessage = `We've received your Day ${day} responses. Your personalized plan for the next 7 days is being prepared — check back within 24 hours.`;
+      } catch (err) {
+        console.error('Premium plan job creation error:', err);
+      }
+    }
+
+    res.json({ progress, premiumGenerating, message: premiumMessage });
   } catch (err) {
     console.error('Complete day error:', err);
     res.status(500).json({ error: 'Failed to mark day complete' });

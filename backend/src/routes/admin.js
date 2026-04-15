@@ -307,6 +307,117 @@ router.post('/review-jobs/:id/process', async (req, res) => {
   }
 });
 
+// GET /api/admin/premium-plans/context/:userId/:skillId — gather LLM context for premium plan curation
+router.get('/premium-plans/context/:userId/:skillId', requireCronSecretOrAdmin, async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    const skillId = req.params.skillId;
+
+    const DAY_RANGES = { 7: [8,14], 14: [15,21], 21: [22,28], 28: [29,30] };
+
+    const jobs = await db.query(
+      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ? AND skill_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1`,
+      [userId, skillId]
+    );
+    const job = jobs[0] || null;
+    const triggerDay = job ? JSON.parse(job.payload || '{}').triggerDay : null;
+    const range = triggerDay ? DAY_RANGES[triggerDay] : null;
+
+    const reviewSubmissions = triggerDay ? await db.query(
+      `SELECT rs.day_number, rs.result_summary, rs.reflection,
+              rsa.question, rsa.answer, rsa.correct, rsa.check_type
+       FROM review_submissions rs
+       LEFT JOIN review_submission_answers rsa ON rsa.submission_id = rs.id
+       WHERE rs.user_id = ? AND rs.skill_id = ? AND rs.day_number = ?
+       ORDER BY rsa.id ASC`,
+      [userId, skillId, triggerDay]
+    ) : [];
+
+    const totalAnswers = reviewSubmissions.filter(r => r.correct !== null).length;
+    const correctAnswers = reviewSubmissions.filter(r => r.correct === 1).length;
+
+    const userPlan = await db.getUserLearningPlan(userId, skillId);
+    const progress = await db.getPlanProgress(userId, skillId);
+    const completedDays = JSON.parse(progress?.completed_days || '[]');
+
+    const usedContentIds = new Set(userPlan.map(e => e.content_id).filter(Boolean));
+    const allContent = await db.getSkillContent(skillId);
+    const availableContent = allContent
+      .filter(c => !usedContentIds.has(c.id))
+      .map(c => ({
+        id: c.id,
+        type: c.type,
+        title: c.title,
+        url: c.url,
+        source: c.source,
+        duration: c.duration,
+        views: c.views,
+        description: c.description ? c.description.slice(0, 200) : null,
+      }));
+
+    const skill = await db.getSkillById(skillId);
+
+    res.json({
+      jobId: job?.id || null,
+      userId,
+      skillId,
+      skillName: skill?.name || skillId,
+      triggerDay,
+      targetDays: range ? { start: range[0], end: range[1] } : null,
+      reviewScore: { correct: correctAnswers, total: totalAnswers },
+      reviewSubmissions,
+      currentPlan: userPlan.map(e => ({
+        day_number: e.day_number,
+        content_id: e.content_id,
+        content_type: e.content_type,
+        title: e.title,
+        completed: completedDays.includes(e.day_number),
+      })),
+      availableContent,
+      instructions: 'Select content from availableContent for each target day. Target 25-45 minutes total per day. Prefer content matching topics from reviewSubmissions answers. Fall back to highest-viewed content if no topic match. Return an array of { day_number, content_id, content_type, reason } objects. If reviewScore is 7+ out of 8, note user is on track and continue at current difficulty.',
+    });
+  } catch (err) {
+    console.error('premium-plans/context error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/premium-plans/save/:userId/:skillId — save LLM-curated premium plan days
+router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, async (req, res) => {
+  try {
+    const userId = Number(req.params.userId);
+    const skillId = req.params.skillId;
+    const { jobId, days } = req.body;
+
+    if (!Array.isArray(days) || days.length === 0) {
+      return res.status(400).json({ error: 'days array required' });
+    }
+
+    await db.savePremiumPlanDays(userId, skillId, days);
+
+    if (jobId) {
+      await db.completeJob(jobId, { generated: true });
+    }
+
+    const skill = await db.getSkillById(skillId);
+    const startDay = Math.min(...days.map(d => d.day_number));
+    const endDay = Math.max(...days.map(d => d.day_number));
+
+    await db.createNotification({
+      user_id: userId,
+      type: 'premium_plan_ready',
+      title: 'Your personalized plan is ready',
+      body: `Days ${startDay}-${endDay} for ${skill?.name || skillId} have been hand-picked based on your review responses. Open your plan to apply them.`,
+      data: { skillId, startDay, endDay },
+    });
+
+    res.json({ saved: true });
+  } catch (err) {
+    console.error('premium-plans/save error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Skill Management ──────────────────────────────────────────────────────
 
 // Helper: verify CRON_SECRET

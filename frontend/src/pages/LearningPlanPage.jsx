@@ -44,6 +44,9 @@ export function LearningPlanPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [refreshAvailable, setRefreshAvailable] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [premiumPending, setPremiumPending] = useState(false);
+  const [premiumDayCount, setPremiumDayCount] = useState(0);
+  const [mergingPremium, setMergingPremium] = useState(false);
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
   const [planReady, setPlanReady] = useState(true);
   const [reviewContent, setReviewContent] = useState({});
@@ -114,6 +117,16 @@ export function LearningPlanPage() {
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
         setCompletedDays(new Set(days));
         setRefreshAvailable(progressData.refreshAvailable || false);
+
+        if (isPremium) {
+          try {
+            const premiumData = await apiService.getPremiumPending(skillId);
+            setPremiumPending(premiumData.hasPending);
+            setPremiumDayCount(premiumData.dayCount);
+          } catch {
+            setPremiumPending(false);
+          }
+        }
       } else {
         setCompletedDays(new Set());
         setRefreshAvailable(false);
@@ -145,6 +158,27 @@ export function LearningPlanPage() {
       analytics.track('plan_day_completed', { skillId, day, totalCompleted: days.length });
     } catch (err) {
       console.error('Complete day error:', err);
+    }
+  };
+
+  const handleMergePremium = async () => {
+    setMergingPremium(true);
+    try {
+      const data = await apiService.mergePremiumPlan(skillId);
+      if (data.merged && data.plan) {
+        setPlan(data.plan);
+        setPremiumPending(false);
+        setPremiumDayCount(0);
+        const ids = data.plan.map(e => e.content_id).filter(Boolean);
+        if (ids.length) {
+          const ratingsData = await apiService.getRatings(ids).catch(() => ({ counts: {}, userRatings: {} }));
+          setRatings(ratingsData);
+        }
+      }
+    } catch (err) {
+      console.error('Premium merge error:', err);
+    } finally {
+      setMergingPremium(false);
     }
   };
 
@@ -232,7 +266,23 @@ export function LearningPlanPage() {
           </div>
         )}
 
-        {refreshAvailable && enrolled && (
+        {premiumPending && enrolled && (
+          <div className="mb-6 bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-purple-300">✨ Your personalized plan is ready</p>
+              <p className="text-xs text-purple-400/70">{premiumDayCount} days hand-picked based on your review responses.</p>
+            </div>
+            <button
+              onClick={handleMergePremium}
+              disabled={mergingPremium}
+              className="ml-4 px-4 py-2 bg-purple-500 text-white text-sm rounded-lg hover:bg-purple-400 disabled:opacity-50 whitespace-nowrap font-semibold"
+            >
+              {mergingPremium ? 'Applying…' : 'Apply Now'}
+            </button>
+          </div>
+        )}
+
+        {refreshAvailable && enrolled && !premiumPending && !(isPremium && plan.some(d => d.day_number > 7 && d.content_type !== 'review')) && (
           <div className="mb-6 bg-teal/10 border border-teal/20 rounded-lg p-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-teal-light">New resources available!</p>
