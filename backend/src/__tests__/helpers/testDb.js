@@ -232,6 +232,21 @@ const TABLE_SQL = [
     FOREIGN KEY (skill_id) REFERENCES skills(id),
     UNIQUE(user_id, skill_id, day_number)
   )`,
+  `CREATE TABLE IF NOT EXISTS premium_plan_days (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    skill_id TEXT NOT NULL,
+    day_number INTEGER NOT NULL,
+    content_id TEXT,
+    content_type TEXT,
+    reason TEXT,
+    status TEXT DEFAULT 'pending_merge',
+    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (skill_id) REFERENCES skills(id),
+    FOREIGN KEY (content_id) REFERENCES content(id),
+    UNIQUE(user_id, skill_id, day_number)
+  )`,
   `CREATE TABLE IF NOT EXISTS review_submission_answers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     submission_id INTEGER NOT NULL,
@@ -950,6 +965,74 @@ function createTestDb() {
           );
         },
 
+        async savePremiumPlanDays(userId, skillId, days) {
+          for (const entry of days) {
+            await insert(
+              `INSERT OR REPLACE INTO premium_plan_days (user_id, skill_id, day_number, content_id, content_type, reason, status, generated_at)
+               VALUES (?, ?, ?, ?, ?, ?, 'pending_merge', CURRENT_TIMESTAMP)`,
+              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+            );
+          }
+        },
+
+        async getPremiumPlanPending(userId, skillId) {
+          return query(
+            `SELECT * FROM premium_plan_days WHERE user_id = ? AND skill_id = ? AND status = 'pending_merge' ORDER BY day_number ASC`,
+            [userId, skillId]
+          );
+        },
+
+        async mergePremiumPlan(userId, skillId) {
+          const pending = await db.getPremiumPlanPending(userId, skillId);
+          for (const row of pending) {
+            await insert(
+              `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              [userId, skillId, row.day_number, row.content_id, row.content_type, row.reason]
+            );
+          }
+          await insert(
+            `UPDATE premium_plan_days SET status = 'merged' WHERE user_id = ? AND skill_id = ? AND status = 'pending_merge'`,
+            [userId, skillId]
+          );
+        },
+
+        async deletePendingPremiumPlan(userId, skillId) {
+          return insert(
+            `DELETE FROM premium_plan_days WHERE user_id = ? AND skill_id = ? AND status = 'pending_merge'`,
+            [userId, skillId]
+          );
+        },
+
+        async getUserSkillsWithPremiumHistory(userId) {
+          const rows = await query(
+            `SELECT DISTINCT skill_id FROM premium_plan_days WHERE user_id = ? AND status = 'merged'`,
+            [userId]
+          );
+          return rows.map(r => r.skill_id);
+        },
+
+        async hasPendingPremiumPlan(userId, skillId) {
+          const rows = await query(
+            `SELECT COUNT(*) as count FROM premium_plan_days WHERE user_id = ? AND skill_id = ? AND status = 'pending_merge'`,
+            [userId, skillId]
+          );
+          return (rows[0]?.count || 0) > 0;
+        },
+
+        async completePlanDay(userId, skillId, day) {
+          const row = await db.getPlanProgress(userId, skillId);
+          if (!row) return null;
+          const completed = JSON.parse(row.completed_days || '[]');
+          if (!completed.includes(day)) completed.push(day);
+          await insert(
+            `UPDATE user_plan_progress SET completed_days = ?, last_activity_at = CURRENT_TIMESTAMP
+             WHERE user_id = ? AND skill_id = ?`,
+            [JSON.stringify(completed), userId, skillId]
+          );
+          return db.getPlanProgress(userId, skillId);
+        },
+
         close() {
           return new Promise((res) => raw.close(() => res()));
         },
@@ -972,7 +1055,7 @@ async function clearTables(db) {
     'user_plan_progress', 'scrape_log', 'user_onboarding', 'user_learning_plans',
     'plan_jobs', 'plan_review_content',
     'review_submission_answers', 'review_submissions',
-    'notifications',
+    'notifications', 'premium_plan_days',
   ];
   for (const t of tables) {
     await db.insert(`DELETE FROM ${t}`);

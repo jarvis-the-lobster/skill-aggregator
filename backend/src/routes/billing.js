@@ -138,6 +138,13 @@ async function handleWebhookEvent(event) {
       subscription_id: obj.id,
       subscription_end_date: toIsoOrNull(obj.current_period_end),
     });
+    if (type === 'customer.subscription.deleted') {
+      try {
+        await handleDowngrade(user.id);
+      } catch (err) {
+        console.error('Downgrade handler error:', err.message);
+      }
+    }
     return;
   }
 
@@ -150,6 +157,34 @@ async function handleWebhookEvent(event) {
       subscription_end_date: user.subscription_end_date || null,
     });
   }
+}
+
+async function handleDowngrade(userId) {
+  const courses = await db.getMyCourses(userId);
+
+  for (const course of courses) {
+    const skillId = course.skill_id;
+    await db.deletePendingPremiumPlan(userId, skillId);
+
+    const progress = await db.getPlanProgress(userId, skillId);
+    if (!progress) continue;
+    const completedDays = JSON.parse(progress.completed_days || '[]');
+
+    const sharedPlan = await db.getLearningPlan(skillId);
+    if (!sharedPlan.length) continue;
+
+    const incompleteDays = sharedPlan.filter(d => !completedDays.includes(d.day_number));
+    if (!incompleteDays.length) continue;
+
+    await db.refreshUserPlanDays(userId, skillId, incompleteDays);
+  }
+
+  await db.createNotification({
+    user_id: userId,
+    type: 'subscription_downgraded',
+    title: 'Your Premium plan has ended',
+    body: 'Your learning plans have been updated to our curated content. Upgrade anytime to get personalized recommendations.',
+  });
 }
 
 const webhookHandler = async (req, res) => {
