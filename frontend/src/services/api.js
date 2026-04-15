@@ -124,6 +124,16 @@ export const apiService = {
     return response.data;
   },
 
+  async getPremiumPending(skillId) {
+    const response = await api.get(`/learning-plans/${skillId}/premium-pending`);
+    return response.data;
+  },
+
+  async mergePremiumPlan(skillId) {
+    const response = await api.post(`/learning-plans/${skillId}/merge-premium`);
+    return response.data;
+  },
+
   async submitReview(skillId, dayNumber, { answers, reflection }) {
     const response = await api.post(`/learning-plans/${skillId}/review/${dayNumber}/submit`, { answers, reflection });
     return response.data;

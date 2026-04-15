@@ -1,0 +1,319 @@
+const { createTestDb, clearTables } = require('./helpers/testDb');
+
+jest.mock('../services/stripeService', () => ({
+  isConfigured: jest.fn(() => true),
+  constructWebhookEvent: jest.fn(),
+  retrieveSubscription: jest.fn(),
+  retrieveCustomer: jest.fn(),
+  getOrCreateCustomer: jest.fn(),
+  createCheckoutSession: jest.fn(),
+  cancelSubscriptionAtPeriodEnd: jest.fn(),
+}));
+
+jest.mock('../services/analyticsService', () => ({
+  trackUserRegistered: jest.fn(),
+  trackUserLoggedIn: jest.fn(),
+}));
+
+jest.mock('../services/pushService', () => ({
+  saveSubscription: jest.fn(),
+  removeSubscription: jest.fn(),
+  sendPushToUser: jest.fn(),
+  sendStreakReminder: jest.fn().mockResolvedValue({ sent: 0, failed: 0 }),
+}));
+
+jest.mock('../services/scraperService', () => ({
+  scrapeSkill: jest.fn().mockResolvedValue({ videos: [], articles: [] }),
+}));
+
+const mockDb = {};
+jest.mock('../models/database', () => mockDb);
+
+const request = require('supertest');
+const app = require('../app');
+
+let db;
+
+beforeAll(async () => {
+  db = await createTestDb();
+  Object.assign(mockDb, db);
+});
+
+beforeEach(async () => {
+  await clearTables(db);
+  jest.clearAllMocks();
+});
+
+afterAll(async () => {
+  await db.close();
+});
+
+async function createUser({ email = 'test@example.com', status = 'free', subscriptionId = null } = {}) {
+  const bcrypt = require('bcryptjs');
+  const hash = await bcrypt.hash('password123', 1);
+  await db.insert(
+    `INSERT INTO users (email, password_hash, subscription_status, subscription_id)
+     VALUES (?, ?, ?, ?)`,
+    [email, hash, status, subscriptionId]
+  );
+  return db.getUserByEmail(email);
+}
+
+async function loginAs(email) {
+  const res = await request(app)
+    .post('/api/auth/login')
+    .send({ email, password: 'password123' });
+  return res.body.token;
+}
+
+async function setupSkillWithPlan(skillId = 'javascript') {
+  await db.insert(
+    `INSERT INTO skills (id, name, category, difficulty, status) VALUES (?, ?, ?, ?, ?)`,
+    [skillId, 'JavaScript', 'programming', 'beginner', 'ready']
+  );
+  const days = [];
+  for (let i = 1; i <= 30; i++) {
+    const isReview = [7, 14, 21, 28].includes(i);
+    days.push({
+      day_number: i,
+      content_id: isReview ? null : `content-${skillId}-${i}`,
+      content_type: isReview ? 'review' : 'video',
+      reason: `Day ${i} content`,
+    });
+    if (!isReview) {
+      await db.insert(
+        `INSERT OR IGNORE INTO content (id, skill_id, type, title, url, source, duration, views)
+         VALUES (?, ?, 'video', ?, ?, 'YouTube', '10:00', 1000)`,
+        [`content-${skillId}-${i}`, skillId, `Lesson ${i}`, `https://example.com/${i}`]
+      );
+    }
+  }
+  await db.saveLearningPlan(skillId, days);
+}
+
+// ─── Premium job gating ───────────────────────────────────────────────────
+
+describe('Premium plan job creation gating', () => {
+  test('free user completing day 7 does NOT create a premium_plan_generation job', async () => {
+    const user = await createUser({ email: 'free@example.com', status: 'free' });
+    const token = await loginAs('free@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    await request(app)
+      .post('/api/learning-plans/javascript/complete-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ day: 7 });
+
+    const jobs = await db.query(
+      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
+      [user.id]
+    );
+    expect(jobs.length).toBe(0);
+  });
+
+  test('premium user completing day 7 DOES create a premium_plan_generation job', async () => {
+    const user = await createUser({ email: 'premium@example.com', status: 'active' });
+    const token = await loginAs('premium@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    const res = await request(app)
+      .post('/api/learning-plans/javascript/complete-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ day: 7 });
+
+    expect(res.body.premiumGenerating).toBe(true);
+    expect(res.body.message).toContain('Day 7');
+
+    const jobs = await db.query(
+      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
+      [user.id]
+    );
+    expect(jobs.length).toBe(1);
+    expect(jobs[0].day_number).toBe(7);
+  });
+});
+
+// ─── mergePremiumPlan ─────────────────────────────────────────────────────
+
+describe('mergePremiumPlan', () => {
+  test('copies pending_merge rows to user_learning_plans and marks them merged', async () => {
+    const user = await createUser({ email: 'merge@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+
+    const premiumDays = [
+      { day_number: 8, content_id: 'content-javascript-8', content_type: 'video', reason: 'premium pick' },
+      { day_number: 9, content_id: 'content-javascript-9', content_type: 'video', reason: 'premium pick' },
+    ];
+    await db.savePremiumPlanDays(user.id, 'javascript', premiumDays);
+
+    const pendingBefore = await db.getPremiumPlanPending(user.id, 'javascript');
+    expect(pendingBefore.length).toBe(2);
+
+    await db.mergePremiumPlan(user.id, 'javascript');
+
+    const pendingAfter = await db.getPremiumPlanPending(user.id, 'javascript');
+    expect(pendingAfter.length).toBe(0);
+
+    const userPlan = await db.getUserLearningPlan(user.id, 'javascript');
+    const day8 = userPlan.find(d => d.day_number === 8);
+    expect(day8).toBeTruthy();
+    expect(day8.reason).toBe('premium pick');
+  });
+});
+
+// ─── deletePendingPremiumPlan ─────────────────────────────────────────────
+
+describe('deletePendingPremiumPlan', () => {
+  test('removes only pending_merge rows, not merged ones', async () => {
+    const user = await createUser({ email: 'delete@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+
+    const mergedDays = [{ day_number: 8, content_id: 'c1', content_type: 'video', reason: 'merged' }];
+    await db.savePremiumPlanDays(user.id, 'javascript', mergedDays);
+    await db.insert(
+      `UPDATE premium_plan_days SET status = 'merged' WHERE user_id = ? AND skill_id = ? AND day_number = 8`,
+      [user.id, 'javascript']
+    );
+
+    const pendingDays = [{ day_number: 15, content_id: 'c2', content_type: 'video', reason: 'pending' }];
+    await db.savePremiumPlanDays(user.id, 'javascript', pendingDays);
+
+    await db.deletePendingPremiumPlan(user.id, 'javascript');
+
+    const allRows = await db.query(
+      `SELECT * FROM premium_plan_days WHERE user_id = ? AND skill_id = ?`,
+      [user.id, 'javascript']
+    );
+    expect(allRows.length).toBe(1);
+    expect(allRows[0].status).toBe('merged');
+    expect(allRows[0].day_number).toBe(8);
+  });
+});
+
+// ─── Downgrade handler ────────────────────────────────────────────────────
+
+describe('Downgrade handler', () => {
+  test('removes pending premium rows and restores shared plan days on subscription deleted', async () => {
+    const stripeService = require('../services/stripeService');
+
+    const user = await createUser({ email: 'downgrade@example.com', status: 'active', subscriptionId: 'sub_down' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_down', user.id]);
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    // Copy shared plan to user
+    const sharedPlan = await db.getLearningPlan('javascript');
+    await db.saveUserLearningPlan(user.id, 'javascript', sharedPlan);
+
+    // Mark some days complete
+    await db.completePlanDay(user.id, 'javascript', 1);
+    await db.completePlanDay(user.id, 'javascript', 2);
+
+    // Add pending premium days
+    await db.savePremiumPlanDays(user.id, 'javascript', [
+      { day_number: 8, content_id: 'premium-8', content_type: 'video', reason: 'premium' },
+    ]);
+
+    mockDb.getUserByStripeCustomerId = jest.fn().mockResolvedValue({
+      ...user, stripe_customer_id: 'cus_down',
+    });
+
+    stripeService.constructWebhookEvent.mockReturnValue({
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_down',
+          customer: 'cus_down',
+          status: 'canceled',
+          current_period_end: Math.floor(Date.now() / 1000),
+        },
+      },
+    });
+
+    await request(app)
+      .post('/api/billing/webhook')
+      .set('stripe-signature', 'sig_test')
+      .set('Content-Type', 'application/json')
+      .send('{}');
+
+    // Pending premium rows should be gone
+    const pending = await db.getPremiumPlanPending(user.id, 'javascript');
+    expect(pending.length).toBe(0);
+
+    // Notification should exist
+    const notifications = await db.getNotifications(user.id);
+    const downgradeNotif = notifications.find(n => n.type === 'subscription_downgraded');
+    expect(downgradeNotif).toBeTruthy();
+    expect(downgradeNotif.title).toBe('Your Premium plan has ended');
+
+    mockDb.getUserByStripeCustomerId = db.getUserByStripeCustomerId.bind(db);
+  });
+});
+
+// ─── Premium pending endpoint ─────────────────────────────────────────────
+
+describe('GET /api/learning-plans/:skillId/premium-pending', () => {
+  test('returns correct hasPending state', async () => {
+    const user = await createUser({ email: 'pending@example.com', status: 'active' });
+    const token = await loginAs('pending@example.com');
+    await setupSkillWithPlan('javascript');
+
+    // No pending rows
+    let res = await request(app)
+      .get('/api/learning-plans/javascript/premium-pending')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.hasPending).toBe(false);
+    expect(res.body.dayCount).toBe(0);
+
+    // Add pending rows
+    await db.savePremiumPlanDays(user.id, 'javascript', [
+      { day_number: 8, content_id: 'c1', content_type: 'video', reason: 'test' },
+      { day_number: 9, content_id: 'c2', content_type: 'video', reason: 'test' },
+    ]);
+
+    res = await request(app)
+      .get('/api/learning-plans/javascript/premium-pending')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.hasPending).toBe(true);
+    expect(res.body.dayCount).toBe(2);
+  });
+});
+
+// ─── Merge premium endpoint ──────────────────────────────────────────────
+
+describe('POST /api/learning-plans/:skillId/merge-premium', () => {
+  test('returns merged plan', async () => {
+    const user = await createUser({ email: 'mergeapi@example.com', status: 'active' });
+    const token = await loginAs('mergeapi@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    // Copy shared plan to user first
+    const sharedPlan = await db.getLearningPlan('javascript');
+    await db.saveUserLearningPlan(user.id, 'javascript', sharedPlan);
+
+    // Save premium days
+    await db.savePremiumPlanDays(user.id, 'javascript', [
+      { day_number: 8, content_id: 'content-javascript-8', content_type: 'video', reason: 'premium curated' },
+    ]);
+
+    const res = await request(app)
+      .post('/api/learning-plans/javascript/merge-premium')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.merged).toBe(true);
+    expect(Array.isArray(res.body.plan)).toBe(true);
+
+    const day8 = res.body.plan.find(d => d.day_number === 8);
+    expect(day8).toBeTruthy();
+    expect(day8.reason).toBe('premium curated');
+  });
+});

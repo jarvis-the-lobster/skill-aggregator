@@ -307,6 +307,22 @@ router.post('/review-jobs/:id/process', async (req, res) => {
   }
 });
 
+// POST /api/admin/premium-plans/generate — trigger premium plan generation (Bearer CRON_SECRET)
+router.post('/premium-plans/generate', (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers['authorization'];
+  if (!secret || auth !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { runPremiumPlanGeneration } = require('../scripts/generate-premium-plans');
+  res.json({ started: true });
+
+  runPremiumPlanGeneration().catch((err) => {
+    console.error('[premium-plans/generate] Fatal error:', err.message);
+  });
+});
+
 // ─── Skill Management ──────────────────────────────────────────────────────
 
 // Helper: verify CRON_SECRET
