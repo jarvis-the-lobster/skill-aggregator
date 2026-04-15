@@ -179,14 +179,27 @@ router.post('/:skillId/complete-day', requireAuth, async (req, res) => {
     let premiumMessage = null;
     if (REVIEW_DAYS.includes(day) && hasPremiumAccess(req.user.subscription_status)) {
       try {
-        await db.createPlanJob({
-          skill_id: skillId,
-          user_id: req.user.id,
-          job_type: 'premium_plan_generation',
-          day_number: day,
-          payload: { triggerDay: day },
-          plan_created_at: new Date().toISOString(),
-        });
+        // Upsert: if a pending job already exists for this user+skill+day, reset it
+        // so re-reviewing a day refreshes the job rather than stacking duplicates
+        const existingJobs = await db.query(
+          `SELECT id FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ? AND skill_id = ? AND day_number = ? AND status = 'pending'`,
+          [req.user.id, skillId, day]
+        );
+        if (existingJobs.length > 0) {
+          await db.insert(
+            `UPDATE plan_jobs SET payload = ?, attempts = 0, plan_created_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [JSON.stringify({ triggerDay: day }), new Date().toISOString(), existingJobs[0].id]
+          );
+        } else {
+          await db.createPlanJob({
+            skill_id: skillId,
+            user_id: req.user.id,
+            job_type: 'premium_plan_generation',
+            day_number: day,
+            payload: { triggerDay: day },
+            plan_created_at: new Date().toISOString(),
+          });
+        }
         premiumGenerating = true;
         premiumMessage = `We've received your Day ${day} responses. Your personalized plan for the next 7 days is being prepared — check back within 24 hours.`;
       } catch (err) {
