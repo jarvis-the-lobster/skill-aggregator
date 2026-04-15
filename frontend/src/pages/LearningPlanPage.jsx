@@ -313,7 +313,6 @@ export function LearningPlanPage() {
               const unlocked = entry.day_number <= FREE_DAYS || enrolled;
               const hasContent = Boolean(entry.content_id);
               const isCompleted = completedDays.has(entry.day_number);
-              const isGraduation = entry.content_type === 'graduation';
               const inlineReview = entry.content_type === 'review'
                 ? {
                     day_number: entry.day_number,
@@ -332,9 +331,7 @@ export function LearningPlanPage() {
                 <div
                   key={entry.day_number}
                   className={`relative rounded-lg border p-3 flex flex-col min-h-[8rem] ${
-                    isGraduation && unlocked
-                      ? 'bg-gradient-to-br from-teal/20 to-teal-deep/20 border-teal/30'
-                      : isCompleted
+                    isCompleted
                       ? 'bg-green-500/10 border-green-500/30'
                       : shouldRenderReviewCard && unlocked
                       ? 'bg-purple-500/10 border-purple-500/20 hover:border-purple-400/40 hover:shadow-sm transition-all'
@@ -359,21 +356,7 @@ export function LearningPlanPage() {
                     ) : null}
                   </div>
 
-                  {isGraduation && unlocked ? (
-                    <div className="flex flex-col flex-grow items-center justify-center text-center py-2">
-                      <span className="text-2xl mb-1">🎓</span>
-                      <p className="text-sm font-bold text-slate-100 mb-1">You did it! 30 days complete.</p>
-                      <p className="text-xs text-teal-light/80">{entry.reason}</p>
-                      {enrolled && !isCompleted && (
-                        <button
-                          onClick={() => handleCompleteDay(entry.day_number)}
-                          className="mt-2 text-xs text-green-400 hover:text-green-300"
-                        >
-                          Mark complete
-                        </button>
-                      )}
-                    </div>
-                  ) : shouldRenderReviewCard && unlocked && review ? (
+                  {shouldRenderReviewCard && unlocked && review ? (
                     <div className="flex flex-col flex-grow">
                       <div className="flex items-center space-x-1 mb-1">
                         <ClipboardCheck className="w-3 h-3 text-purple-400 flex-shrink-0" />

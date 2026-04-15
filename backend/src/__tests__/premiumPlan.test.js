@@ -164,6 +164,42 @@ describe('mergePremiumPlan', () => {
     expect(day8).toBeTruthy();
     expect(day8.reason).toBe('premium pick');
   });
+
+  test('does not overwrite already-completed days during merge', async () => {
+    const user = await createUser({ email: 'merge-skip@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+
+    // Copy shared plan to user so day 8 exists
+    const sharedPlan = await db.getLearningPlan('javascript');
+    await db.saveUserLearningPlan(user.id, 'javascript', sharedPlan);
+
+    // Get original content_id for day 8
+    const planBefore = await db.getUserLearningPlan(user.id, 'javascript');
+    const originalDay8 = planBefore.find(d => d.day_number === 8);
+    const originalContentId = originalDay8.content_id;
+
+    // Mark day 8 as completed
+    await db.completePlanDay(user.id, 'javascript', 8);
+
+    // Save premium days that include day 8 with different content
+    await db.savePremiumPlanDays(user.id, 'javascript', [
+      { day_number: 8, content_id: 'premium-replacement-8', content_type: 'video', reason: 'premium pick' },
+      { day_number: 9, content_id: 'premium-replacement-9', content_type: 'video', reason: 'premium pick' },
+    ]);
+
+    await db.mergePremiumPlan(user.id, 'javascript');
+
+    const planAfter = await db.getUserLearningPlan(user.id, 'javascript');
+    const day8After = planAfter.find(d => d.day_number === 8);
+    const day9After = planAfter.find(d => d.day_number === 9);
+
+    // Day 8 should retain original content (was completed)
+    expect(day8After.content_id).toBe(originalContentId);
+    // Day 9 should be updated (was not completed)
+    expect(day9After.content_id).toBe('premium-replacement-9');
+    expect(day9After.reason).toBe('premium pick');
+  });
 });
 
 // ─── deletePendingPremiumPlan ─────────────────────────────────────────────

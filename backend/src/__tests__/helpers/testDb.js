@@ -984,7 +984,11 @@ function createTestDb() {
 
         async mergePremiumPlan(userId, skillId) {
           const pending = await db.getPremiumPlanPending(userId, skillId);
+          const progress = await db.getPlanProgress(userId, skillId);
+          const completedDays = new Set(JSON.parse(progress?.completed_days || '[]'));
+
           for (const row of pending) {
+            if (completedDays.has(row.day_number)) continue;
             await insert(
               `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, created_at)
                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
