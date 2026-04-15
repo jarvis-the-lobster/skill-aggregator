@@ -26,6 +26,8 @@ jest.mock('../services/scraperService', () => ({
   scrapeSkill: jest.fn().mockResolvedValue({ videos: [], articles: [] }),
 }));
 
+process.env.CRON_SECRET = 'test-secret';
+
 const mockDb = {};
 jest.mock('../models/database', () => mockDb);
 
@@ -134,6 +136,94 @@ describe('Premium plan job creation gating', () => {
     );
     expect(jobs.length).toBe(1);
     expect(jobs[0].day_number).toBe(7);
+  });
+
+  test('premium user completing day 14 creates a job', async () => {
+    const user = await createUser({ email: 'premium14@example.com', status: 'active' });
+    const token = await loginAs('premium14@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    const res = await request(app)
+      .post('/api/learning-plans/javascript/complete-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ day: 14 });
+
+    expect(res.body.premiumGenerating).toBe(true);
+    expect(res.body.message).toContain('Day 14');
+
+    const jobs = await db.query(
+      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
+      [user.id]
+    );
+    expect(jobs.length).toBe(1);
+    expect(jobs[0].day_number).toBe(14);
+  });
+
+  test('premium user completing day 21 creates a job', async () => {
+    const user = await createUser({ email: 'premium21@example.com', status: 'active' });
+    const token = await loginAs('premium21@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    const res = await request(app)
+      .post('/api/learning-plans/javascript/complete-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ day: 21 });
+
+    expect(res.body.premiumGenerating).toBe(true);
+    expect(res.body.message).toContain('Day 21');
+
+    const jobs = await db.query(
+      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
+      [user.id]
+    );
+    expect(jobs.length).toBe(1);
+    expect(jobs[0].day_number).toBe(21);
+  });
+
+  test('premium user completing day 28 creates a job', async () => {
+    const user = await createUser({ email: 'premium28@example.com', status: 'active' });
+    const token = await loginAs('premium28@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    const res = await request(app)
+      .post('/api/learning-plans/javascript/complete-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ day: 28 });
+
+    expect(res.body.premiumGenerating).toBe(true);
+    expect(res.body.message).toContain('Day 28');
+
+    const jobs = await db.query(
+      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
+      [user.id]
+    );
+    expect(jobs.length).toBe(1);
+    expect(jobs[0].day_number).toBe(28);
+  });
+
+  test('premium user completing a non-review day does NOT create a job', async () => {
+    const user = await createUser({ email: 'premium-nonreview@example.com', status: 'active' });
+    const token = await loginAs('premium-nonreview@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    await request(app)
+      .post('/api/learning-plans/javascript/complete-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ day: 3 });
+
+    const jobs = await db.query(
+      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
+      [user.id]
+    );
+    expect(jobs.length).toBe(0);
   });
 });
 
@@ -290,6 +380,65 @@ describe('Downgrade handler', () => {
 
     mockDb.getUserByStripeCustomerId = db.getUserByStripeCustomerId.bind(db);
   });
+
+  test('restores shared plan content for incomplete days after downgrade', async () => {
+    const stripeService = require('../services/stripeService');
+
+    const user = await createUser({ email: 'downgrade-restore@example.com', status: 'active', subscriptionId: 'sub_restore' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_restore', user.id]);
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    const sharedPlan = await db.getLearningPlan('javascript');
+    await db.saveUserLearningPlan(user.id, 'javascript', sharedPlan);
+
+    const sharedDay8 = sharedPlan.find(d => d.day_number === 8);
+
+    await db.completePlanDay(user.id, 'javascript', 1);
+    await db.completePlanDay(user.id, 'javascript', 2);
+
+    const modifiedPlan = sharedPlan.map(d =>
+      d.day_number === 8 ? { ...d, content_id: 'premium-day-8-content' } : d
+    );
+    await db.saveUserLearningPlan(user.id, 'javascript', modifiedPlan);
+
+    mockDb.getUserByStripeCustomerId = jest.fn().mockResolvedValue({
+      ...user, stripe_customer_id: 'cus_restore',
+    });
+
+    stripeService.constructWebhookEvent.mockReturnValue({
+      type: 'customer.subscription.deleted',
+      data: {
+        object: {
+          id: 'sub_restore',
+          customer: 'cus_restore',
+          status: 'canceled',
+          current_period_end: Math.floor(Date.now() / 1000),
+        },
+      },
+    });
+
+    await request(app)
+      .post('/api/billing/webhook')
+      .set('stripe-signature', 'sig_test')
+      .set('Content-Type', 'application/json')
+      .send('{}');
+
+    const userPlan = await db.getUserLearningPlan(user.id, 'javascript');
+    const day8After = userPlan.find(d => d.day_number === 8);
+    expect(day8After.content_id).toBe(sharedDay8.content_id);
+
+    const progress = await db.query(
+      `SELECT completed_days FROM user_plan_progress WHERE user_id = ? AND skill_id = ?`,
+      [user.id, 'javascript']
+    );
+    const completedDays = JSON.parse(progress[0].completed_days);
+    expect(completedDays).toContain(1);
+    expect(completedDays).toContain(2);
+
+    mockDb.getUserByStripeCustomerId = db.getUserByStripeCustomerId.bind(db);
+  });
 });
 
 // ─── Premium pending endpoint ─────────────────────────────────────────────
@@ -318,6 +467,12 @@ describe('GET /api/learning-plans/:skillId/premium-pending', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.body.hasPending).toBe(true);
     expect(res.body.dayCount).toBe(2);
+  });
+
+  test('returns 401 without auth token', async () => {
+    const res = await request(app)
+      .get('/api/learning-plans/javascript/premium-pending');
+    expect(res.status).toBe(401);
   });
 });
 
@@ -351,5 +506,119 @@ describe('POST /api/learning-plans/:skillId/merge-premium', () => {
     const day8 = res.body.plan.find(d => d.day_number === 8);
     expect(day8).toBeTruthy();
     expect(day8.reason).toBe('premium curated');
+  });
+
+  test('returns 200 with empty plan when no pending premium rows exist', async () => {
+    const user = await createUser({ email: 'merge-empty@example.com', status: 'active' });
+    const token = await loginAs('merge-empty@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    const sharedPlan = await db.getLearningPlan('javascript');
+    await db.saveUserLearningPlan(user.id, 'javascript', sharedPlan);
+
+    const res = await request(app)
+      .post('/api/learning-plans/javascript/merge-premium')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.merged).toBe(true);
+    expect(Array.isArray(res.body.plan)).toBe(true);
+  });
+});
+
+// ─── Admin context endpoint ─────────────────────────────────────────────
+
+describe('GET /api/admin/premium-plans/context/:userId/:skillId', () => {
+  test('returns structured context for LLM curation', async () => {
+    const user = await createUser({ email: 'ctx@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    await db.insert(
+      `INSERT INTO plan_jobs (skill_id, user_id, job_type, status, day_number, payload)
+       VALUES (?, ?, 'premium_plan_generation', 'pending', 7, ?)`,
+      ['javascript', user.id, JSON.stringify({ triggerDay: 7 })]
+    );
+
+    const res = await request(app)
+      .get(`/api/admin/premium-plans/context/${user.id}/javascript`)
+      .set('Authorization', 'Bearer test-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.jobId).not.toBeNull();
+    expect(res.body.triggerDay).toBe(7);
+    expect(res.body.targetDays).toEqual({ start: 8, end: 14 });
+    expect(Array.isArray(res.body.availableContent)).toBe(true);
+    expect(Array.isArray(res.body.currentPlan)).toBe(true);
+    expect(Array.isArray(res.body.reviewSubmissions)).toBe(true);
+    expect(typeof res.body.instructions).toBe('string');
+  });
+
+  test('returns 401 without CRON_SECRET', async () => {
+    const res = await request(app)
+      .get('/api/admin/premium-plans/context/1/javascript');
+
+    expect(res.status).toBe(401);
+  });
+});
+
+// ─── Admin save endpoint ────────────────────────────────────────────────
+
+describe('POST /api/admin/premium-plans/save/:userId/:skillId', () => {
+  test('saves premium days, fires notification, marks job complete', async () => {
+    const user = await createUser({ email: 'save@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    await db.insert(
+      `INSERT INTO plan_jobs (skill_id, user_id, job_type, status, day_number, payload)
+       VALUES (?, ?, 'premium_plan_generation', 'pending', 7, ?)`,
+      ['javascript', user.id, JSON.stringify({ triggerDay: 7 })]
+    );
+
+    const jobRows = await db.query(
+      `SELECT id FROM plan_jobs WHERE user_id = ? AND job_type = 'premium_plan_generation'`,
+      [user.id]
+    );
+    const jobId = jobRows[0].id;
+
+    const res = await request(app)
+      .post(`/api/admin/premium-plans/save/${user.id}/javascript`)
+      .set('Authorization', 'Bearer test-secret')
+      .send({
+        jobId,
+        days: [
+          { day_number: 8, content_id: 'content-javascript-8', content_type: 'video', reason: 'curated by agent' },
+          { day_number: 9, content_id: 'content-javascript-9', content_type: 'video', reason: 'curated by agent' },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.saved).toBe(true);
+
+    const pending = await db.getPremiumPlanPending(user.id, 'javascript');
+    expect(pending.length).toBe(2);
+
+    const notifications = await db.getNotifications(user.id);
+    const premiumNotif = notifications.find(n => n.type === 'premium_plan_ready');
+    expect(premiumNotif).toBeTruthy();
+
+    const job = await db.query(`SELECT * FROM plan_jobs WHERE id = ?`, [jobId]);
+    expect(job[0].status).toBe('completed');
+  });
+
+  test('returns 400 if days array is empty', async () => {
+    const user = await createUser({ email: 'save-empty@example.com', status: 'active' });
+
+    const res = await request(app)
+      .post(`/api/admin/premium-plans/save/${user.id}/javascript`)
+      .set('Authorization', 'Bearer test-secret')
+      .send({ days: [] });
+
+    expect(res.status).toBe(400);
   });
 });
