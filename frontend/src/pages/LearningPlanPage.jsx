@@ -189,6 +189,23 @@ export function LearningPlanPage() {
       if (data.refreshed && data.plan) {
         setPlan(data.plan);
         setRefreshAvailable(false);
+
+        const nextReviewContent = data.reviewContent || {};
+        const renderedReviewDaySet = new Set(
+          data.plan
+            .filter((entry) => entry.content_type === 'review')
+            .map((entry) => entry.day_number)
+        );
+        const filteredReviewContent = Object.fromEntries(
+          Object.entries(nextReviewContent).filter(([day]) => renderedReviewDaySet.has(Number(day)))
+        );
+        const hasPendingRenderedReviewDays = data.plan.some(
+          (entry) => entry.content_type === 'review' && !filteredReviewContent[entry.day_number]
+        );
+
+        setReviewContent(filteredReviewContent);
+        setPlanReady(hasPendingRenderedReviewDays ? (data.planReady ?? true) : true);
+
         // Re-fetch ratings for any new content IDs
         const ids = data.plan.map(e => e.content_id).filter(Boolean);
         if (ids.length) {

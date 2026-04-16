@@ -285,6 +285,97 @@ describe('LearningPlanPage', () => {
       // Banner should be gone
       expect(screen.queryByText('New resources available!')).not.toBeInTheDocument();
     });
+
+    it('clicking Update Plan immediately surfaces refreshed review content without a page reload', async () => {
+      const personalPlanWithReviewPlaceholder = PERSONAL_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              title: null,
+              url: null,
+              review_status: 'pending',
+              review_title: null,
+              review_body: null,
+            }
+          : day
+      );
+
+      const refreshedPlanWithReadyReview = REFRESHED_PLAN.map((day) =>
+        day.day_number === 7
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              title: null,
+              url: null,
+              review_status: 'ready',
+              review_title: 'Week 1 review',
+              review_body: JSON.stringify({
+                summary: 'Quick recap before you move on.',
+                content_covered: [{ day: 1, type: 'video', title: 'Intro to ML' }],
+                knowledge_checks: [
+                  {
+                    id: 'mc1',
+                    type: 'multiple_choice',
+                    question: 'What does supervised learning require?',
+                    options: ['Only raw text', 'Labeled examples', 'No data', 'Just GPU access'],
+                  },
+                ],
+                reflection_prompts: [],
+              }),
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[1, 2, 8]' },
+        plan: personalPlanWithReviewPlaceholder,
+        refreshAvailable: true,
+        planReady: false,
+        reviewContent: {},
+      });
+      mockRefreshPlan.mockResolvedValue({
+        refreshed: true,
+        plan: refreshedPlanWithReadyReview,
+        planReady: true,
+        reviewContent: {
+          7: {
+            title: 'Week 1 review',
+            body: {
+              summary: 'Quick recap before you move on.',
+              content_covered: [{ day: 1, type: 'video', title: 'Intro to ML' }],
+              knowledge_checks: [
+                {
+                  id: 'mc1',
+                  type: 'multiple_choice',
+                  question: 'What does supervised learning require?',
+                  options: ['Only raw text', 'Labeled examples', 'No data', 'Just GPU access'],
+                },
+              ],
+              reflection_prompts: [],
+            },
+          },
+        },
+      });
+
+      renderPlanPage('machine-learning');
+
+      const updateBtn = await screen.findByText('Update Plan');
+      const user = userEvent.setup();
+      await user.click(updateBtn);
+
+      await waitFor(() => {
+        expect(mockRefreshPlan).toHaveBeenCalledWith('machine-learning');
+      });
+
+      const reviewButton = await screen.findByRole('button', { name: /week 1 review/i });
+      expect(reviewButton).toBeInTheDocument();
+      expect(screen.queryByText('Review content will appear here once it\'s ready.')).not.toBeInTheDocument();
+    });
   });
 
   describe('review day placeholders', () => {
