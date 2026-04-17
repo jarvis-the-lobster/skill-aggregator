@@ -153,6 +153,33 @@ describe('Premium plan job creation gating', () => {
     await submitPremiumReview({ email: 'premium@example.com', accountStatus: 'active', dayNumber: 7, expectedJob: true });
   });
 
+  test('premium review submission creates a premium_plan_generating notification', async () => {
+    const user = await createUser({ email: 'premium-notify@example.com', status: 'active', planTier: 'premium' });
+    const token = await loginAs('premium-notify@example.com');
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    await request(app)
+      .post('/api/learning-plans/javascript/complete-day')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ day: 7 });
+
+    const res = await request(app)
+      .post('/api/learning-plans/javascript/review/7/submit')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [{ check_id: 'check-7-1', question: 'What did you learn?', answer: 'Functions' }],
+        reflection: 'ok',
+      });
+
+    expect(res.status).toBe(200);
+    const notifications = await db.getNotifications(user.id);
+    const premiumNotification = notifications.find((n) => n.type === 'premium_plan_generating');
+    expect(premiumNotification).toBeTruthy();
+    expect(premiumNotification.title).toMatch(/Premium plan update/i);
+  });
+
   test('premium user submitting day 14 review creates a job', async () => {
     await submitPremiumReview({ email: 'premium14@example.com', accountStatus: 'active', dayNumber: 14, expectedJob: true });
   });
@@ -231,6 +258,62 @@ describe('admin premium plan save validation', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/does not belong to skill javascript/i);
+  });
+
+  test('accepts and saves generated premium review content for review days', async () => {
+    const user = await createUser({ email: 'admin-review@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+    const sharedPlan = await db.getLearningPlan('javascript');
+    await db.saveUserLearningPlan(user.id, 'javascript', sharedPlan);
+
+    const job = await db.createPlanJob({
+      user_id: user.id,
+      skill_id: 'javascript',
+      job_type: 'premium_plan_generation',
+      day_number: 7,
+      payload: { triggerDay: 7 },
+    });
+
+    const reviewBody = {
+      summary: 'Week 2 premium review focused on functions and core syntax.',
+      content_covered: [{ day: 8, title: 'Lesson 8', type: 'video' }],
+      knowledge_checks: [
+        {
+          id: 'kc-premium-1',
+          type: 'multiple_choice',
+          topic: 'functions',
+          question: 'What does a function do?',
+          options: ['Stores files', 'Groups reusable logic', 'Deletes code'],
+          correct_option: 1,
+        },
+      ],
+    };
+
+    const res = await request(app)
+      .post(`/api/admin/premium-plans/save/${user.id}/javascript`)
+      .set('Authorization', 'Bearer test-secret')
+      .send({
+        jobId: job.id,
+        days: [
+          { day_number: 8, content_id: 'content-javascript-8', content_type: 'video', reason: 'Revisit variables' },
+          { day_number: 14, content_type: 'review', content_id: null, reason: 'Checkpoint review', review_title: 'Week 2 Check-In', review_body: reviewBody },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.saved).toBe(true);
+
+    const reviewContent = await db.getReviewContent('javascript', 14, user.id);
+    expect(reviewContent).toBeTruthy();
+    expect(reviewContent.title).toBe('Week 2 Check-In');
+
+    const userPlan = await db.getUserLearningPlan(user.id, 'javascript');
+    const day14 = userPlan.find((d) => d.day_number === 14);
+    expect(day14).toBeTruthy();
+    expect(day14.content_type).toBe('review');
+    expect(day14.review_title).toBe('Week 2 Check-In');
   });
 });
 
