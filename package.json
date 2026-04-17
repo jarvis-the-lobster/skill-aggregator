@@ -10,7 +10,10 @@
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "build": "cd frontend && npm run build",
     "start": "cd backend && npm start",
-    "test": "cd backend && npm test && cd ../frontend && npm test"
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test:risk": "npm run test:backend -- --runInBand src/__tests__/billing.test.js src/__tests__/premiumPlan.test.js src/__tests__/subscriptionAccess.test.js src/__tests__/notifications.test.js src/__tests__/api.test.js && npm run test:frontend -- --run src/__tests__/LearningPlanPage.test.jsx src/__tests__/NotificationBell.test.jsx src/__tests__/HomePage.test.jsx"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
