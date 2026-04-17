@@ -463,6 +463,7 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
     const contentById = new Map(availableContent.map((content) => [content.id, content]));
     const seenDays = new Set();
     const normalizedDays = [];
+    const reviewDays = [];
 
     for (const entry of days) {
       const dayNumber = Number(entry?.day_number);
@@ -479,6 +480,32 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
         return res.status(400).json({ error: `cannot overwrite completed day ${dayNumber}` });
       }
 
+      const reason = typeof entry?.reason === 'string' ? entry.reason.trim() : '';
+      if (!reason) {
+        return res.status(400).json({ error: `day ${dayNumber} must include a reason` });
+      }
+
+      if (entry?.content_type === 'review') {
+        const title = typeof entry?.review_title === 'string' ? entry.review_title.trim() : '';
+        const reviewBody = entry?.review_body;
+        const validation = validateReviewBody(reviewBody);
+        if (!title) {
+          return res.status(400).json({ error: `review day ${dayNumber} must include a review_title` });
+        }
+        if (validation.error) {
+          return res.status(400).json({ error: `review day ${dayNumber}: ${validation.error}` });
+        }
+
+        seenDays.add(dayNumber);
+        reviewDays.push({
+          day_number: dayNumber,
+          reason,
+          review_title: title,
+          review_body: validation.value,
+        });
+        continue;
+      }
+
       const contentId = entry?.content_id;
       if (!contentId || typeof contentId !== 'string') {
         return res.status(400).json({ error: `day ${dayNumber} must include a valid content_id` });
@@ -492,11 +519,6 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
         return res.status(400).json({ error: `content_type mismatch for day ${dayNumber}` });
       }
 
-      const reason = typeof entry?.reason === 'string' ? entry.reason.trim() : '';
-      if (!reason) {
-        return res.status(400).json({ error: `day ${dayNumber} must include a reason` });
-      }
-
       seenDays.add(dayNumber);
       normalizedDays.push({
         day_number: dayNumber,
@@ -507,9 +529,25 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
     }
 
     await db.savePremiumPlanDays(userId, skillId, normalizedDays);
+    for (const reviewDay of reviewDays) {
+      await db.saveReviewContent({
+        skill_id: skillId,
+        user_id: userId,
+        day_number: reviewDay.day_number,
+        review_type: 'weekly_checkin',
+        title: reviewDay.review_title,
+        body: reviewDay.review_body,
+        plan_created_at: job?.plan_created_at || new Date().toISOString(),
+      });
+      await db.insert(
+        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, created_at)
+         VALUES (?, ?, ?, NULL, 'review', ?, 'ready', ?, ?, CURRENT_TIMESTAMP)`,
+        [userId, skillId, reviewDay.day_number, reviewDay.reason, reviewDay.review_title, JSON.stringify(reviewDay.review_body)]
+      );
+    }
 
     if (jobId) {
-      await db.completeJob(jobId, { generated: true, days: normalizedDays.length });
+      await db.completeJob(jobId, { generated: true, days: normalizedDays.length, reviewDays: reviewDays.length });
     }
 
     const skill = await db.getSkillById(skillId);
