@@ -702,9 +702,9 @@ describe('POST /api/admin/premium-plans/save/:userId/:skillId', () => {
       skillId: 'javascript',
       startDay: 8,
       endDay: 9,
-      path: '/skills/javascript/plan',
-      url: 'https://learnstack.dev/skills/javascript/plan',
     });
+    expect(premiumNotifData.path).toBeUndefined();
+    expect(premiumNotifData.url).toBeUndefined();
 
     const job = await db.query(`SELECT * FROM plan_jobs WHERE id = ?`, [jobId]);
     expect(job[0].status).toBe('completed');

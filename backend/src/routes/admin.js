@@ -523,13 +523,7 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
       type: 'premium_plan_ready',
       title: 'Your personalized plan is ready',
       body: `Days ${startDay}-${endDay} for ${skill?.name || skillId} have been hand-picked based on your review responses. Open your plan to apply them.`,
-      data: {
-        skillId,
-        startDay,
-        endDay,
-        path: `/skills/${skillId}/plan`,
-        url: `${process.env.FRONTEND_URL || 'https://learnstack.dev'}/skills/${skillId}/plan`,
-      },
+      data: { skillId, startDay, endDay },
     });
 
     res.json({ saved: true });
