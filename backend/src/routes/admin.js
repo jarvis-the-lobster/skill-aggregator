@@ -318,9 +318,7 @@ router.post('/review-jobs/:id/process', async (req, res) => {
 router.get('/premium-plans/jobs', requireCronSecretOrAdmin, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 100);
-    const pendingJobs = await db.getPendingJobs(limit);
-    const premiumJobs = pendingJobs
-      .filter((job) => job.job_type === 'premium_plan_generation')
+    const premiumJobs = (await db.getPendingPremiumPlanJobs(limit))
       .map((job) => {
         const payload = job.payload ? JSON.parse(job.payload) : null;
         const triggerDay = payload?.triggerDay || job.day_number || null;
