@@ -4,6 +4,13 @@ const db = require('../models/database');
 const { requireAuth } = require('../middleware/auth');
 const { validateReviewBody } = require('../utils/reviewBodySchema');
 
+const PREMIUM_PLAN_DAY_RANGES = {
+  7: [8, 14],
+  14: [15, 21],
+  21: [22, 28],
+  28: [29, 30],
+};
+
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || process.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
 function requireAdmin(req, res, next) {
@@ -313,7 +320,7 @@ router.get('/premium-plans/context/:userId/:skillId', requireCronSecretOrAdmin, 
     const userId = Number(req.params.userId);
     const skillId = req.params.skillId;
 
-    const DAY_RANGES = { 7: [8,14], 14: [15,21], 21: [22,28], 28: [29,30] };
+    const DAY_RANGES = PREMIUM_PLAN_DAY_RANGES;
 
     const jobs = await db.query(
       `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ? AND skill_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1`,
@@ -389,14 +396,83 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
     const skillId = req.params.skillId;
     const { jobId, days } = req.body;
 
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'valid userId required' });
+    }
+
     if (!Array.isArray(days) || days.length === 0) {
       return res.status(400).json({ error: 'days array required' });
     }
 
-    await db.savePremiumPlanDays(userId, skillId, days);
+    const jobRows = jobId ? await db.query('SELECT * FROM plan_jobs WHERE id = ?', [jobId]) : [];
+    const job = jobRows[0] || null;
+    if (jobId && !job) {
+      return res.status(404).json({ error: 'job not found' });
+    }
+
+    if (job && (job.user_id !== userId || job.skill_id !== skillId || job.job_type !== 'premium_plan_generation')) {
+      return res.status(400).json({ error: 'job does not match target user/skill' });
+    }
+
+    const triggerDay = job ? JSON.parse(job.payload || '{}').triggerDay || job.day_number : null;
+    const allowedRange = triggerDay ? PREMIUM_PLAN_DAY_RANGES[triggerDay] : null;
+    if (!allowedRange) {
+      return res.status(400).json({ error: 'premium plan save requires a valid trigger day job' });
+    }
+
+    const progress = await db.getPlanProgress(userId, skillId);
+    const completedDays = new Set(JSON.parse(progress?.completed_days || '[]'));
+    const availableContent = await db.getSkillContent(skillId);
+    const contentById = new Map(availableContent.map((content) => [content.id, content]));
+    const seenDays = new Set();
+    const normalizedDays = [];
+
+    for (const entry of days) {
+      const dayNumber = Number(entry?.day_number);
+      if (!Number.isInteger(dayNumber)) {
+        return res.status(400).json({ error: 'each day must have an integer day_number' });
+      }
+      if (dayNumber < allowedRange[0] || dayNumber > allowedRange[1]) {
+        return res.status(400).json({ error: `day_number must be between ${allowedRange[0]} and ${allowedRange[1]}` });
+      }
+      if (seenDays.has(dayNumber)) {
+        return res.status(400).json({ error: `duplicate day_number: ${dayNumber}` });
+      }
+      if (completedDays.has(dayNumber)) {
+        return res.status(400).json({ error: `cannot overwrite completed day ${dayNumber}` });
+      }
+
+      const contentId = entry?.content_id;
+      if (!contentId || typeof contentId !== 'string') {
+        return res.status(400).json({ error: `day ${dayNumber} must include a valid content_id` });
+      }
+
+      const content = contentById.get(contentId);
+      if (!content) {
+        return res.status(400).json({ error: `content_id ${contentId} does not belong to skill ${skillId}` });
+      }
+      if (entry?.content_type && entry.content_type !== content.type) {
+        return res.status(400).json({ error: `content_type mismatch for day ${dayNumber}` });
+      }
+
+      const reason = typeof entry?.reason === 'string' ? entry.reason.trim() : '';
+      if (!reason) {
+        return res.status(400).json({ error: `day ${dayNumber} must include a reason` });
+      }
+
+      seenDays.add(dayNumber);
+      normalizedDays.push({
+        day_number: dayNumber,
+        content_id: content.id,
+        content_type: content.type,
+        reason,
+      });
+    }
+
+    await db.savePremiumPlanDays(userId, skillId, normalizedDays);
 
     if (jobId) {
-      await db.completeJob(jobId, { generated: true });
+      await db.completeJob(jobId, { generated: true, days: normalizedDays.length });
     }
 
     const skill = await db.getSkillById(skillId);

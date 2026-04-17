@@ -57,4 +57,9 @@ describe('NotificationBell', () => {
     await user.click(screen.getByRole('button', { name: /notifications/i }));
     await waitFor(() => expect(screen.getByText('No notifications yet')).toBeInTheDocument());
   });
+
+  it('does not fetch notifications when signed out', async () => {
+    render(<NotificationBell isAuthenticated={false} />);
+    await waitFor(() => expect(apiService.getNotifications).not.toHaveBeenCalled());
+  });
 });

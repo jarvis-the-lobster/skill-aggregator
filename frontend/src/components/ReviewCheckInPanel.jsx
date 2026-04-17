@@ -127,12 +127,14 @@ export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClo
   const [reflection, setReflection] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const handleSubmit = useCallback(async () => {
     if (!enrolled || !skillId || submitting) {
       onClose();
       return;
     }
+    setSubmitError('');
     setSubmitting(true);
     try {
       const formattedAnswers = knowledgeChecks.map((check, index) => ({
@@ -153,8 +155,10 @@ export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClo
         window.dispatchEvent(new CustomEvent('notifications:refresh'));
         onClose();
       }, 800);
-    } catch {
-      onClose();
+    } catch (error) {
+      setSubmitError(error?.response?.data?.error || error?.message || 'We could not save your review. Try once more.');
+    } finally {
+      setSubmitting(false);
     }
   }, [enrolled, skillId, submitting, knowledgeChecks, answers, reflection, dayNumber, onClose, onSubmitted]);
 
@@ -221,6 +225,11 @@ export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClo
             <ProgressPill current={stepIndex + 1} total={totalSteps} />
 
             <div className="mt-5 flex flex-1 flex-col gap-5 sm:mt-12 sm:gap-4">
+              {submitError && (
+                <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                  {submitError}
+                </div>
+              )}
               {currentStep?.type === 'intro' && (
                 <div className="flex flex-1 flex-col justify-between gap-5 sm:gap-4">
                   <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-4">

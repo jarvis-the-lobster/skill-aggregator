@@ -3,7 +3,9 @@ import { Bell, Check, CheckCheck } from 'lucide-react';
 import { apiService } from '../services/api';
 
 function timeAgo(dateStr) {
-  const seconds = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
+  const timestamp = new Date(dateStr).getTime();
+  if (Number.isNaN(timestamp)) return 'recently';
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
   if (seconds < 60) return 'just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -13,7 +15,7 @@ function timeAgo(dateStr) {
   return `${days}d ago`;
 }
 
-export function NotificationBell() {
+export function NotificationBell({ isAuthenticated = true }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -31,6 +33,13 @@ export function NotificationBell() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setUnreadCount(0);
+      setOpen(false);
+      return undefined;
+    }
+
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 60000);
     const handleRefresh = () => fetchNotifications();
@@ -39,7 +48,7 @@ export function NotificationBell() {
       clearInterval(interval);
       window.removeEventListener('notifications:refresh', handleRefresh);
     };
-  }, [fetchNotifications]);
+  }, [fetchNotifications, isAuthenticated]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -52,6 +61,7 @@ export function NotificationBell() {
   }, [open]);
 
   async function handleToggle() {
+    if (!isAuthenticated) return;
     if (!open) {
       setLoading(true);
       await fetchNotifications();
@@ -61,6 +71,7 @@ export function NotificationBell() {
   }
 
   async function handleMarkRead(id) {
+    if (!isAuthenticated) return;
     await apiService.markNotificationRead(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
@@ -69,6 +80,7 @@ export function NotificationBell() {
   }
 
   async function handleMarkAllRead() {
+    if (!isAuthenticated) return;
     await apiService.markAllNotificationsRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
     setUnreadCount(0);

@@ -229,6 +229,58 @@ describe('Premium plan job creation gating', () => {
 
 // ─── mergePremiumPlan ─────────────────────────────────────────────────────
 
+describe('admin premium plan save validation', () => {
+  test('rejects premium plan days outside the trigger range', async () => {
+    const user = await createUser({ email: 'admin-range@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+    const job = await db.createPlanJob({
+      user_id: user.id,
+      skill_id: 'javascript',
+      job_type: 'premium_plan_generation',
+      day_number: 7,
+      payload: { triggerDay: 7 },
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/premium-plans/save/${user.id}/javascript`)
+      .set('Authorization', 'Bearer test-secret')
+      .send({
+        jobId: job.id,
+        days: [{ day_number: 15, content_id: 'content-javascript-8', content_type: 'video', reason: 'bad range' }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/between 8 and 14/i);
+  });
+
+  test('rejects premium plan days with content outside the skill content pool', async () => {
+    const user = await createUser({ email: 'admin-content@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+    const job = await db.createPlanJob({
+      user_id: user.id,
+      skill_id: 'javascript',
+      job_type: 'premium_plan_generation',
+      day_number: 7,
+      payload: { triggerDay: 7 },
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/premium-plans/save/${user.id}/javascript`)
+      .set('Authorization', 'Bearer test-secret')
+      .send({
+        jobId: job.id,
+        days: [{ day_number: 8, content_id: 'other-skill-content', content_type: 'video', reason: 'wrong content' }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/does not belong to skill javascript/i);
+  });
+});
+
 describe('mergePremiumPlan', () => {
   test('copies pending_merge rows to user_learning_plans and marks them merged', async () => {
     const user = await createUser({ email: 'merge@example.com', status: 'active' });
@@ -573,6 +625,7 @@ describe('POST /api/admin/premium-plans/save/:userId/:skillId', () => {
     await setupSkillWithPlan('javascript');
     await db.enrollPlan(user.id, 'javascript');
     await db.enrollCourse(user.id, 'javascript');
+    await db.completePlanDay(user.id, 'javascript', 1);
 
     await db.insert(
       `INSERT INTO plan_jobs (skill_id, user_id, job_type, status, day_number, payload)
