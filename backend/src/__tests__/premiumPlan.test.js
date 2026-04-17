@@ -582,6 +582,44 @@ describe('POST /api/learning-plans/:skillId/merge-premium', () => {
 
 // ─── Admin context endpoint ─────────────────────────────────────────────
 
+describe('GET /api/admin/premium-plans/jobs', () => {
+  test('returns pending premium plan generation jobs with target ranges', async () => {
+    const user = await createUser({ email: 'premium-jobs@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    await db.insert(
+      `INSERT INTO plan_jobs (skill_id, user_id, job_type, status, day_number, payload)
+       VALUES (?, ?, 'premium_plan_generation', 'pending', 7, ?)`,
+      ['javascript', user.id, JSON.stringify({ triggerDay: 7 })]
+    );
+
+    const res = await request(app)
+      .get('/api/admin/premium-plans/jobs?limit=10')
+      .set('Authorization', 'Bearer test-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.jobs)).toBe(true);
+    expect(res.body.count).toBeGreaterThanOrEqual(1);
+    expect(res.body.jobs[0]).toMatchObject({
+      skillId: 'javascript',
+      userId: user.id,
+      triggerDay: 7,
+      targetDays: { start: 8, end: 14 },
+      status: 'pending',
+    });
+  });
+
+  test('returns 401 without CRON_SECRET', async () => {
+    const res = await request(app)
+      .get('/api/admin/premium-plans/jobs');
+
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('GET /api/admin/premium-plans/context/:userId/:skillId', () => {
   test('returns structured context for LLM curation', async () => {
     const user = await createUser({ email: 'ctx@example.com', status: 'active' });
@@ -659,6 +697,14 @@ describe('POST /api/admin/premium-plans/save/:userId/:skillId', () => {
     const notifications = await db.getNotifications(user.id);
     const premiumNotif = notifications.find(n => n.type === 'premium_plan_ready');
     expect(premiumNotif).toBeTruthy();
+    const premiumNotifData = JSON.parse(premiumNotif.data);
+    expect(premiumNotifData).toMatchObject({
+      skillId: 'javascript',
+      startDay: 8,
+      endDay: 9,
+    });
+    expect(premiumNotifData.path).toBeUndefined();
+    expect(premiumNotifData.url).toBeUndefined();
 
     const job = await db.query(`SELECT * FROM plan_jobs WHERE id = ?`, [jobId]);
     expect(job[0].status).toBe('completed');

@@ -314,6 +314,45 @@ router.post('/review-jobs/:id/process', async (req, res) => {
   }
 });
 
+// GET /api/admin/premium-plans/jobs — list pending premium plan generation jobs (CRON_SECRET or admin)
+router.get('/premium-plans/jobs', requireCronSecretOrAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 100);
+    const pendingJobs = await db.getPendingJobs(limit);
+    const premiumJobs = pendingJobs
+      .filter((job) => job.job_type === 'premium_plan_generation')
+      .map((job) => {
+        const payload = job.payload ? JSON.parse(job.payload) : null;
+        const triggerDay = payload?.triggerDay || job.day_number || null;
+        const targetRange = triggerDay ? PREMIUM_PLAN_DAY_RANGES[triggerDay] : null;
+        return {
+          id: job.id,
+          skillId: job.skill_id,
+          userId: job.user_id,
+          dayNumber: job.day_number,
+          triggerDay,
+          targetDays: targetRange ? { start: targetRange[0], end: targetRange[1] } : null,
+          status: job.status,
+          attempts: job.attempts,
+          maxAttempts: job.max_attempts,
+          payload,
+          planCreatedAt: job.plan_created_at,
+          createdAt: job.created_at,
+          updatedAt: job.updated_at,
+        };
+      });
+
+    res.json({
+      ok: true,
+      jobs: premiumJobs,
+      count: premiumJobs.length,
+    });
+  } catch (err) {
+    console.error('[premium-plans/jobs] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/premium-plans/context/:userId/:skillId — gather LLM context for premium plan curation
 router.get('/premium-plans/context/:userId/:skillId', requireCronSecretOrAdmin, async (req, res) => {
   try {
