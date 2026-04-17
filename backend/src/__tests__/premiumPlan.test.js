@@ -50,13 +50,14 @@ afterAll(async () => {
   await db.close();
 });
 
-async function createUser({ email = 'test@example.com', status = 'free', subscriptionId = null } = {}) {
+async function createUser({ email = 'test@example.com', status = 'free', planTier, subscriptionId = null } = {}) {
   const bcrypt = require('bcryptjs');
   const hash = await bcrypt.hash('password123', 1);
+  const resolvedPlanTier = planTier || (status === 'active' ? 'premium' : 'free');
   await db.insert(
-    `INSERT INTO users (email, password_hash, subscription_status, subscription_id)
-     VALUES (?, ?, ?, ?)`,
-    [email, hash, status, subscriptionId]
+    `INSERT INTO users (email, password_hash, plan_tier, subscription_status, subscription_id)
+     VALUES (?, ?, ?, ?, ?)`,
+    [email, hash, resolvedPlanTier, status, subscriptionId]
   );
   return db.getUserByEmail(email);
 }
@@ -96,134 +97,76 @@ async function setupSkillWithPlan(skillId = 'javascript') {
 // ─── Premium job gating ───────────────────────────────────────────────────
 
 describe('Premium plan job creation gating', () => {
-  test('free user completing day 7 does NOT create a premium_plan_generation job', async () => {
-    const user = await createUser({ email: 'free@example.com', status: 'free' });
-    const token = await loginAs('free@example.com');
+  async function submitPremiumReview({ email, accountStatus, dayNumber, expectedJob }) {
+    const user = await createUser({ email, status: accountStatus, planTier: accountStatus === 'active' ? 'premium' : 'free' });
+    const token = await loginAs(email);
     await setupSkillWithPlan('javascript');
     await db.enrollPlan(user.id, 'javascript');
     await db.enrollCourse(user.id, 'javascript');
 
-    await request(app)
+    const completeRes = await request(app)
       .post('/api/learning-plans/javascript/complete-day')
       .set('Authorization', `Bearer ${token}`)
-      .send({ day: 7 });
+      .send({ day: dayNumber });
+
+    expect(completeRes.status).toBe(200);
+    expect(completeRes.body.premiumGenerating).toBe(false);
+
+    const submitRes = await request(app)
+      .post(`/api/learning-plans/javascript/review/${dayNumber}/submit`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        answers: [
+          { check_id: `check-${dayNumber}-1`, question: 'What did you learn?', answer: 'Closures and scope' },
+        ],
+        reflection: 'Felt good',
+      });
 
     const jobs = await db.query(
       `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
       [user.id]
     );
-    expect(jobs.length).toBe(0);
+
+    expect(submitRes.status).toBe(200);
+    expect(submitRes.body.ok).toBe(true);
+
+    if (expectedJob) {
+      expect(submitRes.body.status).toBe('pending');
+      expect(submitRes.body).toHaveProperty('premiumGenerating', true);
+      expect(submitRes.body.message).toContain(`Day ${dayNumber}`);
+      expect(jobs.length).toBe(1);
+      expect(jobs[0].day_number).toBe(dayNumber);
+    } else {
+      const expectedStatus = accountStatus === 'active' ? 'pending' : 'completed';
+      expect(submitRes.body.status).toBe(expectedStatus);
+      expect(submitRes.body.premiumGenerating ?? false).toBe(false);
+      expect(submitRes.body.message ?? null).toBeNull();
+      expect(jobs.length).toBe(0);
+    }
+  }
+
+  test('free user submitting day 7 review does NOT create a premium_plan_generation job', async () => {
+    await submitPremiumReview({ email: 'free@example.com', accountStatus: 'free', dayNumber: 7, expectedJob: false });
   });
 
-  test('premium user completing day 7 DOES create a premium_plan_generation job', async () => {
-    const user = await createUser({ email: 'premium@example.com', status: 'active' });
-    const token = await loginAs('premium@example.com');
-    await setupSkillWithPlan('javascript');
-    await db.enrollPlan(user.id, 'javascript');
-    await db.enrollCourse(user.id, 'javascript');
-
-    const res = await request(app)
-      .post('/api/learning-plans/javascript/complete-day')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ day: 7 });
-
-    expect(res.body.premiumGenerating).toBe(true);
-    expect(res.body.message).toContain('Day 7');
-
-    const jobs = await db.query(
-      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
-      [user.id]
-    );
-    expect(jobs.length).toBe(1);
-    expect(jobs[0].day_number).toBe(7);
+  test('premium user submitting day 7 review creates a job', async () => {
+    await submitPremiumReview({ email: 'premium@example.com', accountStatus: 'active', dayNumber: 7, expectedJob: true });
   });
 
-  test('premium user completing day 14 creates a job', async () => {
-    const user = await createUser({ email: 'premium14@example.com', status: 'active' });
-    const token = await loginAs('premium14@example.com');
-    await setupSkillWithPlan('javascript');
-    await db.enrollPlan(user.id, 'javascript');
-    await db.enrollCourse(user.id, 'javascript');
-
-    const res = await request(app)
-      .post('/api/learning-plans/javascript/complete-day')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ day: 14 });
-
-    expect(res.body.premiumGenerating).toBe(true);
-    expect(res.body.message).toContain('Day 14');
-
-    const jobs = await db.query(
-      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
-      [user.id]
-    );
-    expect(jobs.length).toBe(1);
-    expect(jobs[0].day_number).toBe(14);
+  test('premium user submitting day 14 review creates a job', async () => {
+    await submitPremiumReview({ email: 'premium14@example.com', accountStatus: 'active', dayNumber: 14, expectedJob: true });
   });
 
-  test('premium user completing day 21 creates a job', async () => {
-    const user = await createUser({ email: 'premium21@example.com', status: 'active' });
-    const token = await loginAs('premium21@example.com');
-    await setupSkillWithPlan('javascript');
-    await db.enrollPlan(user.id, 'javascript');
-    await db.enrollCourse(user.id, 'javascript');
-
-    const res = await request(app)
-      .post('/api/learning-plans/javascript/complete-day')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ day: 21 });
-
-    expect(res.body.premiumGenerating).toBe(true);
-    expect(res.body.message).toContain('Day 21');
-
-    const jobs = await db.query(
-      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
-      [user.id]
-    );
-    expect(jobs.length).toBe(1);
-    expect(jobs[0].day_number).toBe(21);
+  test('premium user submitting day 21 review creates a job', async () => {
+    await submitPremiumReview({ email: 'premium21@example.com', accountStatus: 'active', dayNumber: 21, expectedJob: true });
   });
 
-  test('premium user completing day 28 creates a job', async () => {
-    const user = await createUser({ email: 'premium28@example.com', status: 'active' });
-    const token = await loginAs('premium28@example.com');
-    await setupSkillWithPlan('javascript');
-    await db.enrollPlan(user.id, 'javascript');
-    await db.enrollCourse(user.id, 'javascript');
-
-    const res = await request(app)
-      .post('/api/learning-plans/javascript/complete-day')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ day: 28 });
-
-    expect(res.body.premiumGenerating).toBe(true);
-    expect(res.body.message).toContain('Day 28');
-
-    const jobs = await db.query(
-      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
-      [user.id]
-    );
-    expect(jobs.length).toBe(1);
-    expect(jobs[0].day_number).toBe(28);
+  test('premium user submitting day 28 review creates a job', async () => {
+    await submitPremiumReview({ email: 'premium28@example.com', accountStatus: 'active', dayNumber: 28, expectedJob: true });
   });
 
-  test('premium user completing a non-review day does NOT create a job', async () => {
-    const user = await createUser({ email: 'premium-nonreview@example.com', status: 'active' });
-    const token = await loginAs('premium-nonreview@example.com');
-    await setupSkillWithPlan('javascript');
-    await db.enrollPlan(user.id, 'javascript');
-    await db.enrollCourse(user.id, 'javascript');
-
-    await request(app)
-      .post('/api/learning-plans/javascript/complete-day')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ day: 3 });
-
-    const jobs = await db.query(
-      `SELECT * FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ?`,
-      [user.id]
-    );
-    expect(jobs.length).toBe(0);
+  test('premium user submitting a non-review day does NOT create a job', async () => {
+    await submitPremiumReview({ email: 'premium-nonreview@example.com', accountStatus: 'active', dayNumber: 3, expectedJob: false });
   });
 });
 
