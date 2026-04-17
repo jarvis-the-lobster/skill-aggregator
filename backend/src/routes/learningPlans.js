@@ -202,9 +202,9 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
       return res.status(403).json({ error: 'Not enrolled in this plan' });
     }
 
-    const planTier = await db.getUserPlanTier(req.user.id);
+    const isPremium = hasPremiumAccess(req.user.subscription_status);
 
-    if (planTier === 'premium') {
+    if (isPremium) {
       const submission = await db.createReviewSubmission({
         user_id: req.user.id,
         skill_id: skillId,

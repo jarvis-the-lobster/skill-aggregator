@@ -97,8 +97,8 @@ async function setupSkillWithPlan(skillId = 'javascript') {
 // ─── Premium job gating ───────────────────────────────────────────────────
 
 describe('Premium plan job creation gating', () => {
-  async function submitPremiumReview({ email, accountStatus, dayNumber, expectedJob }) {
-    const user = await createUser({ email, status: accountStatus, planTier: accountStatus === 'active' ? 'premium' : 'free' });
+  async function submitPremiumReview({ email, accountStatus, dayNumber, expectedJob, planTier }) {
+    const user = await createUser({ email, status: accountStatus, planTier: planTier || (accountStatus === 'active' ? 'premium' : 'free') });
     const token = await loginAs(email);
     await setupSkillWithPlan('javascript');
     await db.enrollPlan(user.id, 'javascript');
@@ -167,6 +167,16 @@ describe('Premium plan job creation gating', () => {
 
   test('premium user submitting a non-review day does NOT create a job', async () => {
     await submitPremiumReview({ email: 'premium-nonreview@example.com', accountStatus: 'active', dayNumber: 3, expectedJob: false });
+  });
+
+  test('active subscription with stale free plan_tier still uses premium review flow', async () => {
+    await submitPremiumReview({
+      email: 'stale-plan-tier@example.com',
+      accountStatus: 'active',
+      planTier: 'free',
+      dayNumber: 7,
+      expectedJob: true,
+    });
   });
 });
 
