@@ -174,40 +174,7 @@ router.post('/:skillId/complete-day', requireAuth, async (req, res) => {
       await db.updateCourseStatus(req.user.id, skillId, 'completed');
     }
 
-    const REVIEW_DAYS = [7, 14, 21, 28];
-    let premiumGenerating = false;
-    let premiumMessage = null;
-    if (REVIEW_DAYS.includes(day) && hasPremiumAccess(req.user.subscription_status)) {
-      try {
-        // Upsert: if a pending job already exists for this user+skill+day, reset it
-        // so re-reviewing a day refreshes the job rather than stacking duplicates
-        const existingJobs = await db.query(
-          `SELECT id FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ? AND skill_id = ? AND day_number = ? AND status = 'pending'`,
-          [req.user.id, skillId, day]
-        );
-        if (existingJobs.length > 0) {
-          await db.insert(
-            `UPDATE plan_jobs SET payload = ?, attempts = 0, plan_created_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [JSON.stringify({ triggerDay: day }), new Date().toISOString(), existingJobs[0].id]
-          );
-        } else {
-          await db.createPlanJob({
-            skill_id: skillId,
-            user_id: req.user.id,
-            job_type: 'premium_plan_generation',
-            day_number: day,
-            payload: { triggerDay: day },
-            plan_created_at: new Date().toISOString(),
-          });
-        }
-        premiumGenerating = true;
-        premiumMessage = `We've received your Day ${day} responses. Your personalized plan for the next 7 days is being prepared — check back within 24 hours.`;
-      } catch (err) {
-        console.error('Premium plan job creation error:', err);
-      }
-    }
-
-    res.json({ progress, premiumGenerating, message: premiumMessage });
+    res.json({ progress, premiumGenerating: false, message: null });
   } catch (err) {
     console.error('Complete day error:', err);
     res.status(500).json({ error: 'Failed to mark day complete' });
@@ -235,9 +202,9 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
       return res.status(403).json({ error: 'Not enrolled in this plan' });
     }
 
-    const planTier = await db.getUserPlanTier(req.user.id);
+    const isPremium = hasPremiumAccess(req.user.subscription_status);
 
-    if (planTier === 'premium') {
+    if (isPremium) {
       const submission = await db.createReviewSubmission({
         user_id: req.user.id,
         skill_id: skillId,
@@ -246,7 +213,39 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
         reflection: reflection || null,
       });
       await db.saveReviewSubmissionAnswers(submission.id, answers);
-      return res.json({ ok: true, submissionId: submission.id, status: 'pending' });
+
+      let premiumGenerating = false;
+      let premiumMessage = null;
+      const REVIEW_DAYS = [7, 14, 21, 28];
+      if (REVIEW_DAYS.includes(dayNumber) && hasPremiumAccess(req.user.subscription_status)) {
+        try {
+          const existingJobs = await db.query(
+            `SELECT id FROM plan_jobs WHERE job_type = 'premium_plan_generation' AND user_id = ? AND skill_id = ? AND day_number = ? AND status = 'pending'`,
+            [req.user.id, skillId, dayNumber]
+          );
+          if (existingJobs.length > 0) {
+            await db.insert(
+              `UPDATE plan_jobs SET payload = ?, attempts = 0, plan_created_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              [JSON.stringify({ triggerDay: dayNumber }), new Date().toISOString(), existingJobs[0].id]
+            );
+          } else {
+            await db.createPlanJob({
+              skill_id: skillId,
+              user_id: req.user.id,
+              job_type: 'premium_plan_generation',
+              day_number: dayNumber,
+              payload: { triggerDay: dayNumber },
+              plan_created_at: new Date().toISOString(),
+            });
+          }
+          premiumGenerating = true;
+          premiumMessage = `We've received your Day ${dayNumber} responses. Your personalized plan for the next 7 days is being prepared — check back within 24 hours.`;
+        } catch (err) {
+          console.error('Premium plan job creation error:', err);
+        }
+      }
+
+      return res.json({ ok: true, submissionId: submission.id, status: 'pending', premiumGenerating, message: premiumMessage });
     }
 
     const reviewContent = await db.getReviewContent(skillId, dayNumber, null);

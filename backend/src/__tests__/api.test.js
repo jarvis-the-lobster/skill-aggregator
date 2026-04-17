@@ -683,7 +683,7 @@ describe('POST /api/learning-plans/:skillId/review/:dayNumber/submit', () => {
 
   test('premium user: stores submission as pending without result summary', async () => {
     const { token, userId } = await setupEnrolledUser();
-    await db.insert("UPDATE users SET plan_tier = 'premium' WHERE id = ?", [userId]);
+    await db.insert("UPDATE users SET plan_tier = 'premium', subscription_status = 'active' WHERE id = ?", [userId]);
 
     const res = await request(app)
       .post('/api/learning-plans/python/review/7/submit')
