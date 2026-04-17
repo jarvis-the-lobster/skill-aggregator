@@ -35,7 +35,7 @@ function getEntryUrl(entry) {
 export function LearningPlanPage() {
   const { skillId } = useParams();
   const { user, loading: authLoading } = useAuth();
-  const { isPremium } = useSubscription();
+  const { isPremium, loading: subscriptionLoading } = useSubscription();
   const [plan, setPlan] = useState([]);
   const [skillName, setSkillName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -64,6 +64,27 @@ export function LearningPlanPage() {
     analytics.track('plan_viewed', { skillId });
     loadPlan();
   }, [skillId, authLoading]);
+
+  useEffect(() => {
+    if (authLoading || subscriptionLoading || !user || !enrolled || !isPremium) return;
+
+    let cancelled = false;
+    apiService.getPremiumPending(skillId)
+      .then((premiumData) => {
+        if (cancelled) return;
+        setPremiumPending(Boolean(premiumData.hasPending));
+        setPremiumDayCount(premiumData.dayCount || 0);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPremiumPending(false);
+        setPremiumDayCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [skillId, user, enrolled, isPremium, authLoading, subscriptionLoading]);
 
   const loadPlan = async () => {
     setLoading(true);
@@ -118,18 +139,15 @@ export function LearningPlanPage() {
         setCompletedDays(new Set(days));
         setRefreshAvailable(progressData.refreshAvailable || false);
 
-        if (isPremium) {
-          try {
-            const premiumData = await apiService.getPremiumPending(skillId);
-            setPremiumPending(premiumData.hasPending);
-            setPremiumDayCount(premiumData.dayCount);
-          } catch {
-            setPremiumPending(false);
-          }
+        if (!isPremium) {
+          setPremiumPending(false);
+          setPremiumDayCount(0);
         }
       } else {
         setCompletedDays(new Set());
         setRefreshAvailable(false);
+        setPremiumPending(false);
+        setPremiumDayCount(0);
       }
     } catch (error) {
       console.error('Error loading learning plan:', error);
