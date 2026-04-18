@@ -1033,6 +1033,18 @@ class Database {
     );
   }
 
+  async getPendingPremiumPlanJobs(limit = 50) {
+    return this.query(
+      `SELECT * FROM plan_jobs
+       WHERE status = 'pending'
+         AND attempts < max_attempts
+         AND job_type = 'premium_plan_generation'
+       ORDER BY created_at ASC
+       LIMIT ?`,
+      [limit]
+    );
+  }
+
   async claimJob(jobId) {
     const result = await this.insert(
       `UPDATE plan_jobs

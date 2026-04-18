@@ -318,9 +318,7 @@ router.post('/review-jobs/:id/process', async (req, res) => {
 router.get('/premium-plans/jobs', requireCronSecretOrAdmin, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 100);
-    const pendingJobs = await db.getPendingJobs(limit);
-    const premiumJobs = pendingJobs
-      .filter((job) => job.job_type === 'premium_plan_generation')
+    const premiumJobs = (await db.getPendingPremiumPlanJobs(limit))
       .map((job) => {
         const payload = job.payload ? JSON.parse(job.payload) : null;
         const triggerDay = payload?.triggerDay || job.day_number || null;
@@ -465,6 +463,7 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
     const contentById = new Map(availableContent.map((content) => [content.id, content]));
     const seenDays = new Set();
     const normalizedDays = [];
+    const reviewDays = [];
 
     for (const entry of days) {
       const dayNumber = Number(entry?.day_number);
@@ -486,11 +485,10 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
         return res.status(400).json({ error: `day ${dayNumber} must include a reason` });
       }
 
-      const isReviewDay = entry?.content_type === 'review';
-      if (isReviewDay) {
-        const reviewTitle = typeof entry?.review_title === 'string' ? entry.review_title.trim() : '';
-        if (!reviewTitle) {
-          return res.status(400).json({ error: `review day ${dayNumber} must include review_title` });
+      if (entry?.content_type === 'review') {
+        const title = typeof entry?.review_title === 'string' ? entry.review_title.trim() : '';
+        if (!title) {
+          return res.status(400).json({ error: `review day ${dayNumber} must include a review_title` });
         }
 
         let reviewBody;
@@ -501,13 +499,19 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
         }
 
         seenDays.add(dayNumber);
+        reviewDays.push({
+          day_number: dayNumber,
+          reason,
+          review_title: title,
+          review_body: reviewBody,
+        });
         normalizedDays.push({
           day_number: dayNumber,
           content_id: null,
           content_type: 'review',
           reason,
           review_status: 'ready',
-          review_title: reviewTitle,
+          review_title: title,
           review_body: reviewBody,
         });
         continue;
@@ -539,9 +543,25 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
     }
 
     await db.savePremiumPlanDays(userId, skillId, normalizedDays);
+    for (const reviewDay of reviewDays) {
+      await db.saveReviewContent({
+        skill_id: skillId,
+        user_id: userId,
+        day_number: reviewDay.day_number,
+        review_type: 'weekly_checkin',
+        title: reviewDay.review_title,
+        body: reviewDay.review_body,
+        plan_created_at: job?.plan_created_at || new Date().toISOString(),
+      });
+      await db.insert(
+        `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, created_at)
+         VALUES (?, ?, ?, NULL, 'review', ?, 'ready', ?, ?, CURRENT_TIMESTAMP)`,
+        [userId, skillId, reviewDay.day_number, reviewDay.reason, reviewDay.review_title, JSON.stringify(reviewDay.review_body)]
+      );
+    }
 
     if (jobId) {
-      await db.completeJob(jobId, { generated: true, days: normalizedDays.length });
+      await db.completeJob(jobId, { generated: true, days: normalizedDays.length, reviewDays: reviewDays.length });
     }
 
     const skill = await db.getSkillById(skillId);

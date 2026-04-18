@@ -240,6 +240,17 @@ router.post('/:skillId/review/:dayNumber/submit', requireAuth, async (req, res) 
           }
           premiumGenerating = true;
           premiumMessage = `We've received your Day ${dayNumber} responses. Your personalized plan for the next 7 days is being prepared — check back within 24 hours.`;
+          try {
+            await db.createNotification({
+              user_id: req.user.id,
+              type: 'premium_plan_generating',
+              title: `Premium plan update for Day ${dayNumber}`,
+              body: premiumMessage,
+              data: { skillId, dayNumber },
+            });
+          } catch (notifyErr) {
+            console.error('Premium plan notification error:', notifyErr);
+          }
         } catch (err) {
           console.error('Premium plan job creation error:', err);
         }
