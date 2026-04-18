@@ -67,34 +67,6 @@ export function LearningPlanPage() {
     return map;
   }, [plan, reviewContent]);
 
-  useEffect(() => {
-    // Wait for auth to resolve before loading — otherwise user is null
-    // on hard refresh and we skip the personal plan fetch
-    if (authLoading) return;
-    loadPlan();
-  }, [skillId, authLoading, loadPlan]);
-
-  useEffect(() => {
-    if (authLoading || subscriptionLoading || !user || !enrolled || !isPremium) return;
-
-    let cancelled = false;
-    apiService.getPremiumPending(skillId)
-      .then((premiumData) => {
-        if (cancelled) return;
-        setPremiumPending(Boolean(premiumData.hasPending));
-        setPremiumDayCount(premiumData.dayCount || 0);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPremiumPending(false);
-        setPremiumDayCount(0);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [skillId, user, enrolled, isPremium, authLoading, subscriptionLoading]);
-
   const loadPlan = useCallback(async () => {
     setLoading(true);
     try {
@@ -172,6 +144,34 @@ export function LearningPlanPage() {
       setLoading(false);
     }
   }, [skillId, user, isPremium]);
+
+  useEffect(() => {
+    // Wait for auth to resolve before loading, otherwise user is null
+    // on hard refresh and we skip the personal plan fetch
+    if (authLoading) return;
+    loadPlan();
+  }, [skillId, authLoading, loadPlan]);
+
+  useEffect(() => {
+    if (authLoading || subscriptionLoading || !user || !enrolled || !isPremium) return;
+
+    let cancelled = false;
+    apiService.getPremiumPending(skillId)
+      .then((premiumData) => {
+        if (cancelled) return;
+        setPremiumPending(Boolean(premiumData.hasPending));
+        setPremiumDayCount(premiumData.dayCount || 0);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPremiumPending(false);
+        setPremiumDayCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [skillId, user, enrolled, isPremium, authLoading, subscriptionLoading]);
 
   const handleEnroll = async () => {
     setEnrolling(true);
