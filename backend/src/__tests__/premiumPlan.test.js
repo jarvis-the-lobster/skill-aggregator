@@ -746,6 +746,82 @@ describe('POST /api/admin/premium-plans/save/:userId/:skillId', () => {
     expect(job[0].status).toBe('completed');
   });
 
+  test('saves premium review day content so it can be merged into the user plan', async () => {
+    const user = await createUser({ email: 'save-review@example.com', status: 'active' });
+    await setupSkillWithPlan('javascript');
+    await db.enrollPlan(user.id, 'javascript');
+    await db.enrollCourse(user.id, 'javascript');
+
+    await db.insert(
+      `INSERT INTO plan_jobs (skill_id, user_id, job_type, status, day_number, payload)
+       VALUES (?, ?, 'premium_plan_generation', 'pending', 7, ?)`,
+      ['javascript', user.id, JSON.stringify({ triggerDay: 7 })]
+    );
+
+    const jobRows = await db.query(
+      `SELECT id FROM plan_jobs WHERE user_id = ? AND job_type = 'premium_plan_generation'`,
+      [user.id]
+    );
+    const jobId = jobRows[0].id;
+
+    const reviewBody = {
+      summary: 'Week 2 review',
+      content_covered: [
+        { day: 8, title: 'Functions basics', type: 'concept' },
+      ],
+      knowledge_checks: [
+        {
+          id: 'q1',
+          type: 'multiple_choice',
+          topic: 'functions',
+          question: 'What does return do?',
+          helper_text: 'Pick the best answer.',
+          options: ['Sends a value back', 'Creates a loop'],
+          correct_option: 0,
+        },
+      ],
+    };
+
+    const res = await request(app)
+      .post(`/api/admin/premium-plans/save/${user.id}/javascript`)
+      .set('Authorization', 'Bearer test-secret')
+      .send({
+        jobId,
+        days: [
+          {
+            day_number: 14,
+            content_type: 'review',
+            reason: 'Adaptive review checkpoint',
+            review_title: 'Week 2 Review: JavaScript',
+            review_body: reviewBody,
+          },
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.saved).toBe(true);
+
+    const pending = await db.getPremiumPlanPending(user.id, 'javascript');
+    expect(pending).toHaveLength(1);
+    expect(pending[0].day_number).toBe(14);
+    expect(pending[0].content_id).toBeNull();
+    expect(pending[0].content_type).toBe('review');
+    expect(pending[0].review_status).toBe('ready');
+    expect(pending[0].review_title).toBe('Week 2 Review: JavaScript');
+    expect(JSON.parse(pending[0].review_body)).toEqual(reviewBody);
+
+    await db.mergePremiumPlan(user.id, 'javascript');
+    const merged = await db.query(
+      `SELECT day_number, content_type, review_status, review_title, review_body FROM user_learning_plans WHERE user_id = ? AND skill_id = ? AND day_number = 14`,
+      [user.id, 'javascript']
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].content_type).toBe('review');
+    expect(merged[0].review_status).toBe('ready');
+    expect(merged[0].review_title).toBe('Week 2 Review: JavaScript');
+    expect(JSON.parse(merged[0].review_body)).toEqual(reviewBody);
+  });
+
   test('returns 400 if days array is empty', async () => {
     const user = await createUser({ email: 'save-empty@example.com', status: 'active' });
 

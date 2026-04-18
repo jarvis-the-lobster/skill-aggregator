@@ -240,6 +240,9 @@ const TABLE_SQL = [
     content_id TEXT,
     content_type TEXT,
     reason TEXT,
+    review_status TEXT,
+    review_title TEXT,
+    review_body TEXT,
     status TEXT DEFAULT 'pending_merge',
     generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id),
@@ -980,9 +983,19 @@ function createTestDb() {
         async savePremiumPlanDays(userId, skillId, days) {
           for (const entry of days) {
             await insert(
-              `INSERT OR REPLACE INTO premium_plan_days (user_id, skill_id, day_number, content_id, content_type, reason, status, generated_at)
-               VALUES (?, ?, ?, ?, ?, ?, 'pending_merge', CURRENT_TIMESTAMP)`,
-              [userId, skillId, entry.day_number, entry.content_id || null, entry.content_type || null, entry.reason || null]
+              `INSERT OR REPLACE INTO premium_plan_days (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, status, generated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_merge', CURRENT_TIMESTAMP)`,
+              [
+                userId,
+                skillId,
+                entry.day_number,
+                entry.content_id || null,
+                entry.content_type || null,
+                entry.reason || null,
+                entry.review_status || null,
+                entry.review_title || null,
+                entry.review_body ? JSON.stringify(entry.review_body) : null,
+              ]
             );
           }
         },
@@ -1002,9 +1015,9 @@ function createTestDb() {
           for (const row of pending) {
             if (completedDays.has(row.day_number)) continue;
             await insert(
-              `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-              [userId, skillId, row.day_number, row.content_id, row.content_type, row.reason]
+              `INSERT OR REPLACE INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              [userId, skillId, row.day_number, row.content_id, row.content_type, row.reason, row.review_status, row.review_title, row.review_body]
             );
           }
           await insert(

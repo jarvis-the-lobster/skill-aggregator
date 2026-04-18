@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const { requireAuth } = require('../middleware/auth');
-const { validateReviewBody } = require('../utils/reviewBodySchema');
+const { validateReviewBody, assertValidReviewBody } = require('../utils/reviewBodySchema');
 
 const PREMIUM_PLAN_DAY_RANGES = {
   7: [8, 14],
@@ -487,13 +487,15 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
 
       if (entry?.content_type === 'review') {
         const title = typeof entry?.review_title === 'string' ? entry.review_title.trim() : '';
-        const reviewBody = entry?.review_body;
-        const validation = validateReviewBody(reviewBody);
         if (!title) {
           return res.status(400).json({ error: `review day ${dayNumber} must include a review_title` });
         }
-        if (validation.error) {
-          return res.status(400).json({ error: `review day ${dayNumber}: ${validation.error}` });
+
+        let reviewBody;
+        try {
+          reviewBody = assertValidReviewBody(entry?.review_body);
+        } catch (err) {
+          return res.status(400).json({ error: `review day ${dayNumber} has invalid review_body: ${err.message}` });
         }
 
         seenDays.add(dayNumber);
@@ -501,7 +503,16 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
           day_number: dayNumber,
           reason,
           review_title: title,
-          review_body: validation.value,
+          review_body: reviewBody,
+        });
+        normalizedDays.push({
+          day_number: dayNumber,
+          content_id: null,
+          content_type: 'review',
+          reason,
+          review_status: 'ready',
+          review_title: title,
+          review_body: reviewBody,
         });
         continue;
       }
@@ -525,6 +536,9 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
         content_id: content.id,
         content_type: content.type,
         reason,
+        review_status: null,
+        review_title: null,
+        review_body: null,
       });
     }
 
