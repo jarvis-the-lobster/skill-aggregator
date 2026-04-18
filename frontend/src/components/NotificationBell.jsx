@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Check, CheckCheck } from 'lucide-react';
 import { apiService } from '../services/api';
+
+function getNotificationLink(notification) {
+  let data = notification.data;
+  if (!data) return null;
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data); } catch { return null; }
+  }
+  if (data.skillId) return `/skills/${data.skillId}/plan`;
+  return null;
+}
 
 function timeAgo(dateStr) {
   const timestamp = new Date(dateStr).getTime();
@@ -16,6 +27,7 @@ function timeAgo(dateStr) {
 }
 
 export function NotificationBell({ isAuthenticated = true }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -86,6 +98,16 @@ export function NotificationBell({ isAuthenticated = true }) {
     setUnreadCount(0);
   }
 
+  async function handleNotificationClick(n) {
+    const link = getNotificationLink(n);
+    if (!link) return;
+    if (!n.read_at) {
+      await handleMarkRead(n.id);
+    }
+    setOpen(false);
+    navigate(link);
+  }
+
   return (
     <div className="relative" ref={panelRef}>
       <button
@@ -122,34 +144,58 @@ export function NotificationBell({ isAuthenticated = true }) {
             ) : notifications.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-slate-500">No notifications yet</div>
             ) : (
-              notifications.map((n) => (
-                <div
-                  key={n.id}
-                  className={`flex items-start gap-3 border-b border-white/[0.04] px-4 py-3 transition-colors ${
-                    n.read_at ? 'opacity-60' : 'bg-white/[0.02]'
-                  }`}
-                >
-                  <div className="mt-0.5 flex-shrink-0 rounded-full bg-teal/20 p-1.5">
-                    <Bell className="h-3.5 w-3.5 text-teal" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-200 leading-snug">{n.title}</p>
-                    {n.body && (
-                      <p className="mt-0.5 text-xs text-slate-400 leading-relaxed">{n.body}</p>
+              notifications.map((n) => {
+                const link = getNotificationLink(n);
+                const content = (
+                  <>
+                    <div className="mt-0.5 flex-shrink-0 rounded-full bg-teal/20 p-1.5">
+                      <Bell className="h-3.5 w-3.5 text-teal" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-200 leading-snug">{n.title}</p>
+                      {n.body && (
+                        <p className="mt-0.5 text-xs text-slate-400 leading-relaxed">{n.body}</p>
+                      )}
+                      <p className="mt-1 text-[11px] text-slate-500">{timeAgo(n.created_at)}</p>
+                    </div>
+                    {!n.read_at && (
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleMarkRead(n.id); }}
+                        className="mt-0.5 flex-shrink-0 rounded-full p-1 text-slate-500 transition-colors hover:bg-white/[0.08] hover:text-teal"
+                        title="Mark as read"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
                     )}
-                    <p className="mt-1 text-[11px] text-slate-500">{timeAgo(n.created_at)}</p>
-                  </div>
-                  {!n.read_at && (
-                    <button
-                      onClick={() => handleMarkRead(n.id)}
-                      className="mt-0.5 flex-shrink-0 rounded-full p-1 text-slate-500 transition-colors hover:bg-white/[0.08] hover:text-teal"
-                      title="Mark as read"
+                  </>
+                );
+
+                if (link) {
+                  return (
+                    <Link
+                      key={n.id}
+                      to={link}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`flex items-start gap-3 border-b border-white/[0.04] px-4 py-3 transition-colors hover:bg-white/[0.06] ${
+                        n.read_at ? 'opacity-60' : 'bg-white/[0.02]'
+                      }`}
                     >
-                      <Check className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              ))
+                      {content}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <div
+                    key={n.id}
+                    className={`flex items-start gap-3 border-b border-white/[0.04] px-4 py-3 transition-colors ${
+                      n.read_at ? 'opacity-60' : 'bg-white/[0.02]'
+                    }`}
+                  >
+                    {content}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
