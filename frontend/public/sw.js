@@ -1,3 +1,5 @@
+/* eslint-env serviceworker */
+
 // LearnStack Push Notification Service Worker
 
 self.addEventListener('push', (event) => {

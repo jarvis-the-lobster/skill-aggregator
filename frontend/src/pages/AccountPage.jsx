@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Sparkles, Check, AlertCircle, Loader2, X, CreditCard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -46,7 +46,6 @@ function StatusBadge({ status }) {
 export function AccountPage() {
   const { user, loading: authLoading } = useAuth();
   const { status, subscriptionEndDate, loading: subLoading, refresh } = useSubscription();
-  const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -56,7 +55,7 @@ export function AccountPage() {
     if (!authLoading && user) {
       analytics.accountPageViewed({ status, is_premium: status === 'active' });
     }
-  }, [authLoading, user]);
+  }, [authLoading, user, status]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/login?next=/account" replace />;

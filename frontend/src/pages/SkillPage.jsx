@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink, CalendarDays } from 'lucide-react';
@@ -84,18 +84,12 @@ export function SkillPage() {
     analytics.contentTabSwitched(tab, skillId);
   };
 
-  useEffect(() => {
-    skillViewedRef.current = false;
-    loadSkillData();
-    return () => clearTimers();
-  }, [skillId]);
-
-  const clearTimers = () => {
+  const clearTimers = useCallback(() => {
     if (pollTimer.current) clearInterval(pollTimer.current);
     if (timeoutTimer.current) clearTimeout(timeoutTimer.current);
-  };
+  }, []);
 
-  const fetchRatings = async (videos, articles) => {
+  const fetchRatings = useCallback(async (videos, articles) => {
     const ids = [
       ...(videos || []).map(v => v.id),
       ...(articles || []).map(a => a.id),
@@ -106,32 +100,9 @@ export function SkillPage() {
     } catch {
       return { counts: {}, userRatings: {} };
     }
-  };
+  }, []);
 
-  const loadSkillData = async () => {
-    clearTimers();
-    setStatus('loading');
-    try {
-      const result = await apiService.getSkillContent(skillId);
-
-      // If content is ready, fetch ratings in parallel before rendering
-      let ratingsData = { counts: {}, userRatings: {} };
-      if (result.status === 'ready' && result.content) {
-        ratingsData = await fetchRatings(result.content.videos, result.content.articles);
-      }
-
-      applyResult(result, ratingsData);
-
-      if (result.status === 'scraping' || result.status === 'pending') {
-        startPolling();
-      }
-    } catch (error) {
-      console.error('Error loading skill data:', error);
-      setStatus('error');
-    }
-  };
-
-  const applyResult = (result, ratingsData = null) => {
+  const applyResult = useCallback((result, ratingsData = null) => {
     setSkillData(result.skill || null);
     if (result.skill && !skillViewedRef.current) {
       skillViewedRef.current = true;
@@ -156,9 +127,9 @@ export function SkillPage() {
       setRatings(ratingsData);
     }
     setStatus(result.status || 'error');
-  };
+  }, [skillId]);
 
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     // Timeout after 60 seconds
     timeoutTimer.current = setTimeout(() => {
       clearTimers();
@@ -183,7 +154,36 @@ export function SkillPage() {
         console.error('Poll error:', err);
       }
     }, POLL_INTERVAL_MS);
-  };
+  }, [applyResult, clearTimers, fetchRatings, skillId]);
+
+  const loadSkillData = useCallback(async () => {
+    clearTimers();
+    setStatus('loading');
+    try {
+      const result = await apiService.getSkillContent(skillId);
+
+      // If content is ready, fetch ratings in parallel before rendering
+      let ratingsData = { counts: {}, userRatings: {} };
+      if (result.status === 'ready' && result.content) {
+        ratingsData = await fetchRatings(result.content.videos, result.content.articles);
+      }
+
+      applyResult(result, ratingsData);
+
+      if (result.status === 'scraping' || result.status === 'pending') {
+        startPolling();
+      }
+    } catch (error) {
+      console.error('Error loading skill data:', error);
+      setStatus('error');
+    }
+  }, [applyResult, clearTimers, fetchRatings, skillId, startPolling]);
+
+  useEffect(() => {
+    skillViewedRef.current = false;
+    loadSkillData();
+    return () => clearTimers();
+  }, [skillId, loadSkillData, clearTimers]);
 
   const handleRefreshContent = async () => {
     setIsRefreshing(true);

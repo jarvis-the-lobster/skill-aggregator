@@ -282,7 +282,7 @@ export function WelcomePage() {
         analytics.track('onboarding_started');
       }
     }).catch(() => setChecking(false));
-  }, [user, authLoading]);
+  }, [user, authLoading, navigate]);
 
   // Load skills for step 3 (skill picker)
   useEffect(() => {
