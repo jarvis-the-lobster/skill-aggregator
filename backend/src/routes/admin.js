@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../models/database');
 const { requireAuth } = require('../middleware/auth');
-const { validateReviewBody } = require('../utils/reviewBodySchema');
+const { validateReviewBody, assertValidReviewBody } = require('../utils/reviewBodySchema');
 
 const PREMIUM_PLAN_DAY_RANGES = {
   7: [8, 14],
@@ -481,6 +481,38 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
         return res.status(400).json({ error: `cannot overwrite completed day ${dayNumber}` });
       }
 
+      const reason = typeof entry?.reason === 'string' ? entry.reason.trim() : '';
+      if (!reason) {
+        return res.status(400).json({ error: `day ${dayNumber} must include a reason` });
+      }
+
+      const isReviewDay = entry?.content_type === 'review';
+      if (isReviewDay) {
+        const reviewTitle = typeof entry?.review_title === 'string' ? entry.review_title.trim() : '';
+        if (!reviewTitle) {
+          return res.status(400).json({ error: `review day ${dayNumber} must include review_title` });
+        }
+
+        let reviewBody;
+        try {
+          reviewBody = assertValidReviewBody(entry?.review_body);
+        } catch (err) {
+          return res.status(400).json({ error: `review day ${dayNumber} has invalid review_body: ${err.message}` });
+        }
+
+        seenDays.add(dayNumber);
+        normalizedDays.push({
+          day_number: dayNumber,
+          content_id: null,
+          content_type: 'review',
+          reason,
+          review_status: 'ready',
+          review_title: reviewTitle,
+          review_body: reviewBody,
+        });
+        continue;
+      }
+
       const contentId = entry?.content_id;
       if (!contentId || typeof contentId !== 'string') {
         return res.status(400).json({ error: `day ${dayNumber} must include a valid content_id` });
@@ -494,17 +526,15 @@ router.post('/premium-plans/save/:userId/:skillId', requireCronSecretOrAdmin, as
         return res.status(400).json({ error: `content_type mismatch for day ${dayNumber}` });
       }
 
-      const reason = typeof entry?.reason === 'string' ? entry.reason.trim() : '';
-      if (!reason) {
-        return res.status(400).json({ error: `day ${dayNumber} must include a reason` });
-      }
-
       seenDays.add(dayNumber);
       normalizedDays.push({
         day_number: dayNumber,
         content_id: content.id,
         content_type: content.type,
         reason,
+        review_status: null,
+        review_title: null,
+        review_body: null,
       });
     }
 
