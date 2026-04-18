@@ -56,6 +56,21 @@ export function LearningPlanPage() {
     () => new Set(plan.filter((entry) => entry.content_type === 'review').map((entry) => entry.day_number)),
     [plan]
   );
+  const resolvedReviewByDay = useMemo(() => {
+    const map = { ...reviewContent };
+    for (const entry of plan) {
+      if (entry.content_type !== 'review') continue;
+      map[entry.day_number] = {
+        day_number: entry.day_number,
+        title: entry.review_title,
+        body: typeof entry.review_body === 'string'
+          ? (() => { try { return JSON.parse(entry.review_body); } catch { return entry.review_body; } })()
+          : entry.review_body,
+        review_type: 'weekly_checkin',
+      };
+    }
+    return map;
+  }, [plan, reviewContent]);
 
   useEffect(() => {
     // Wait for auth to resolve before loading — otherwise user is null
@@ -359,7 +374,7 @@ export function LearningPlanPage() {
                   }
                 : null;
               const isReviewDay = Boolean(inlineReview);
-              const review = inlineReview || reviewContent[entry.day_number];
+              const review = inlineReview || resolvedReviewByDay[entry.day_number];
               const shouldRenderReviewCard = isReviewDay;
 
               return (
@@ -512,9 +527,9 @@ export function LearningPlanPage() {
             })}
           </div>
 
-          {expandedReview && reviewContent[expandedReview]?.body && (
+          {expandedReview && resolvedReviewByDay[expandedReview]?.body && (
             <ReviewCheckInPanel
-              review={reviewContent[expandedReview]}
+              review={resolvedReviewByDay[expandedReview]}
               dayNumber={expandedReview}
               skillId={skillId}
               enrolled={enrolled}
