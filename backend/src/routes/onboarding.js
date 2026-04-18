@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const db = require('../models/database');
+const analytics = require('../services/analyticsService');
 
 const VALID_USER_TYPES = ['student', 'self-learner', 'career-switcher', 'professional', 'freelancer-creator'];
 const VALID_GOALS = ['new-skill-for-work', 'school-coursework', 'interviews-certs', 'career-switch', 'personal-interest', 'side-project'];
@@ -49,6 +50,15 @@ router.post('/', requireAuth, async (req, res) => {
         dailyTime,
       ]
     );
+
+    analytics.trackOnboardingCompleted?.({
+      userId: req.user.id,
+      userType,
+      goal,
+      dailyTime,
+      attributionSource,
+      url: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
+    });
 
     res.json({ success: true });
   } catch (err) {

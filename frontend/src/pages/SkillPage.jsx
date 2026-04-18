@@ -77,12 +77,15 @@ export function SkillPage() {
   const timeoutTimer = useRef(null);
   const initialTabSet = useRef(false);
 
+  const skillViewedRef = useRef(false);
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    analytics.track('content_tab_switched', { skillId, tab });
+    analytics.contentTabSwitched(tab, skillId);
   };
 
   useEffect(() => {
+    skillViewedRef.current = false;
     loadSkillData();
     return () => clearTimers();
   }, [skillId]);
@@ -130,6 +133,16 @@ export function SkillPage() {
 
   const applyResult = (result, ratingsData = null) => {
     setSkillData(result.skill || null);
+    if (result.skill && !skillViewedRef.current) {
+      skillViewedRef.current = true;
+      analytics.skillPageViewed(skillId, result.skill.name, {
+        status: result.status,
+        difficulty: result.skill.difficulty,
+        category: result.skill.category,
+        video_count: result.content?.videos?.length || 0,
+        article_count: result.content?.articles?.length || 0,
+      });
+    }
     if (result.content) {
       setContent(result.content);
       if (result.content.lastScrapedAt) setLastScrapedAt(result.content.lastScrapedAt);
@@ -175,6 +188,7 @@ export function SkillPage() {
   const handleRefreshContent = async () => {
     setIsRefreshing(true);
     setRefreshMessage(null);
+    analytics.track('skill_content_refresh_requested', { skill_id: skillId });
     try {
       clearTimers();
       const prevLastScraped = lastScrapedAt;
@@ -515,7 +529,7 @@ export function SkillPage() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="btn-primary flex items-center space-x-2"
-                                onClick={() => analytics.track('content_link_clicked', { skillId, contentId: video.id, type: 'video', source: video.source })}
+                                onClick={() => analytics.contentLinkClicked(skillId, video.id, 'video', video.url)}
                               >
                                 <Play className="w-4 h-4" />
                                 <span>Watch</span>
@@ -575,7 +589,7 @@ export function SkillPage() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn-secondary flex items-center space-x-2"
-                            onClick={() => analytics.track('content_link_clicked', { skillId, contentId: article.id, type: 'article', source: article.source })}
+                            onClick={() => analytics.contentLinkClicked(skillId, article.id, 'article', article.url)}
                           >
                             <BookOpen className="w-4 h-4" />
                             <span>Read</span>

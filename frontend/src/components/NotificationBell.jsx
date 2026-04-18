@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Check, CheckCheck } from 'lucide-react';
 import { apiService } from '../services/api';
+import analytics from '../services/analytics';
 
 function getNotificationLink(notification) {
   let data = notification.data;
@@ -78,6 +79,7 @@ export function NotificationBell({ isAuthenticated = true }) {
       setLoading(true);
       await fetchNotifications();
       setLoading(false);
+      analytics.notificationBellOpened(unreadCount);
     }
     setOpen((prev) => !prev);
   }
@@ -89,13 +91,16 @@ export function NotificationBell({ isAuthenticated = true }) {
       prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
     );
     setUnreadCount((prev) => Math.max(0, prev - 1));
+    analytics.notificationMarkedRead(id);
   }
 
   async function handleMarkAllRead() {
     if (!isAuthenticated) return;
     await apiService.markAllNotificationsRead();
+    const markedCount = notifications.filter((n) => !n.read_at).length;
     setNotifications((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
     setUnreadCount(0);
+    analytics.notificationsMarkedAllRead(markedCount);
   }
 
   async function handleNotificationClick(n) {

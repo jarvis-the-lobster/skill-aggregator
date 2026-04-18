@@ -28,7 +28,7 @@ vi.mock('../services/api', () => ({
 }));
 
 vi.mock('../services/analytics', () => ({
-  default: { track: vi.fn() },
+  default: new Proxy({}, { get: (t, p) => { if (!t[p]) t[p] = vi.fn(); return t[p]; } }),
 }));
 
 // Default: logged-in user with auth loaded

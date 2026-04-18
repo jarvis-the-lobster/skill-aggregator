@@ -162,7 +162,7 @@ function PremiumPitchScreen({ onSkip }) {
   ];
 
   async function startTrial() {
-    analytics.track('onboarding_trial_started');
+    analytics.onboardingTrialStarted();
     if (!user) {
       navigate('/login?next=/premium');
       return;
@@ -359,7 +359,7 @@ export function WelcomePage() {
 
   async function handleSkillSelect(skill) {
     setEnrolling(skill.id);
-    analytics.track('onboarding_skill_selected', { skillId: skill.id });
+    analytics.onboardingSkillSelected(skill.id, { skill_name: skill.name });
     try {
       await apiService.enrollCourse(skill.id);
     } catch {
@@ -367,18 +367,20 @@ export function WelcomePage() {
     }
     // Store selected skill, show premium pitch before navigating to plan
     setSelectedSkillId(skill.id);
+    analytics.onboardingPremiumPitchViewed({ skill_id: skill.id });
     setStep(4);
     setEnrolling(null);
   }
 
   function handlePremiumSkip() {
-    analytics.track('onboarding_premium_skipped');
+    analytics.onboardingPremiumSkipped();
     navigate(selectedSkillId ? `/skills/${selectedSkillId}/plan` : '/');
   }
 
   function handleSkip() {
-    analytics.track('onboarding_skipped');
+    analytics.onboardingSkipped();
     setSelectedSkillId(null);
+    analytics.onboardingPremiumPitchViewed({ skill_id: null });
     setStep(4);
   }
 

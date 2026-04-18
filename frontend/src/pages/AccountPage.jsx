@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Sparkles, Check, AlertCircle, Loader2, X, CreditCard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
+import analytics from '../services/analytics';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -51,6 +52,12 @@ export function AccountPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!authLoading && user) {
+      analytics.accountPageViewed({ status, is_premium: status === 'active' });
+    }
+  }, [authLoading, user]);
+
   if (authLoading) return null;
   if (!user) return <Navigate to="/login?next=/account" replace />;
 
@@ -70,6 +77,7 @@ export function AccountPage() {
       if (!res.ok || !data.url) {
         throw new Error(data.error || 'Unable to start checkout');
       }
+      analytics.premiumCheckoutStarted('account_page');
       window.location.href = data.url;
     } catch (err) {
       setError(err.message || 'Something went wrong');
@@ -93,6 +101,7 @@ export function AccountPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to cancel');
       await refresh();
       setShowConfirm(false);
+      analytics.track('subscription_cancelled', { source: 'account_page' });
     } catch (err) {
       setError(err.message || 'Something went wrong');
     } finally {

@@ -16,7 +16,7 @@ vi.mock('../services/api', () => ({
 
 // Mock analytics
 vi.mock('../services/analytics', () => ({
-  default: { track: vi.fn() },
+  default: new Proxy({}, { get: (t, p) => { if (!t[p]) t[p] = vi.fn(); return t[p]; } }),
 }));
 
 // Mock useAuth

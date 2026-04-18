@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
+import analytics from '../services/analytics';
 
 export function SearchBar({ value, onChange, onSearch, onSuggestionSelect, skills = [], placeholder }) {
   const [showDropdown, setShowDropdown] = useState(false);
@@ -18,6 +19,7 @@ export function SearchBar({ value, onChange, onSearch, onSuggestionSelect, skill
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && trimmed && onSearch) {
+      analytics.searchSubmitted(trimmed, { source: 'search_input_enter' });
       onSearch(trimmed);
       setShowDropdown(false);
     }
@@ -25,6 +27,7 @@ export function SearchBar({ value, onChange, onSearch, onSuggestionSelect, skill
 
   const handleSuggestionClick = (skill) => {
     setShowDropdown(false);
+    analytics.searchSuggestionClicked(skill.id, skill.name, { source: 'search_dropdown' });
     if (onSuggestionSelect) {
       onSuggestionSelect(skill);
     } else {
@@ -35,6 +38,7 @@ export function SearchBar({ value, onChange, onSearch, onSuggestionSelect, skill
 
   const handleSearchForQuery = () => {
     if (trimmed && onSearch) {
+      analytics.searchSubmitted(trimmed, { source: 'search_dropdown_cta' });
       onSearch(trimmed);
       setShowDropdown(false);
     }

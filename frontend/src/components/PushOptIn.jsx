@@ -17,21 +17,21 @@ export function PushOptIn({ streak }) {
     !dismissed;
 
   useEffect(() => {
-    if (shouldShow) analytics.track('push_optin_shown');
-  }, [shouldShow]);
+    if (shouldShow) analytics.pushOptInShown({ streak });
+  }, [shouldShow, streak]);
 
   if (!shouldShow) return null;
 
   function handleDismiss() {
     localStorage.setItem(DISMISSED_KEY, '1');
     setDismissed(true);
-    analytics.track('push_optin_dismissed');
+    analytics.pushOptInDismissed({ streak });
   }
 
   async function handleEnable() {
     const success = await requestPermission();
     if (success) {
-      analytics.track('push_optin_enabled');
+      analytics.pushOptInEnabled({ streak });
       handleDismiss();
     }
   }

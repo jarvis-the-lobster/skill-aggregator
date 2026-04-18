@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const db = require('../models/database');
 const stripeService = require('../services/stripeService');
+const analytics = require('../services/analyticsService');
 
 const router = express.Router();
 
@@ -57,6 +58,12 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
       await db.setStripeCustomerId(user.id, customerId);
     }
 
+    analytics.trackCheckoutSessionRequested?.({
+      userId: user.id,
+      source: 'billing_route',
+      url: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
+    });
+
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const session = await stripeService.createCheckoutSession({
       customerId,
@@ -96,6 +103,10 @@ router.post('/cancel', requireAuth, async (req, res) => {
       subscription_status: 'active',
       subscription_id: sub.id,
       subscription_end_date: toIsoOrNull(sub.current_period_end),
+    });
+    analytics.trackSubscriptionCancelled?.({
+      userId: user.id,
+      url: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
     });
     res.json({ ok: true, subscriptionEndDate: toIsoOrNull(sub.current_period_end) });
   } catch (err) {

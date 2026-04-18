@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
+import analytics from '../services/analytics';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function AuthCallback() {
@@ -10,6 +11,7 @@ export function AuthCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    analytics.authCallbackViewed({ method: 'oauth' });
     const token = searchParams.get('token');
     if (!token) { navigate('/login?error=oauth'); return; }
     loadUserFromToken(token).then(async (user) => {
