@@ -1,12 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Sparkles, Check, ArrowRight } from 'lucide-react';
 import { useSubscription } from '../hooks/useSubscription';
+import analytics from '../services/analytics';
 
 export function PremiumSuccessPage() {
   const { refresh, isPremium, status } = useSubscription();
   const [checking, setChecking] = useState(true);
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    analytics.premiumSuccessViewed();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,6 +22,10 @@ export function PremiumSuccessPage() {
         const data = await refresh();
         if (cancelled) return;
         if (data?.status === 'active') {
+          if (!trackedRef.current) {
+            trackedRef.current = true;
+            analytics.premiumCheckoutSucceeded({ status: 'active' });
+          }
           setChecking(false);
           return;
         }

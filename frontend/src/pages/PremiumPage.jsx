@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Sparkles, Check, Zap, Flame, Brain, Rocket, Loader2 } from 'lucide-react';
@@ -39,8 +39,13 @@ export function PremiumPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function startCheckout() {
+  useEffect(() => {
+    analytics.premiumPageViewed({ is_premium: isPremium, status });
+  }, [isPremium, status]);
+
+  async function startCheckout(source = 'premium_page') {
     if (!user) {
+      analytics.premiumCheckoutStarted(`${source}_unauthenticated`);
       navigate('/login?next=/premium');
       return;
     }
@@ -59,7 +64,7 @@ export function PremiumPage() {
       if (!res.ok || !data.url) {
         throw new Error(data.error || 'Unable to start checkout');
       }
-      analytics.track('premium_checkout_started');
+      analytics.premiumCheckoutStarted(source, { status });
       window.location.href = data.url;
     } catch (err) {
       setError(err.message || 'Something went wrong');
@@ -106,7 +111,7 @@ export function PremiumPage() {
             ) : (
               <button
                 type="button"
-                onClick={startCheckout}
+                onClick={() => startCheckout('premium_hero_cta')}
                 disabled={loading}
                 className="group inline-flex items-center gap-3 rounded-xl bg-teal px-8 py-4 text-base font-semibold text-dark-bg transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-teal-light hover:shadow-[0_12px_32px_rgba(0,191,166,0.4)] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:scale-100"
               >
@@ -182,7 +187,7 @@ export function PremiumPage() {
             </p>
             <button
               type="button"
-              onClick={startCheckout}
+              onClick={() => startCheckout('premium_footer_cta')}
               disabled={loading}
               className="inline-flex items-center gap-3 rounded-xl bg-teal px-8 py-4 text-base font-semibold text-dark-bg transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-teal-light hover:shadow-[0_12px_32px_rgba(0,191,166,0.4)] disabled:opacity-60 disabled:cursor-not-allowed"
             >

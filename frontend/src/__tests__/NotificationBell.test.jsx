@@ -11,6 +11,10 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+vi.mock('../services/analytics', () => ({
+  default: new Proxy({}, { get: (t, p) => { if (!t[p]) t[p] = vi.fn(); return t[p]; } }),
+}));
+
 import { NotificationBell } from '../components/NotificationBell';
 import { apiService } from '../services/api';
 

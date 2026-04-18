@@ -1,8 +1,14 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Zap, Target, Users, Rocket } from 'lucide-react';
+import analytics from '../services/analytics';
 
 export function AboutPage() {
+  useEffect(() => {
+    analytics.aboutPageViewed();
+  }, []);
+
   return (
     <div className="min-h-screen bg-dark-bg">
       <Helmet>

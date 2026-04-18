@@ -214,6 +214,132 @@ const analytics = {
     this.track('plan_day_completed', { day_number: dayNumber, skill_id: skillId });
   },
 
+  // ─── Page-specific views ──────────────────────────────────────────────────
+
+  pageViewed(pageName, properties = {}) {
+    this.track('page_viewed', { page: pageName, ...properties });
+  },
+
+  skillPageViewed(skillId, skillName, properties = {}) {
+    this.track('skill_page_viewed', { skill_id: skillId, skill_name: skillName, ...properties });
+  },
+
+  learningPlanViewed(skillId, properties = {}) {
+    this.track('learning_plan_viewed', { skill_id: skillId, ...properties });
+  },
+
+  learningPlanEnrolled(skillId, properties = {}) {
+    this.track('learning_plan_enrolled', { skill_id: skillId, ...getUtmProperties(), ...properties });
+  },
+
+  learningPlanRefreshed(skillId, properties = {}) {
+    this.track('learning_plan_refreshed', { skill_id: skillId, ...properties });
+  },
+
+  premiumPlanMerged(skillId, properties = {}) {
+    this.track('premium_plan_merged', { skill_id: skillId, ...properties });
+  },
+
+  reviewOpened(skillId, dayNumber, properties = {}) {
+    this.track('review_opened', { skill_id: skillId, day_number: dayNumber, ...properties });
+  },
+
+  reviewSubmitted(skillId, dayNumber, properties = {}) {
+    this.track('review_submitted', { skill_id: skillId, day_number: dayNumber, ...properties });
+  },
+
+  premiumPageViewed(properties = {}) {
+    this.track('premium_page_viewed', { ...properties });
+  },
+
+  premiumCheckoutStarted(source, properties = {}) {
+    this.track('premium_checkout_started', { source, ...properties });
+  },
+
+  premiumCheckoutSucceeded(properties = {}) {
+    this.track('premium_checkout_succeeded', { ...getUtmProperties(), ...properties });
+  },
+
+  accountPageViewed(properties = {}) {
+    this.track('account_page_viewed', { ...properties });
+  },
+
+  myCoursesViewed(courseCount, properties = {}) {
+    this.track('my_courses_viewed', { course_count: courseCount, ...properties });
+  },
+
+  aboutPageViewed(properties = {}) {
+    this.track('about_page_viewed', { ...properties });
+  },
+
+  premiumSuccessViewed(properties = {}) {
+    this.track('premium_success_viewed', { ...getUtmProperties(), ...properties });
+  },
+
+  authCallbackViewed(properties = {}) {
+    this.track('auth_callback_viewed', { ...properties });
+  },
+
+  // ─── Notifications ────────────────────────────────────────────────────────
+
+  notificationBellOpened(unreadCount) {
+    this.track('notification_bell_opened', { unread_count: unreadCount });
+  },
+
+  notificationMarkedRead(notificationId, properties = {}) {
+    this.track('notification_marked_read', { notification_id: notificationId, ...properties });
+  },
+
+  notificationsMarkedAllRead(count, properties = {}) {
+    this.track('notifications_marked_all_read', { count, ...properties });
+  },
+
+  // ─── Push opt-in ──────────────────────────────────────────────────────────
+
+  pushOptInShown(properties = {}) {
+    // Dedupe: only fire once per session
+    if (!isServer && !sessionStorage.getItem('_ph_push_optin_shown')) {
+      sessionStorage.setItem('_ph_push_optin_shown', '1');
+      this.track('push_optin_shown', { ...properties });
+    }
+  },
+
+  pushOptInDismissed(properties = {}) {
+    this.track('push_optin_dismissed', { ...properties });
+  },
+
+  pushOptInEnabled(properties = {}) {
+    this.track('push_optin_enabled', { ...properties });
+  },
+
+  // ─── Onboarding ───────────────────────────────────────────────────────────
+
+  onboardingSkillSelected(skillId, properties = {}) {
+    this.track('onboarding_skill_selected', { skill_id: skillId, ...properties });
+  },
+
+  onboardingPremiumPitchViewed(properties = {}) {
+    this.track('onboarding_premium_pitch_viewed', { ...properties });
+  },
+
+  onboardingTrialStarted(properties = {}) {
+    this.track('onboarding_trial_started', { ...getUtmProperties(), ...properties });
+  },
+
+  onboardingPremiumSkipped(properties = {}) {
+    this.track('onboarding_premium_skipped', { ...properties });
+  },
+
+  // ─── Search ───────────────────────────────────────────────────────────────
+
+  searchSuggestionClicked(skillId, skillName, properties = {}) {
+    this.track('search_suggestion_clicked', { skill_id: skillId, skill_name: skillName, ...properties });
+  },
+
+  searchSubmitted(query, properties = {}) {
+    this.track('search_submitted', { query, ...properties });
+  },
+
   // ─── Newsletter / Early Access ─────────────────────────────────────────────
 
   earlyAccessViewed() {

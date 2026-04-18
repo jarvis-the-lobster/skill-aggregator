@@ -50,9 +50,38 @@ function trackUserLoggedIn({ userId, method, url }) {
   });
 }
 
+function trackCheckoutSessionRequested({ userId, url, source = 'billing' }) {
+  track(`user_${userId}`, 'checkout_session_requested', {
+    userId,
+    source,
+    ...(url && { $current_url: url }),
+  });
+}
+
+function trackSubscriptionCancelled({ userId, url }) {
+  track(`user_${userId}`, 'subscription_cancelled', {
+    userId,
+    ...(url && { $current_url: url }),
+  });
+}
+
+function trackOnboardingCompleted({ userId, userType, goal, dailyTime, attributionSource, url }) {
+  track(`user_${userId}`, 'onboarding_completed', {
+    userId,
+    userType,
+    goal,
+    dailyTime,
+    attributionSource,
+    ...(url && { $current_url: url }),
+  });
+}
+
 module.exports = {
   trackSkillSearched,
   trackSkillContentServed,
   trackUserRegistered,
   trackUserLoggedIn,
+  trackCheckoutSessionRequested,
+  trackSubscriptionCancelled,
+  trackOnboardingCompleted,
 };

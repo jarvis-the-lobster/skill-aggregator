@@ -12,9 +12,9 @@ vi.mock('../services/api', () => ({
   },
 }));
 
-// Mock analytics
+// Mock analytics — Proxy auto-stubs any method call
 vi.mock('../services/analytics', () => ({
-  default: { track: vi.fn() },
+  default: new Proxy({}, { get: (t, p) => { if (!t[p]) t[p] = vi.fn(); return t[p]; } }),
 }));
 
 // Mock useAuth
@@ -129,10 +129,8 @@ describe('SkillPage', () => {
     const user = userEvent.setup();
     await user.click(watchLink);
 
-    expect(analytics.track).toHaveBeenCalledWith('content_link_clicked', expect.objectContaining({
-      skillId: 'python',
-      contentId: 'vid1',
-      type: 'video',
-    }));
+    expect(analytics.contentLinkClicked).toHaveBeenCalledWith(
+      'python', 'vid1', 'video', expect.any(String)
+    );
   });
 });

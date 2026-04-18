@@ -28,11 +28,37 @@ import { AccountPage } from './pages/AccountPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 
+const ROUTE_NAMES = {
+  '/': 'Home',
+  '/about': 'About',
+  '/login': 'Login',
+  '/signup': 'Signup',
+  '/auth/callback': 'AuthCallback',
+  '/admin': 'Admin',
+  '/my-courses': 'MyCourses',
+  '/early-access': 'EarlyAccess',
+  '/welcome': 'Welcome',
+  '/premium': 'Premium',
+  '/premium/success': 'PremiumSuccess',
+  '/account': 'Account',
+};
+
+function derivePageName(pathname) {
+  if (ROUTE_NAMES[pathname]) return ROUTE_NAMES[pathname];
+  if (/^\/skills\/[^/]+\/plan$/.test(pathname)) return 'LearningPlan';
+  if (/^\/skills\/[^/]+$/.test(pathname)) return 'Skill';
+  return pathname;
+}
+
 function RouteTracker() {
   const location = useLocation();
   useEffect(() => {
-    analytics.track('page_view', { path: location.pathname });
-  }, [location.pathname]);
+    analytics.track('page_view', {
+      path: location.pathname,
+      search: location.search || undefined,
+      page_name: derivePageName(location.pathname),
+    });
+  }, [location.pathname, location.search]);
   return null;
 }
 

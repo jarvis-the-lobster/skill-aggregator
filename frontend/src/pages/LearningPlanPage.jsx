@@ -76,7 +76,6 @@ export function LearningPlanPage() {
     // Wait for auth to resolve before loading — otherwise user is null
     // on hard refresh and we skip the personal plan fetch
     if (authLoading) return;
-    analytics.track('plan_viewed', { skillId });
     loadPlan();
   }, [skillId, authLoading]);
 
@@ -147,9 +146,10 @@ export function LearningPlanPage() {
       setSkillName(skillData.skill?.name || skillId);
       setRatings(ratingsData);
 
-      setEnrolled(Boolean(progressData?.enrolled));
+      const isEnrolled = Boolean(progressData?.enrolled);
+      setEnrolled(isEnrolled);
 
-      if (progressData?.enrolled) {
+      if (isEnrolled) {
         const days = JSON.parse(progressData.progress?.completed_days || '[]');
         setCompletedDays(new Set(days));
         setRefreshAvailable(progressData.refreshAvailable || false);
@@ -164,6 +164,13 @@ export function LearningPlanPage() {
         setPremiumPending(false);
         setPremiumDayCount(0);
       }
+
+      analytics.learningPlanViewed(skillId, {
+        enrolled: isEnrolled,
+        is_premium: isPremium,
+        plan_length: displayPlan.length,
+        skill_name: skillData.skill?.name || skillId,
+      });
     } catch (error) {
       console.error('Error loading learning plan:', error);
     } finally {
@@ -176,6 +183,7 @@ export function LearningPlanPage() {
     try {
       await apiService.enrollLearningPlan(skillId);
       setEnrolled(true);
+      analytics.learningPlanEnrolled(skillId, { skill_name: skillName });
     } catch (err) {
       console.error('Enroll error:', err);
     } finally {
@@ -202,6 +210,7 @@ export function LearningPlanPage() {
         setPlan(data.plan);
         setPremiumPending(false);
         setPremiumDayCount(0);
+        analytics.premiumPlanMerged(skillId, { day_count: data.plan.length });
         const ids = data.plan.map(e => e.content_id).filter(Boolean);
         if (ids.length) {
           const ratingsData = await apiService.getRatings(ids).catch(() => ({ counts: {}, userRatings: {} }));
@@ -222,6 +231,7 @@ export function LearningPlanPage() {
       if (data.refreshed && data.plan) {
         setPlan(data.plan);
         setRefreshAvailable(false);
+        analytics.learningPlanRefreshed(skillId, { plan_length: data.plan.length });
 
         const nextReviewContent = data.reviewContent || {};
         const renderedReviewDaySet = new Set(
@@ -417,7 +427,10 @@ export function LearningPlanPage() {
                           if (node) reviewButtonRefs.current[entry.day_number] = node;
                           else delete reviewButtonRefs.current[entry.day_number];
                         }}
-                        onClick={() => setExpandedReview(entry.day_number)}
+                        onClick={() => {
+                          analytics.reviewOpened(skillId, entry.day_number);
+                          setExpandedReview(entry.day_number);
+                        }}
                         className="flex-grow rounded-xl border border-purple-400/20 bg-purple-400/8 px-3 py-3 text-left text-sm font-medium text-slate-100 transition hover:border-purple-400/40 hover:bg-purple-400/12 hover:text-white"
                       >
                         <span className="block line-clamp-2">{review.title || 'Weekly Review'}</span>
@@ -533,7 +546,10 @@ export function LearningPlanPage() {
               dayNumber={expandedReview}
               skillId={skillId}
               enrolled={enrolled}
-              onSubmitted={() => handleCompleteDay(expandedReview)}
+              onSubmitted={() => {
+                analytics.reviewSubmitted(skillId, expandedReview);
+                handleCompleteDay(expandedReview);
+              }}
               onClose={() => {
                 const trigger = reviewButtonRefs.current[expandedReview];
                 setExpandedReview(null);

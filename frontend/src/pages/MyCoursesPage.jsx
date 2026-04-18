@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { BookOpen, Clock, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
+import analytics from '../services/analytics';
 import { StreakWidget } from '../components/StreakWidget';
 import { PushOptIn } from '../components/PushOptIn';
 import { useStreak } from '../hooks/useStreak';
@@ -29,7 +30,14 @@ export function MyCoursesPage() {
   useEffect(() => {
     if (!user) return;
     apiService.getMyCourses()
-      .then(data => setCourses(data.courses || []))
+      .then(data => {
+        const c = data.courses || [];
+        setCourses(c);
+        analytics.myCoursesViewed(c.length, {
+          active_count: c.filter((course) => course.status === 'active').length,
+          completed_count: c.filter((course) => course.status === 'completed').length,
+        });
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [user]);

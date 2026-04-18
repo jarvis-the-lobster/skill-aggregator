@@ -13,9 +13,9 @@ vi.mock('../hooks/usePushNotifications', () => ({
   usePushNotifications: () => mockPush,
 }));
 
-// Mock analytics
+// Mock analytics — Proxy auto-stubs any method call
 vi.mock('../services/analytics', () => ({
-  default: { track: vi.fn() },
+  default: new Proxy({}, { get: (t, p) => { if (!t[p]) t[p] = vi.fn(); return t[p]; } }),
 }));
 
 import { PushOptIn } from '../components/PushOptIn';
@@ -61,7 +61,7 @@ describe('PushOptIn', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /Dismiss/ }));
     expect(localStorage.getItem('push-optin-dismissed')).toBe('1');
-    expect(analytics.track).toHaveBeenCalledWith('push_optin_dismissed');
+    expect(analytics.pushOptInDismissed).toHaveBeenCalled();
     expect(screen.queryByText(/daily reminders/)).not.toBeInTheDocument();
   });
 });
