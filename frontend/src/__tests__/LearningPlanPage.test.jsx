@@ -493,6 +493,90 @@ describe('LearningPlanPage', () => {
       expect(screen.queryByText('What a solid answer should touch')).not.toBeInTheDocument();
     });
 
+    it('prefers inline personal-plan review content over stale shared reviewContent when opening the modal', async () => {
+      const personalReviewBody = {
+        summary: 'Personalized review summary',
+        content_covered: [{ day: 8, type: 'video', title: 'Personal Python Lesson' }],
+        knowledge_checks: [
+          {
+            id: 'personal-q1',
+            type: 'multiple_choice',
+            topic: 'python-functions-def',
+            question: 'Personalized question text',
+            helper_text: 'Pick the best answer.',
+            options: ['def', 'func'],
+            correct_option: 0,
+          },
+        ],
+      };
+
+      const staleSharedBody = {
+        summary: 'Old shared review summary',
+        content_covered: [{ day: 1, type: 'video', title: 'Old Shared Lesson' }],
+        knowledge_checks: [
+          {
+            id: 'shared-q1',
+            type: 'multiple_choice',
+            topic: 'old-topic',
+            question: 'Old shared question text',
+            helper_text: 'Pick the best answer.',
+            options: ['A', 'B'],
+            correct_option: 0,
+          },
+        ],
+      };
+
+      const personalPlan = SHARED_PLAN.map((day) =>
+        day.day_number === 14
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              review_status: 'ready',
+              review_title: 'Python Week 2 Review: Functions, Loops & Practical Python',
+              review_body: JSON.stringify(personalReviewBody),
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: SHARED_PLAN,
+        planReady: true,
+        reviewContent: {
+          14: {
+            title: 'Old shared review title',
+            body: staleSharedBody,
+          },
+        },
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[]' },
+        plan: personalPlan,
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {
+          14: {
+            title: 'Old shared review title',
+            body: staleSharedBody,
+          },
+        },
+      });
+
+      renderPlanPage();
+
+      const user = userEvent.setup();
+      const openButton = await screen.findByRole('button', { name: /python week 2 review: functions, loops & practical python/i });
+      await user.click(openButton);
+
+      expect(await screen.findByRole('dialog', { name: /day 14 review/i })).toBeInTheDocument();
+      await user.click(screen.getByText('Start review'));
+
+      expect(await screen.findByText('Personalized question text')).toBeInTheDocument();
+      expect(screen.queryByText('Old shared question text')).not.toBeInTheDocument();
+      expect(screen.queryByText('Old shared review title')).not.toBeInTheDocument();
+    });
+
     it('renders multiple-choice options as radio-style UI for multiple_choice knowledge checks', async () => {
       const sharedPlanWithMCReview = SHARED_PLAN.map((day) =>
         day.day_number === 7
