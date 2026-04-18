@@ -351,7 +351,10 @@ class Database {
         'ALTER TABLE users ADD COLUMN subscription_id TEXT',
         'ALTER TABLE users ADD COLUMN subscription_end_date TEXT',
         'ALTER TABLE user_onboarding ADD COLUMN attribution_source TEXT',
-        'ALTER TABLE user_onboarding ADD COLUMN created_at DATETIME'
+        'ALTER TABLE user_onboarding ADD COLUMN created_at DATETIME',
+        "ALTER TABLE premium_plan_days ADD COLUMN review_status TEXT DEFAULT 'ready'",
+        'ALTER TABLE premium_plan_days ADD COLUMN review_title TEXT',
+        'ALTER TABLE premium_plan_days ADD COLUMN review_body TEXT'
       ];
       migrations.forEach(sql => {
         this.db.run(sql, (err) => {
