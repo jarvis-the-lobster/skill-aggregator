@@ -48,7 +48,9 @@ export function AuthProvider({ children }) {
         setUser(data.user);
         return data.user;
       }
-    } catch {}
+    } catch {
+      return null;
+    }
     return null;
   }
 
@@ -110,7 +112,9 @@ export function AuthProvider({ children }) {
         analytics.identify(data.user.id, { email: data.user.email, name: data.user.name });
         return data.user;
       }
-    } catch {}
+    } catch {
+      // noop, invalid token falls through to token cleanup below
+    }
     removeToken();
     return null;
   }

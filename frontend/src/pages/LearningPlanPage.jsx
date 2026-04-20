@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader, Sparkles } from 'lucide-react';
+import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
 import { ReviewCheckInPanel } from '../components/ReviewCheckInPanel';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,7 +10,6 @@ import { RatingButtons } from '../components/RatingButtons';
 import analytics from '../services/analytics';
 
 const FREE_DAYS = 7;
-const REVIEW_DAYS = new Set([7, 14, 21, 28]);
 
 // Format seconds as "M:SS" for display (e.g. "25:00")
 function formatTimestamp(totalSeconds) {
@@ -52,10 +51,6 @@ export function LearningPlanPage() {
   const [reviewContent, setReviewContent] = useState({});
   const [expandedReview, setExpandedReview] = useState(null);
   const reviewButtonRefs = useRef({});
-  const renderedReviewDays = useMemo(
-    () => new Set(plan.filter((entry) => entry.content_type === 'review').map((entry) => entry.day_number)),
-    [plan]
-  );
   const resolvedReviewByDay = useMemo(() => {
     const map = { ...reviewContent };
     for (const entry of plan) {
@@ -72,35 +67,7 @@ export function LearningPlanPage() {
     return map;
   }, [plan, reviewContent]);
 
-  useEffect(() => {
-    // Wait for auth to resolve before loading — otherwise user is null
-    // on hard refresh and we skip the personal plan fetch
-    if (authLoading) return;
-    loadPlan();
-  }, [skillId, authLoading]);
-
-  useEffect(() => {
-    if (authLoading || subscriptionLoading || !user || !enrolled || !isPremium) return;
-
-    let cancelled = false;
-    apiService.getPremiumPending(skillId)
-      .then((premiumData) => {
-        if (cancelled) return;
-        setPremiumPending(Boolean(premiumData.hasPending));
-        setPremiumDayCount(premiumData.dayCount || 0);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPremiumPending(false);
-        setPremiumDayCount(0);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [skillId, user, enrolled, isPremium, authLoading, subscriptionLoading]);
-
-  const loadPlan = async () => {
+  const loadPlan = useCallback(async () => {
     setLoading(true);
     try {
       const fetches = [
@@ -176,7 +143,35 @@ export function LearningPlanPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [skillId, user, isPremium]);
+
+  useEffect(() => {
+    // Wait for auth to resolve before loading, otherwise user is null
+    // on hard refresh and we skip the personal plan fetch
+    if (authLoading) return;
+    loadPlan();
+  }, [skillId, authLoading, loadPlan]);
+
+  useEffect(() => {
+    if (authLoading || subscriptionLoading || !user || !enrolled || !isPremium) return;
+
+    let cancelled = false;
+    apiService.getPremiumPending(skillId)
+      .then((premiumData) => {
+        if (cancelled) return;
+        setPremiumPending(Boolean(premiumData.hasPending));
+        setPremiumDayCount(premiumData.dayCount || 0);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPremiumPending(false);
+        setPremiumDayCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [skillId, user, enrolled, isPremium, authLoading, subscriptionLoading]);
 
   const handleEnroll = async () => {
     setEnrolling(true);

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { apiService } from '../services/api';
@@ -10,12 +10,18 @@ export function AuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const handleAuthCallback = useCallback(() => {
     analytics.authCallbackViewed({ method: 'oauth' });
     const token = searchParams.get('token');
-    if (!token) { navigate('/login?error=oauth'); return; }
+    if (!token) {
+      navigate('/login?error=oauth');
+      return;
+    }
     loadUserFromToken(token).then(async (user) => {
-      if (!user) { navigate('/login?error=oauth'); return; }
+      if (!user) {
+        navigate('/login?error=oauth');
+        return;
+      }
       try {
         const { completed } = await apiService.getOnboardingStatus();
         navigate(completed ? '/' : '/welcome');
@@ -23,7 +29,11 @@ export function AuthCallback() {
         navigate('/');
       }
     });
-  }, []);
+  }, [loadUserFromToken, navigate, searchParams]);
+
+  useEffect(() => {
+    handleAuthCallback();
+  }, [handleAuthCallback]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
