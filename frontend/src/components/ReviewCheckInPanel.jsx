@@ -190,10 +190,10 @@ export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClo
   const retreat = () => setStepIndex((value) => Math.max(0, value - 1));
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-sm sm:top-[72px] sm:px-6" role="dialog" aria-modal="true" aria-label={`Day ${dayNumber} review`}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-sm sm:inset-x-0 sm:bottom-0 sm:top-[72px] sm:px-6" role="dialog" aria-modal="true" aria-label={`Day ${dayNumber} review`}>
       <button className="absolute inset-0 cursor-default" aria-label="Close review" onClick={onClose} />
 
-      <div className="relative z-10 flex h-[min(92vh,calc(100dvh-1rem))] w-full max-w-5xl flex-col overflow-hidden rounded-t-[28px] border border-purple-400/20 bg-[radial-gradient(circle_at_top_left,_rgba(192,132,252,0.18),_transparent_35%),linear-gradient(180deg,rgba(20,18,33,0.98),rgba(11,14,24,0.98))] shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:h-full sm:max-h-full sm:rounded-3xl">
+      <div className="relative z-10 flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden rounded-none border border-purple-400/20 bg-[radial-gradient(circle_at_top_left,_rgba(192,132,252,0.18),_transparent_35%),linear-gradient(180deg,rgba(20,18,33,0.98),rgba(11,14,24,0.98))] shadow-[0_20px_80px_rgba(0,0,0,0.35)] sm:h-full sm:max-h-full sm:rounded-3xl">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 z-20 rounded-full border border-white/[0.08] bg-white/[0.03] p-2 text-slate-300 transition hover:border-white/[0.16] hover:text-white"
@@ -220,8 +220,8 @@ export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClo
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto sm:overflow-hidden">
-          <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-5 py-5 sm:px-6 sm:py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-5 py-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:h-full sm:px-6 sm:py-4 sm:pb-4">
             <ProgressPill current={stepIndex + 1} total={totalSteps} />
 
             <div className="mt-5 flex flex-1 flex-col gap-5 sm:mt-12 sm:gap-4">
@@ -294,7 +294,7 @@ export function ReviewCheckInPanel({ review, dayNumber, skillId, enrolled, onClo
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-white/[0.08] px-5 py-4 sm:px-8">
+        <div className="sticky bottom-0 flex items-center justify-between border-t border-white/[0.08] bg-[linear-gradient(180deg,rgba(11,14,24,0.92),rgba(11,14,24,0.98))] px-5 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:px-8 sm:py-4 sm:pb-4">
           <button
             onClick={retreat}
             className="rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-white/[0.16] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
