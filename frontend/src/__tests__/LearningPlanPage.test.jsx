@@ -192,6 +192,56 @@ describe('LearningPlanPage', () => {
       expect(screen.queryByText('Shared review that should be ignored')).not.toBeInTheDocument();
       expect(screen.queryByText(/Day 7.*Check-in/)).not.toBeInTheDocument();
     });
+
+    it('does not show the finalizing banner for an enrolled user with a full personal plan when only the shared plan has pending review content', async () => {
+      const personalPlan = PERSONAL_PLAN.map((day) =>
+        [7, 14, 21, 28].includes(day.day_number)
+          ? {
+              ...day,
+              content_id: `personal_review_${day.day_number}`,
+              content_type: 'article',
+              title: `Personal Resource ${day.day_number}`,
+              url: `https://example.com/personal/${day.day_number}`,
+            }
+          : day
+      );
+
+      const sharedPlanWithPendingReviews = SHARED_PLAN.map((day) =>
+        [7, 14, 21, 28].includes(day.day_number)
+          ? {
+              ...day,
+              content_id: null,
+              content_type: 'review',
+              title: null,
+              url: null,
+              review_status: 'pending',
+              review_title: null,
+              review_body: null,
+            }
+          : day
+      );
+
+      mockGetLearningPlan.mockResolvedValue({
+        plan: sharedPlanWithPendingReviews,
+        planReady: false,
+        reviewContent: {},
+      });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: true,
+        progress: { completed_days: '[]' },
+        plan: personalPlan,
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
+      });
+
+      renderPlanPage();
+
+      expect(await screen.findByText('My Resource 1')).toBeInTheDocument();
+      expect(screen.queryByText('Your plan is being finalized')).not.toBeInTheDocument();
+      expect(screen.queryByText('Weekly check-in content is still generating. Please check back within 24 hours.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Generating review content. Check back within 24 hours.')).not.toBeInTheDocument();
+    });
   });
 
   describe('non-enrolled user sees shared plan', () => {
