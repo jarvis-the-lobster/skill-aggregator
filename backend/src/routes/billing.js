@@ -82,11 +82,27 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
 
 router.get('/status', requireAuth, async (req, res) => {
   const user = await db.getUserById(req.user.id);
+
+  let cancelAtPeriodEnd = false;
+  let isTrialing = false;
+
+  if (user?.subscription_id && stripeService.isConfigured()) {
+    try {
+      const sub = await stripeService.retrieveSubscription(user.subscription_id);
+      cancelAtPeriodEnd = Boolean(sub?.cancel_at_period_end);
+      isTrialing = sub?.status === 'trialing';
+    } catch (err) {
+      console.warn('billing status subscription lookup failed:', err.message);
+    }
+  }
+
   res.json({
     status: user?.subscription_status || 'free',
     isPremium: user?.subscription_status === 'active',
     subscriptionEndDate: user?.subscription_end_date || null,
     subscriptionId: user?.subscription_id || null,
+    cancelAtPeriodEnd,
+    isTrialing,
   });
 });
 
