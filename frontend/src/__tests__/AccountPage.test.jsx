@@ -76,4 +76,24 @@ describe('AccountPage', () => {
     expect(screen.getByRole('button', { name: /cancel subscription/i })).toBeInTheDocument();
     expect(screen.queryByText('Trial ends on')).not.toBeInTheDocument();
   });
+
+  it('treats expired cancelled subscriptions as free instead of showing stale premium cancellation copy', () => {
+    mockUseSubscription.mockReturnValue({
+      status: 'cancelled',
+      subscriptionEndDate: null,
+      cancelAtPeriodEnd: false,
+      isTrialing: false,
+      loading: false,
+      refresh: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.getByText('Free plan')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /upgrade to premium/i })).toBeInTheDocument();
+    expect(screen.queryByText('Cancels at period end')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your subscription is cancelled\./i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Ends on')).not.toBeInTheDocument();
+  });
 });

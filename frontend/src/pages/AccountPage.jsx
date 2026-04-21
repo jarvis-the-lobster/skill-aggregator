@@ -108,7 +108,10 @@ export function AccountPage() {
     }
   }
 
+  const hasFutureEndDate = Boolean(subscriptionEndDate && new Date(subscriptionEndDate) > new Date());
   const cancelledTrial = status === 'active' && isTrialing && cancelAtPeriodEnd;
+  const cancelledButStillActive = status === 'cancelled' && hasFutureEndDate;
+  const effectiveStatus = cancelledButStillActive ? 'cancelled' : (status === 'cancelled' ? 'free' : status);
 
   return (
     <div className="min-h-screen bg-dark-bg">
@@ -145,15 +148,15 @@ export function AccountPage() {
               <h2 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-2">Subscription</h2>
               <div className="flex items-center gap-3">
                 <span className="text-2xl font-bold text-slate-100">
-                  {cancelledTrial ? 'Premium Trial' : (status === 'active' || status === 'cancelled' ? 'Premium' : 'Free')}
+                  {cancelledTrial ? 'Premium Trial' : (effectiveStatus === 'active' || effectiveStatus === 'cancelled' ? 'Premium' : 'Free')}
                 </span>
-                <StatusBadge status={status} />
+                <StatusBadge status={effectiveStatus} />
               </div>
             </div>
-            {(status === 'active' || status === 'cancelled') && (
+            {(effectiveStatus === 'active' || effectiveStatus === 'cancelled') && (
               <div className="text-right">
                 <div className="text-xs text-slate-500 mb-1">
-                  {cancelledTrial ? 'Trial ends on' : (status === 'cancelled' ? 'Ends on' : 'Renews on')}
+                  {cancelledTrial ? 'Trial ends on' : (effectiveStatus === 'cancelled' ? 'Ends on' : 'Renews on')}
                 </div>
                 <div className="text-slate-200 font-medium">{formatDate(subscriptionEndDate)}</div>
               </div>
@@ -165,7 +168,7 @@ export function AccountPage() {
               <Loader2 className="w-4 h-4 animate-spin" />
               Loading…
             </div>
-          ) : status === 'active' ? (
+          ) : effectiveStatus === 'active' ? (
             <div>
               {cancelledTrial ? (
                 <>
@@ -197,7 +200,7 @@ export function AccountPage() {
                 </>
               )}
             </div>
-          ) : status === 'cancelled' ? (
+          ) : effectiveStatus === 'cancelled' ? (
             <div>
               <p className="text-slate-400 mb-6 leading-relaxed">
                 Your subscription is cancelled. You'll keep premium access until {formatDate(subscriptionEndDate)}, then revert to the free plan.
