@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { StreakProvider } from './contexts/StreakContext';
 import analytics from './services/analytics';
 
 const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
@@ -83,6 +84,7 @@ function LayoutShell({ children }) {
 export function AppContent() {
   return (
     <AuthProvider>
+      <StreakProvider>
       <RouteTracker />
       <ScrollToTop />
       <LayoutShell>
@@ -103,6 +105,7 @@ export function AppContent() {
           <Route path="/account" element={<AccountPage />} />
         </Routes>
       </LayoutShell>
+      </StreakProvider>
     </AuthProvider>
   );
 }

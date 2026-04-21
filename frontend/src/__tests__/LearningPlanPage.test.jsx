@@ -37,6 +37,10 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: (...args) => mockUseAuth(...args),
 }));
 
+vi.mock('../hooks/useStreak', () => ({
+  useStreak: () => ({ streak: null, loading: false, refresh: vi.fn() }),
+}));
+
 import { LearningPlanPage } from '../pages/LearningPlanPage';
 
 // --- Test data ---
