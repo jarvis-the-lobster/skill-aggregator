@@ -12,8 +12,7 @@ const FEATURES = [
   {
     icon: Brain,
     title: 'Personalized learning plans',
-    description: 'Plans built around your goals, schedule, and pace — not a one-size-fits-all template. (Coming soon.)',
-    soon: true,
+    description: 'Plans built around your goals, schedule, and pace — not a one-size-fits-all template.',
   },
   {
     icon: Rocket,
@@ -153,7 +152,7 @@ export function PremiumPage() {
         </div>
 
         <div className="grid sm:grid-cols-2 gap-6">
-          {FEATURES.map(({ icon: Icon, title, description, soon }) => (
+          {FEATURES.map(({ icon: Icon, title, description }) => (
             <div
               key={title}
               className="group relative bg-dark-card rounded-xl border border-white/[0.08] p-8 transition-all duration-300 hover:-translate-y-1 hover:border-teal/30 hover:shadow-[0_20px_48px_rgba(0,0,0,0.4)]"
@@ -163,11 +162,6 @@ export function PremiumPage() {
               </div>
               <div className="flex items-center gap-2 mb-2">
                 <h3 className="text-lg font-semibold text-slate-100">{title}</h3>
-                {soon && (
-                  <span className="text-[10px] uppercase tracking-wider font-semibold text-teal bg-teal/10 px-2 py-0.5 rounded-full">
-                    Soon
-                  </span>
-                )}
               </div>
               <p className="text-slate-400 leading-relaxed">{description}</p>
             </div>
