@@ -98,8 +98,9 @@ export function LearningPlanPage() {
         Object.entries(selectedReviewContent).filter(([day]) => renderedReviewDaySet.has(Number(day)))
       );
       const hasPendingRenderedReviewDays = displayPlan.some((entry) => entry.content_type === 'review' && !filteredReviewContent[entry.day_number]);
+      const shouldShowPlanFinalizingState = hasPendingRenderedReviewDays && !hasPersonalPlan;
 
-      setPlanReady(hasPendingRenderedReviewDays ? (progressData?.planReady ?? planData.planReady ?? true) : true);
+      setPlanReady(shouldShowPlanFinalizingState ? (planData.planReady ?? true) : true);
       setReviewContent(filteredReviewContent);
 
       // Fetch ratings in parallel with nothing — we have the IDs now, before any setState
@@ -240,9 +241,10 @@ export function LearningPlanPage() {
         const hasPendingRenderedReviewDays = data.plan.some(
           (entry) => entry.content_type === 'review' && !filteredReviewContent[entry.day_number]
         );
+        const shouldShowPlanFinalizingState = hasPendingRenderedReviewDays && !enrolled;
 
         setReviewContent(filteredReviewContent);
-        setPlanReady(hasPendingRenderedReviewDays ? (data.planReady ?? true) : true);
+        setPlanReady(shouldShowPlanFinalizingState ? (data.planReady ?? true) : true);
 
         // Re-fetch ratings for any new content IDs
         const ids = data.plan.map(e => e.content_id).filter(Boolean);
