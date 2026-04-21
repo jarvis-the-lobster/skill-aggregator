@@ -585,7 +585,13 @@ export function LearningPlanPage() {
                 </button>
                 {enrollError && (
                   <p className="mt-4 text-sm leading-6 text-amber-300">
-                    {enrollError}
+                    {enrollError.includes('Free accounts are limited to 1 active learning plan at a time') ? (
+                      <>
+                        Free accounts support one active learning plan at a time.{' '}
+                        <a href="/premium" className="underline hover:text-amber-200">Upgrade to Premium</a>{' '}
+                        for unlimited simultaneous plans, or complete your current one first.
+                      </>
+                    ) : enrollError}
                   </p>
                 )}
               </>

@@ -296,7 +296,8 @@ describe('LearningPlanPage', () => {
         expect(mockEnrollLearningPlan).toHaveBeenCalledWith('python');
       });
 
-      expect(await screen.findByText(/Free accounts are limited to 1 active learning plan at a time/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Free accounts support one active learning plan at a time/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /upgrade to premium/i })).toHaveAttribute('href', '/premium');
       expect(screen.getByRole('button', { name: /enroll free/i })).toBeInTheDocument();
     });
   });
