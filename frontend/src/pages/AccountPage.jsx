@@ -45,7 +45,7 @@ function StatusBadge({ status }) {
 
 export function AccountPage() {
   const { user, loading: authLoading } = useAuth();
-  const { status, subscriptionEndDate, loading: subLoading, refresh } = useSubscription();
+  const { status, subscriptionEndDate, cancelAtPeriodEnd, isTrialing, loading: subLoading, refresh } = useSubscription();
   const [showConfirm, setShowConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -108,6 +108,8 @@ export function AccountPage() {
     }
   }
 
+  const cancelledTrial = status === 'active' && isTrialing && cancelAtPeriodEnd;
+
   return (
     <div className="min-h-screen bg-dark-bg">
       <Helmet>
@@ -143,7 +145,7 @@ export function AccountPage() {
               <h2 className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-2">Subscription</h2>
               <div className="flex items-center gap-3">
                 <span className="text-2xl font-bold text-slate-100">
-                  {status === 'active' || status === 'cancelled' ? 'Premium' : 'Free'}
+                  {cancelledTrial ? 'Premium Trial' : (status === 'active' || status === 'cancelled' ? 'Premium' : 'Free')}
                 </span>
                 <StatusBadge status={status} />
               </div>
@@ -151,7 +153,7 @@ export function AccountPage() {
             {(status === 'active' || status === 'cancelled') && (
               <div className="text-right">
                 <div className="text-xs text-slate-500 mb-1">
-                  {status === 'cancelled' ? 'Ends on' : 'Renews on'}
+                  {cancelledTrial ? 'Trial ends on' : (status === 'cancelled' ? 'Ends on' : 'Renews on')}
                 </div>
                 <div className="text-slate-200 font-medium">{formatDate(subscriptionEndDate)}</div>
               </div>
@@ -165,16 +167,35 @@ export function AccountPage() {
             </div>
           ) : status === 'active' ? (
             <div>
-              <p className="text-slate-400 mb-6 leading-relaxed">
-                You have full access to all premium features. Cancel anytime — you'll keep access until the end of your billing period.
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowConfirm(true)}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] px-6 py-3 text-sm font-medium text-slate-200 transition-all duration-200 hover:border-red-500/30 hover:text-red-300 hover:bg-red-500/[0.05]"
-              >
-                Cancel subscription
-              </button>
+              {cancelledTrial ? (
+                <>
+                  <p className="text-slate-400 mb-6 leading-relaxed">
+                    Your Premium trial is active until {formatDate(subscriptionEndDate)}, and it will end automatically on that date. You will not be charged unless you reactivate before the trial ends.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={startCheckout}
+                    disabled={checkoutLoading}
+                    className="inline-flex items-center gap-2 rounded-xl bg-teal px-6 py-3 text-sm font-semibold text-dark-bg transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Resume Premium after trial
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400 mb-6 leading-relaxed">
+                    You have full access to all premium features. Cancel anytime, you'll keep access until the end of your billing period.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] px-6 py-3 text-sm font-medium text-slate-200 transition-all duration-200 hover:border-red-500/30 hover:text-red-300 hover:bg-red-500/[0.05]"
+                  >
+                    Cancel subscription
+                  </button>
+                </>
+              )}
             </div>
           ) : status === 'cancelled' ? (
             <div>

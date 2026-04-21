@@ -272,6 +272,13 @@ describe('GET /api/billing/status', () => {
       endDate: futureDate,
     });
 
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_trial',
+      status: 'trialing',
+      cancel_at_period_end: false,
+      current_period_end: Math.floor(Date.now() / 1000) + 7 * 86400,
+    });
+
     const token = await loginAs('trial@example.com');
     const res = await request(app)
       .get('/api/billing/status')
@@ -280,6 +287,8 @@ describe('GET /api/billing/status', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('active');
     expect(res.body.isPremium).toBe(true);
+    expect(res.body.isTrialing).toBe(true);
+    expect(res.body.cancelAtPeriodEnd).toBe(false);
   });
 
   test('post-trial user (cancelled, end date in past) shows isPremium false', async () => {
@@ -310,6 +319,13 @@ describe('GET /api/billing/status', () => {
       endDate: futureDate,
     });
 
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_cancelledfuture',
+      status: 'canceled',
+      cancel_at_period_end: false,
+      current_period_end: Math.floor(Date.now() / 1000) + 7 * 86400,
+    });
+
     const token = await loginAs('cancelledfuture@example.com');
     const res = await request(app)
       .get('/api/billing/status')
@@ -319,5 +335,34 @@ describe('GET /api/billing/status', () => {
     expect(res.body.status).toBe('cancelled');
     // Backend isPremium is false for cancelled; frontend useSubscription adds the date check
     expect(res.body.isPremium).toBe(false);
+    expect(res.body.isTrialing).toBe(false);
+  });
+
+  test('cancelled trial user exposes cancel-at-period-end and trialing flags for clearer account messaging', async () => {
+    const futureDate = new Date(Date.now() + 5 * 86400 * 1000).toISOString();
+    await createUserWithSubscription({
+      email: 'trialcancelled@example.com',
+      status: 'active',
+      subscriptionId: 'sub_trial_cancelled',
+      endDate: futureDate,
+    });
+
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_trial_cancelled',
+      status: 'trialing',
+      cancel_at_period_end: true,
+      current_period_end: Math.floor(Date.now() / 1000) + 5 * 86400,
+    });
+
+    const token = await loginAs('trialcancelled@example.com');
+    const res = await request(app)
+      .get('/api/billing/status')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('active');
+    expect(res.body.isPremium).toBe(true);
+    expect(res.body.isTrialing).toBe(true);
+    expect(res.body.cancelAtPeriodEnd).toBe(true);
   });
 });
