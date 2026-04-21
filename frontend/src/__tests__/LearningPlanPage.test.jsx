@@ -266,6 +266,39 @@ describe('LearningPlanPage', () => {
       expect(await screen.findByText('Shared Resource 1')).toBeInTheDocument();
       expect(screen.queryByText('My Resource 1')).not.toBeInTheDocument();
     });
+
+    it('shows a helpful error when a free user hits the active plan limit while enrolling', async () => {
+      mockGetLearningPlan.mockResolvedValue({ plan: SHARED_PLAN, planReady: true, reviewContent: {} });
+      mockGetPlanProgress.mockResolvedValue({
+        enrolled: false,
+        progress: null,
+        plan: null,
+        refreshAvailable: false,
+        planReady: true,
+        reviewContent: {},
+      });
+      mockEnrollLearningPlan.mockRejectedValue({
+        response: {
+          data: {
+            error: 'Free accounts are limited to 1 active learning plan at a time. Complete your current plan or upgrade to Premium for unlimited plans.',
+            code: 'FREE_PLAN_LIMIT_REACHED',
+          },
+        },
+      });
+
+      renderPlanPage();
+
+      const user = userEvent.setup();
+      const enrollButton = await screen.findByRole('button', { name: /enroll free/i });
+      await user.click(enrollButton);
+
+      await waitFor(() => {
+        expect(mockEnrollLearningPlan).toHaveBeenCalledWith('python');
+      });
+
+      expect(await screen.findByText(/Free accounts are limited to 1 active learning plan at a time/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /enroll free/i })).toBeInTheDocument();
+    });
   });
 
   describe('refresh banner', () => {
