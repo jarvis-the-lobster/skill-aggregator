@@ -43,6 +43,7 @@ export function LearningPlanPage() {
   const [enrolled, setEnrolled] = useState(false);
   const [completedDays, setCompletedDays] = useState(new Set());
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState('');
   const [refreshAvailable, setRefreshAvailable] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [premiumPending, setPremiumPending] = useState(false);
@@ -177,6 +178,7 @@ export function LearningPlanPage() {
   }, [skillId, user, enrolled, isPremium, authLoading, subscriptionLoading]);
 
   const handleEnroll = async () => {
+    setEnrollError('');
     setEnrolling(true);
     try {
       await apiService.enrollLearningPlan(skillId);
@@ -184,6 +186,11 @@ export function LearningPlanPage() {
       analytics.learningPlanEnrolled(skillId, { skill_name: skillName });
     } catch (err) {
       console.error('Enroll error:', err);
+      setEnrollError(
+        err?.response?.data?.error
+          || err?.message
+          || 'We could not enroll you in this plan right now. Please try again.'
+      );
     } finally {
       setEnrolling(false);
     }
@@ -572,9 +579,22 @@ export function LearningPlanPage() {
                 : 'Create a free account to access all 30 days of curated content.'}
             </p>
             {user ? (
-              <button onClick={handleEnroll} disabled={enrolling} className="btn-primary">
-                {enrolling ? 'Enrolling…' : 'Enroll Free'}
-              </button>
+              <>
+                <button onClick={handleEnroll} disabled={enrolling} className="btn-primary">
+                  {enrolling ? 'Enrolling…' : 'Enroll Free'}
+                </button>
+                {enrollError && (
+                  <p className="mt-4 text-sm leading-6 text-amber-300">
+                    {enrollError.includes('Free accounts are limited to 1 active learning plan at a time') ? (
+                      <>
+                        Free accounts support one active learning plan at a time.{' '}
+                        <a href="/premium" className="underline hover:text-amber-200">Upgrade to Premium</a>{' '}
+                        for unlimited simultaneous plans, or complete your current one first.
+                      </>
+                    ) : enrollError}
+                  </p>
+                )}
+              </>
             ) : (
               <Link to="/signup" className="btn-primary">
                 Get Started Free
