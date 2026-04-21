@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { RatingButtons } from '../components/RatingButtons';
 import analytics from '../services/analytics';
+import { STREAK_REFRESH_EVENT } from '../hooks/useStreak';
 
 const FREE_DAYS = 7;
 
@@ -192,6 +193,7 @@ export function LearningPlanPage() {
       const data = await apiService.completePlanDay(skillId, day);
       const days = JSON.parse(data.progress?.completed_days || '[]');
       setCompletedDays(new Set(days));
+      window.dispatchEvent(new CustomEvent(STREAK_REFRESH_EVENT));
       analytics.track('plan_day_completed', { skillId, day, totalCompleted: days.length });
     } catch (err) {
       console.error('Complete day error:', err);
