@@ -1,4 +1,8 @@
 const db = require('../models/database');
+const { hasPremiumAccess } = require('../utils/subscriptionAccess');
+
+const FREEZE_RECHARGE_DAYS_FREE = 7;
+const FREEZE_RECHARGE_DAYS_PREMIUM = 2; // 48 hours
 
 function todayStr() {
   // Use Pacific time for streak date boundaries so users on the US West Coast
@@ -40,10 +44,15 @@ const streakService = {
     let streak = await this.ensureRow(userId);
     const today = todayStr();
 
+    // Look up subscription to determine recharge period
+    const userRows = await db.query('SELECT subscription_status FROM users WHERE id = ?', [userId]);
+    const isPremium = userRows[0] && hasPremiumAccess(userRows[0].subscription_status);
+    const rechargeDays = isPremium ? FREEZE_RECHARGE_DAYS_PREMIUM : FREEZE_RECHARGE_DAYS_FREE;
+
     // --- Check freeze recharge ---
     if (streak.freeze_available === 0 && streak.freeze_last_used_date) {
       const daysSinceFreeze = daysBetween(streak.freeze_last_used_date, today);
-      if (daysSinceFreeze >= 7) {
+      if (daysSinceFreeze >= rechargeDays) {
         await db.insert(
           `UPDATE user_streaks SET freeze_available = 1, freeze_last_recharged_date = ?, updated_at = ? WHERE user_id = ?`,
           [today, new Date().toISOString(), userId]
@@ -146,7 +155,7 @@ const streakService = {
     // Freeze recharge countdown
     let freezeRechargesIn = null;
     if (streak.freeze_available === 0 && streak.freeze_last_used_date) {
-      const daysLeft = 7 - daysBetween(streak.freeze_last_used_date, today);
+      const daysLeft = rechargeDays - daysBetween(streak.freeze_last_used_date, today);
       freezeRechargesIn = Math.max(0, daysLeft);
     }
 
