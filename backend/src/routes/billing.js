@@ -27,6 +27,63 @@ function mapSubscriptionStatus(stripeStatus) {
   }
 }
 
+/**
+ * Fetch live Stripe subscription state for a user who has a subscription_id,
+ * derive canonical status, and repair the DB if it has drifted.
+ * Returns reconciled billing fields.
+ */
+async function reconcileSubscription(user) {
+  const result = {
+    status: user?.subscription_status || 'free',
+    isPremium: user?.subscription_status === 'active',
+    subscriptionEndDate: user?.subscription_end_date || null,
+    subscriptionId: user?.subscription_id || null,
+    cancelAtPeriodEnd: false,
+    isTrialing: false,
+  };
+
+  if (!user?.subscription_id || !stripeService.isConfigured()) {
+    return result;
+  }
+
+  let sub;
+  try {
+    sub = await stripeService.retrieveSubscription(user.subscription_id);
+  } catch (err) {
+    console.warn('reconcileSubscription: Stripe lookup failed:', err.message);
+    return result;
+  }
+
+  if (!sub) return result;
+
+  const stripeStatus = mapSubscriptionStatus(sub.status);
+  const stripeEndDate = toIsoOrNull(sub.current_period_end);
+
+  result.status = stripeStatus;
+  result.isPremium = stripeStatus === 'active';
+  result.subscriptionEndDate = stripeEndDate;
+  result.cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end);
+  result.isTrialing = sub.status === 'trialing';
+
+  // Repair DB if state has drifted from Stripe
+  if (
+    user.subscription_status !== stripeStatus ||
+    user.subscription_end_date !== stripeEndDate
+  ) {
+    try {
+      await db.updateUserSubscription(user.id, {
+        subscription_status: stripeStatus,
+        subscription_id: sub.id,
+        subscription_end_date: stripeEndDate,
+      });
+    } catch (err) {
+      console.error('reconcileSubscription: DB repair failed:', err.message);
+    }
+  }
+
+  return result;
+}
+
 router.post('/create-checkout-session', requireAuth, async (req, res) => {
   try {
     if (!stripeService.isConfigured()) {
@@ -82,28 +139,8 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
 
 router.get('/status', requireAuth, async (req, res) => {
   const user = await db.getUserById(req.user.id);
-
-  let cancelAtPeriodEnd = false;
-  let isTrialing = false;
-
-  if (user?.subscription_id && stripeService.isConfigured()) {
-    try {
-      const sub = await stripeService.retrieveSubscription(user.subscription_id);
-      cancelAtPeriodEnd = Boolean(sub?.cancel_at_period_end);
-      isTrialing = sub?.status === 'trialing';
-    } catch (err) {
-      console.warn('billing status subscription lookup failed:', err.message);
-    }
-  }
-
-  res.json({
-    status: user?.subscription_status || 'free',
-    isPremium: user?.subscription_status === 'active',
-    subscriptionEndDate: user?.subscription_end_date || null,
-    subscriptionId: user?.subscription_id || null,
-    cancelAtPeriodEnd,
-    isTrialing,
-  });
+  const billing = await reconcileSubscription(user);
+  res.json(billing);
 });
 
 router.post('/cancel', requireAuth, async (req, res) => {
@@ -235,4 +272,4 @@ const webhookHandler = async (req, res) => {
   }
 };
 
-module.exports = { router, webhookHandler };
+module.exports = { router, webhookHandler, reconcileSubscription };

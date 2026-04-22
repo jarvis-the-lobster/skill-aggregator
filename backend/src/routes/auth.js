@@ -6,6 +6,7 @@ const { requireAuth } = require('../middleware/auth');
 const analytics = require('../services/analyticsService');
 
 const { authLimiter } = require('../middleware/rateLimit');
+const { reconcileSubscription } = require('./billing');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -59,8 +60,16 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user });
+router.get('/me', requireAuth, async (req, res) => {
+  const user = req.user;
+  if (user.subscription_id) {
+    const billing = await reconcileSubscription(user);
+    if (billing.status !== user.subscription_status || billing.subscriptionEndDate !== user.subscription_end_date) {
+      user.subscription_status = billing.status;
+      user.subscription_end_date = billing.subscriptionEndDate;
+    }
+  }
+  res.json({ user });
 });
 
 // POST /api/auth/logout
