@@ -8,6 +8,7 @@ jest.mock('../services/stripeService', () => ({
   retrieveCustomer: jest.fn(),
   getOrCreateCustomer: jest.fn(),
   createCheckoutSession: jest.fn(),
+  listCustomerSubscriptions: jest.fn(),
   cancelSubscriptionAtPeriodEnd: jest.fn(),
 }));
 
@@ -483,6 +484,123 @@ describe('GET /api/billing/status', () => {
     // Falls back to DB state
     expect(res.body.status).toBe('active');
     expect(res.body.isPremium).toBe(true);
+  });
+});
+
+// ─── Duplicate subscription prevention ────────────────────────────────────
+
+describe('POST /api/billing/create-checkout-session (duplicate prevention)', () => {
+  test('blocks checkout when customer has an active subscription in Stripe', async () => {
+    const user = await createUserWithSubscription({ email: 'dup-active@example.com', status: 'free' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_dup_active', user.id]);
+
+    stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_dup_active' });
+    stripeService.listCustomerSubscriptions.mockResolvedValue([
+      { id: 'sub_existing_active', status: 'active' },
+    ]);
+
+    const token = await loginAs('dup-active@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('existing_subscription');
+    expect(res.body.existingStatus).toBe('active');
+    expect(stripeService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  test('blocks checkout when customer has a trialing subscription in Stripe', async () => {
+    const user = await createUserWithSubscription({ email: 'dup-trial@example.com', status: 'free' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_dup_trial', user.id]);
+
+    stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_dup_trial' });
+    stripeService.listCustomerSubscriptions.mockResolvedValue([
+      { id: 'sub_existing_trial', status: 'trialing' },
+    ]);
+
+    const token = await loginAs('dup-trial@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('existing_subscription');
+    expect(res.body.existingStatus).toBe('trialing');
+    expect(stripeService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  test('blocks checkout when customer has a past_due subscription in Stripe', async () => {
+    const user = await createUserWithSubscription({ email: 'dup-pastdue@example.com', status: 'free' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_dup_pd', user.id]);
+
+    stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_dup_pd' });
+    stripeService.listCustomerSubscriptions.mockResolvedValue([
+      { id: 'sub_existing_pd', status: 'past_due' },
+    ]);
+
+    const token = await loginAs('dup-pastdue@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('existing_subscription');
+    expect(res.body.existingStatus).toBe('past_due');
+    expect(res.body.message).toMatch(/payment issue/);
+    expect(stripeService.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  test('allows checkout when customer has only canceled subscriptions in Stripe', async () => {
+    const user = await createUserWithSubscription({ email: 'dup-cancelled@example.com', status: 'cancelled' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_dup_can', user.id]);
+
+    stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_dup_can' });
+    stripeService.listCustomerSubscriptions.mockResolvedValue([]);
+    stripeService.createCheckoutSession.mockResolvedValue({ url: 'https://checkout.stripe.com/test', id: 'cs_test' });
+
+    const token = await loginAs('dup-cancelled@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toBeTruthy();
+    expect(stripeService.createCheckoutSession).toHaveBeenCalled();
+  });
+
+  test('allows checkout when customer has no subscriptions in Stripe', async () => {
+    const user = await createUserWithSubscription({ email: 'dup-none@example.com', status: 'free' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_dup_none', user.id]);
+
+    stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_dup_none' });
+    stripeService.listCustomerSubscriptions.mockResolvedValue([]);
+    stripeService.createCheckoutSession.mockResolvedValue({ url: 'https://checkout.stripe.com/test', id: 'cs_test' });
+
+    const token = await loginAs('dup-none@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toBeTruthy();
+    expect(stripeService.createCheckoutSession).toHaveBeenCalled();
+  });
+
+  test('allows checkout for new customer with no stripe_customer_id', async () => {
+    await createUserWithSubscription({ email: 'dup-new@example.com', status: 'free' });
+
+    stripeService.getOrCreateCustomer.mockResolvedValue('cus_brand_new');
+    stripeService.listCustomerSubscriptions.mockResolvedValue([]);
+    stripeService.createCheckoutSession.mockResolvedValue({ url: 'https://checkout.stripe.com/test', id: 'cs_test' });
+
+    const token = await loginAs('dup-new@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toBeTruthy();
   });
 });
 

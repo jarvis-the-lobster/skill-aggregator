@@ -115,6 +115,30 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
       await db.setStripeCustomerId(user.id, customerId);
     }
 
+    // Prevent duplicate subscriptions: check if this customer already has one
+    // that would conflict. Active/trialing are clearly working subs. Past_due
+    // means a sub exists but payment failed — the fix is to update the payment
+    // method on the existing sub, not to create a second one.
+    const BLOCKING_STATUSES = ['active', 'trialing', 'past_due'];
+    const existingSubs = await stripeService.listCustomerSubscriptions(customerId, {
+      statuses: BLOCKING_STATUSES,
+    });
+    if (existingSubs.length > 0) {
+      const existing = existingSubs[0];
+      console.warn(
+        `Blocked duplicate checkout for user ${user.id}: existing subscription ${existing.id} (${existing.status})`
+      );
+      return res.status(409).json({
+        error: 'existing_subscription',
+        existingStatus: existing.status,
+        subscriptionId: existing.id,
+        message:
+          existing.status === 'past_due'
+            ? 'You have a subscription with a payment issue. Please resolve it instead of creating a new one.'
+            : 'You already have an active subscription.',
+      });
+    }
+
     analytics.trackCheckoutSessionRequested?.({
       userId: user.id,
       source: 'billing_route',

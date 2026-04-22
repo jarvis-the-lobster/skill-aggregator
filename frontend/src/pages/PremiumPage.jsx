@@ -60,6 +60,11 @@ export function PremiumPage() {
         },
       });
       const data = await res.json();
+      if (res.status === 409 && data.error === 'existing_subscription') {
+        setError(data.message || 'You already have an active subscription.');
+        setLoading(false);
+        return;
+      }
       if (!res.ok || !data.url) {
         throw new Error(data.error || 'Unable to start checkout');
       }

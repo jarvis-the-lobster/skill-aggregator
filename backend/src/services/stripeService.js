@@ -47,6 +47,17 @@ async function retrieveSubscription(subscriptionId) {
   return stripe.subscriptions.retrieve(subscriptionId);
 }
 
+async function listCustomerSubscriptions(customerId, { statuses } = {}) {
+  assertConfigured();
+  const params = { customer: customerId, limit: 10 };
+  if (statuses) params.status = statuses.length === 1 ? statuses[0] : 'all';
+  const result = await stripe.subscriptions.list(params);
+  if (statuses && statuses.length > 1) {
+    return result.data.filter(sub => statuses.includes(sub.status));
+  }
+  return result.data;
+}
+
 async function cancelSubscriptionAtPeriodEnd(subscriptionId) {
   assertConfigured();
   return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
@@ -68,6 +79,7 @@ function isConfigured() {
 module.exports = {
   getOrCreateCustomer,
   createCheckoutSession,
+  listCustomerSubscriptions,
   retrieveCustomer,
   retrieveSubscription,
   cancelSubscriptionAtPeriodEnd,
