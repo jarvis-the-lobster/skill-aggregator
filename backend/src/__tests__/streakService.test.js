@@ -115,7 +115,7 @@ describe('getStreak', () => {
     expect(result.currentStreak).toBe(0);
   });
 
-  test('recharges freeze after 7 days', async () => {
+  test('recharges freeze after 7 days for free users', async () => {
     setToday('2024-01-15');
     await streakService.recordActivity(USER_ID);
     setToday('2024-01-16');
@@ -131,6 +131,107 @@ describe('getStreak', () => {
     setToday('2024-01-17');
     const result = await streakService.getStreak(USER_ID);
     expect(result.freezeAvailable).toBe(1);
+  });
+
+  test('does not recharge freeze before 7 days for free users', async () => {
+    setToday('2024-01-15');
+    await streakService.recordActivity(USER_ID);
+    setToday('2024-01-16');
+    await streakService.recordActivity(USER_ID);
+
+    // Use freeze on Jan 12 — by Jan 17 only 5 days have passed (< 7)
+    await db.insert(
+      "UPDATE user_streaks SET freeze_available = 0, freeze_last_used_date = '2024-01-12' WHERE user_id = ?",
+      [USER_ID]
+    );
+
+    setToday('2024-01-17');
+    const result = await streakService.getStreak(USER_ID);
+    expect(result.freezeAvailable).toBe(0);
+    expect(result.freezeRechargesIn).toBe(2); // 7 - 5 = 2 days left
+  });
+
+  test('recharges freeze after 2 days for premium users', async () => {
+    // Make user premium
+    await db.insert(
+      "UPDATE users SET subscription_status = 'active' WHERE id = ?",
+      [USER_ID]
+    );
+
+    setToday('2024-01-15');
+    await streakService.recordActivity(USER_ID);
+    setToday('2024-01-16');
+    await streakService.recordActivity(USER_ID);
+
+    // Use freeze on Jan 14 — by Jan 17 it will be 3 days (>= 2), triggering recharge
+    await db.insert(
+      "UPDATE user_streaks SET freeze_available = 0, freeze_last_used_date = '2024-01-14' WHERE user_id = ?",
+      [USER_ID]
+    );
+
+    setToday('2024-01-17');
+    const result = await streakService.getStreak(USER_ID);
+    expect(result.freezeAvailable).toBe(1);
+  });
+
+  test('does not recharge freeze before 2 days for premium users', async () => {
+    // Make user premium
+    await db.insert(
+      "UPDATE users SET subscription_status = 'active' WHERE id = ?",
+      [USER_ID]
+    );
+
+    setToday('2024-01-15');
+    await streakService.recordActivity(USER_ID);
+    setToday('2024-01-16');
+    await streakService.recordActivity(USER_ID);
+
+    // Use freeze on Jan 16 — by Jan 17 only 1 day has passed (< 2)
+    await db.insert(
+      "UPDATE user_streaks SET freeze_available = 0, freeze_last_used_date = '2024-01-16' WHERE user_id = ?",
+      [USER_ID]
+    );
+
+    setToday('2024-01-17');
+    const result = await streakService.getStreak(USER_ID);
+    expect(result.freezeAvailable).toBe(0);
+    expect(result.freezeRechargesIn).toBe(1); // 2 - 1 = 1 day left
+  });
+
+  test('premium countdown shows fewer days than free countdown', async () => {
+    // Both users have freeze used on same date
+    const PREMIUM_USER_ID = 2;
+    await db.insert(
+      "INSERT INTO users (id, email, password_hash, subscription_status) VALUES (?, 'premium@test.com', 'hash', 'active')",
+      [PREMIUM_USER_ID]
+    );
+
+    setToday('2024-01-15');
+    await streakService.recordActivity(USER_ID);
+    await streakService.recordActivity(PREMIUM_USER_ID);
+    setToday('2024-01-16');
+    await streakService.recordActivity(USER_ID);
+    await streakService.recordActivity(PREMIUM_USER_ID);
+
+    // Both used freeze on Jan 15
+    await db.insert(
+      "UPDATE user_streaks SET freeze_available = 0, freeze_last_used_date = '2024-01-15' WHERE user_id = ?",
+      [USER_ID]
+    );
+    await db.insert(
+      "UPDATE user_streaks SET freeze_available = 0, freeze_last_used_date = '2024-01-15' WHERE user_id = ?",
+      [PREMIUM_USER_ID]
+    );
+
+    setToday('2024-01-17');
+    const freeResult = await streakService.getStreak(USER_ID);
+    const premiumResult = await streakService.getStreak(PREMIUM_USER_ID);
+
+    // Free: 7 - 2 = 5 days left; Premium: already recharged (2 days passed)
+    expect(freeResult.freezeAvailable).toBe(0);
+    expect(freeResult.freezeRechargesIn).toBe(5);
+    expect(premiumResult.freezeAvailable).toBe(1);
+    expect(premiumResult.freezeRechargesIn).toBeNull();
   });
 });
 
