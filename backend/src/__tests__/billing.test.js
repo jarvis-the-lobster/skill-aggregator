@@ -300,6 +300,13 @@ describe('GET /api/billing/status', () => {
       endDate: pastDate,
     });
 
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_expired',
+      status: 'canceled',
+      cancel_at_period_end: false,
+      current_period_end: Math.floor(Date.now() / 1000) - 86400,
+    });
+
     const token = await loginAs('posttrial@example.com');
     const res = await request(app)
       .get('/api/billing/status')
@@ -364,5 +371,164 @@ describe('GET /api/billing/status', () => {
     expect(res.body.isPremium).toBe(true);
     expect(res.body.isTrialing).toBe(true);
     expect(res.body.cancelAtPeriodEnd).toBe(true);
+  });
+
+  test('drift: DB says cancelled but Stripe says active → reconciles to active and repairs DB', async () => {
+    const futureEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
+    const user = await createUserWithSubscription({
+      email: 'drift-active@example.com',
+      status: 'cancelled',
+      subscriptionId: 'sub_drift_active',
+      endDate: new Date(Date.now() - 86400 * 1000).toISOString(), // stale past date in DB
+    });
+
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_drift_active',
+      status: 'active',
+      cancel_at_period_end: false,
+      current_period_end: futureEnd,
+    });
+
+    const token = await loginAs('drift-active@example.com');
+    const res = await request(app)
+      .get('/api/billing/status')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('active');
+    expect(res.body.isPremium).toBe(true);
+
+    // Verify DB was repaired
+    const updated = await db.getUserById(user.id);
+    expect(updated.subscription_status).toBe('active');
+    expect(updated.subscription_end_date).toBe(new Date(futureEnd * 1000).toISOString());
+  });
+
+  test('drift: DB says active but Stripe says canceled → reconciles to cancelled and repairs DB', async () => {
+    const pastEnd = Math.floor(Date.now() / 1000) - 86400;
+    const user = await createUserWithSubscription({
+      email: 'drift-cancelled@example.com',
+      status: 'active',
+      subscriptionId: 'sub_drift_cancelled',
+      endDate: new Date(Date.now() + 30 * 86400 * 1000).toISOString(), // stale future date in DB
+    });
+
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_drift_cancelled',
+      status: 'canceled',
+      cancel_at_period_end: false,
+      current_period_end: pastEnd,
+    });
+
+    const token = await loginAs('drift-cancelled@example.com');
+    const res = await request(app)
+      .get('/api/billing/status')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('cancelled');
+    expect(res.body.isPremium).toBe(false);
+
+    // Verify DB was repaired
+    const updated = await db.getUserById(user.id);
+    expect(updated.subscription_status).toBe('cancelled');
+  });
+
+  test('drift: DB says free but Stripe says trialing → reconciles to active and repairs DB', async () => {
+    const futureEnd = Math.floor(Date.now() / 1000) + 7 * 86400;
+    const user = await createUserWithSubscription({
+      email: 'drift-trialing@example.com',
+      status: 'free',
+      subscriptionId: 'sub_drift_trialing',
+    });
+
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_drift_trialing',
+      status: 'trialing',
+      cancel_at_period_end: false,
+      current_period_end: futureEnd,
+    });
+
+    const token = await loginAs('drift-trialing@example.com');
+    const res = await request(app)
+      .get('/api/billing/status')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('active');
+    expect(res.body.isPremium).toBe(true);
+    expect(res.body.isTrialing).toBe(true);
+
+    // Verify DB was repaired
+    const updated = await db.getUserById(user.id);
+    expect(updated.subscription_status).toBe('active');
+  });
+
+  test('Stripe lookup failure falls back to DB state gracefully', async () => {
+    await createUserWithSubscription({
+      email: 'stripe-fail@example.com',
+      status: 'active',
+      subscriptionId: 'sub_fail',
+      endDate: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
+    });
+
+    stripeService.retrieveSubscription.mockRejectedValue(new Error('Stripe is down'));
+
+    const token = await loginAs('stripe-fail@example.com');
+    const res = await request(app)
+      .get('/api/billing/status')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    // Falls back to DB state
+    expect(res.body.status).toBe('active');
+    expect(res.body.isPremium).toBe(true);
+  });
+});
+
+// ─── Auth /me reconciliation ──────────────────────────────────────────────
+
+describe('GET /api/auth/me (subscription reconciliation)', () => {
+  test('drift: DB says cancelled but Stripe says active → /me returns reconciled status', async () => {
+    const futureEnd = Math.floor(Date.now() / 1000) + 30 * 86400;
+    await createUserWithSubscription({
+      email: 'me-drift@example.com',
+      status: 'cancelled',
+      subscriptionId: 'sub_me_drift',
+      endDate: new Date(Date.now() - 86400 * 1000).toISOString(),
+    });
+
+    stripeService.retrieveSubscription.mockResolvedValue({
+      id: 'sub_me_drift',
+      status: 'active',
+      cancel_at_period_end: false,
+      current_period_end: futureEnd,
+    });
+
+    const token = await loginAs('me-drift@example.com');
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.subscription_status).toBe('active');
+    expect(res.body.user.subscription_end_date).toBe(new Date(futureEnd * 1000).toISOString());
+  });
+
+  test('free user with no subscription_id skips Stripe lookup', async () => {
+    await createUserWithSubscription({
+      email: 'free-user@example.com',
+      status: 'free',
+    });
+
+    const token = await loginAs('free-user@example.com');
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.subscription_status).toBe('free');
+    // Should not have called Stripe
+    expect(stripeService.retrieveSubscription).not.toHaveBeenCalled();
   });
 });
