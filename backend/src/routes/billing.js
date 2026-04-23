@@ -145,6 +145,8 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
       url: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
     });
 
+    const trialPeriodDays = user.premium_trial_started_at ? 0 : 7;
+
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const session = await stripeService.createCheckoutSession({
       customerId,
@@ -152,9 +154,10 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
       successUrl: `${frontendUrl}/premium/success?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${frontendUrl}/premium`,
       userId: user.id,
+      trialPeriodDays,
     });
 
-    res.json({ url: session.url, sessionId: session.id });
+    res.json({ url: session.url, sessionId: session.id, trialApplied: trialPeriodDays > 0 });
   } catch (err) {
     console.error('create-checkout-session error:', err.message);
     res.status(500).json({ error: 'Failed to create checkout session' });
@@ -201,6 +204,7 @@ async function handleWebhookEvent(event) {
     const customerId = obj.customer;
     const subscriptionId = obj.subscription;
     if (!userId) return;
+    const existingUser = await db.getUserById(Number(userId));
     if (customerId) {
       await db.setStripeCustomerId(Number(userId), customerId);
     }
@@ -211,6 +215,9 @@ async function handleWebhookEvent(event) {
         subscription_id: sub.id,
         subscription_end_date: toIsoOrNull(sub.current_period_end),
       });
+      if (sub.status === 'trialing' && existingUser?.subscription_id !== sub.id) {
+        await db.markPremiumTrialStarted(Number(userId), toIsoOrNull(sub.trial_start) || new Date().toISOString());
+      }
     }
     return;
   }

@@ -96,21 +96,32 @@ export function HomePage() {
 
   const handleSearch = async (query) => {
     if (!query.trim()) return;
+    setError(null);
     analytics.track('search_query_typed', { query: query.trim() });
     try {
       const result = await apiService.searchSkill(query.trim());
-      if (result.status === 'blocked' || result.status === 'rate_limited') {
-        setError(result.message || 'This search is not allowed.');
+      if (result.status === 'blocked') {
+        setError({
+          message: result.message || 'That search looks invalid. Try a skill name instead.',
+          upgrade: false,
+        });
+        return;
+      }
+      if (result.status === 'rate_limited') {
+        setError({
+          message: result.message || 'Free accounts can only create a limited number of brand-new skills. Try an existing skill or upgrade to Premium.',
+          upgrade: true,
+        });
         return;
       }
       if (!result.skill?.id) {
-        setError('Could not find that skill. Try a different search.');
+        setError({ message: 'Could not find that skill. Try a different search.', upgrade: false });
         return;
       }
       navigate(`/skills/${result.skill.id}`);
     } catch (err) {
       console.error('Search error:', err);
-      setError('Search failed. Please try again.');
+      setError({ message: 'Search failed. Please try again.', upgrade: false });
     }
   };
 
@@ -175,7 +186,16 @@ export function HomePage() {
                 skills={skills}
                 placeholder="Search Python, Kubernetes, Design…"
               />
-              {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+              {error && (
+                <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
+                  <p>{error.message}</p>
+                  {error.upgrade && (
+                    <a href="/premium" className="mt-2 inline-block font-medium text-teal hover:text-teal-light">
+                      Upgrade to Premium →
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
 
           </div>

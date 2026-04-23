@@ -34,7 +34,7 @@ describe('AccountPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAuth.mockReturnValue({
-      user: { id: 1, email: 'trial@example.com', name: 'Trial User' },
+      user: { id: 1, email: 'trial@example.com', name: 'Trial User', premium_trial_started_at: null },
       loading: false,
     });
   });
@@ -91,9 +91,30 @@ describe('AccountPage', () => {
 
     expect(screen.getByText('Free')).toBeInTheDocument();
     expect(screen.getByText('Free plan')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /upgrade to premium/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start free 7-day trial/i })).toBeInTheDocument();
     expect(screen.queryByText('Cancels at period end')).not.toBeInTheDocument();
     expect(screen.queryByText(/Your subscription is cancelled\./i)).not.toBeInTheDocument();
     expect(screen.queryByText('Ends on')).not.toBeInTheDocument();
+  });
+
+  it('does not offer another free trial once the account has already used one', () => {
+    mockUseAuth.mockReturnValue({
+      user: { id: 1, email: 'trial@example.com', name: 'Trial User', premium_trial_started_at: '2026-04-01T00:00:00.000Z' },
+      loading: false,
+    });
+    mockUseSubscription.mockReturnValue({
+      status: 'free',
+      subscriptionEndDate: null,
+      cancelAtPeriodEnd: false,
+      isTrialing: false,
+      loading: false,
+      refresh: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText(/already used your free trial/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /upgrade to premium — \$9\/month/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start free 7-day trial/i })).not.toBeInTheDocument();
   });
 });

@@ -72,6 +72,8 @@ const TABLE_SQL = [
     google_id TEXT UNIQUE,
     name TEXT,
     avatar_url TEXT,
+    free_skill_creations_count INTEGER DEFAULT 0,
+    premium_trial_started_at TEXT,
     plan_tier TEXT DEFAULT 'free',
     subscription_status TEXT DEFAULT 'free',
     subscription_id TEXT,
@@ -412,6 +414,22 @@ function createTestDb() {
             `UPDATE users SET subscription_status = ?, subscription_id = ?, subscription_end_date = ? WHERE id = ?`,
             [subscription_status, subscription_id, subscription_end_date, userId]
           );
+        },
+
+        async incrementFreeSkillCreations(userId) {
+          await insert(
+            'UPDATE users SET free_skill_creations_count = COALESCE(free_skill_creations_count, 0) + 1 WHERE id = ?',
+            [userId]
+          );
+          return db.getUserById(userId);
+        },
+
+        async markPremiumTrialStarted(userId, startedAt) {
+          await insert(
+            'UPDATE users SET premium_trial_started_at = COALESCE(premium_trial_started_at, ?) WHERE id = ?',
+            [startedAt, userId]
+          );
+          return db.getUserById(userId);
         },
 
         async setStripeCustomerId(userId, stripeCustomerId) {

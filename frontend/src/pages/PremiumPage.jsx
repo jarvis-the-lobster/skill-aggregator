@@ -37,6 +37,7 @@ export function PremiumPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const hasUsedTrial = Boolean(user?.premium_trial_started_at);
 
   useEffect(() => {
     analytics.premiumPageViewed({ is_premium: isPremium, status });
@@ -127,7 +128,7 @@ export function PremiumPage() {
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5 transition-transform group-hover:rotate-12" />
-                    Upgrade to Premium
+                    {hasUsedTrial ? 'Upgrade to Premium' : 'Start free 7-day trial'}
                   </>
                 )}
               </button>
@@ -138,6 +139,12 @@ export function PremiumPage() {
               <span className="text-slate-400">/month</span>
               <span className="ml-2 text-xs text-slate-500">cancel anytime</span>
             </div>
+
+            {!isPremium && (
+              <p className="text-sm text-slate-400">
+                {hasUsedTrial ? 'Your free trial has already been used on this account.' : 'Includes a 7-day free trial for first-time Premium accounts.'}
+              </p>
+            )}
 
             {status === 'cancelled' && (
               <p className="text-sm text-slate-400">
@@ -182,7 +189,9 @@ export function PremiumPage() {
               Ready to level up?
             </h2>
             <p className="text-lg text-slate-400 mb-12 max-w-lg mx-auto">
-              $9/month. Cancel anytime. Built for people who actually want to follow through.
+              {hasUsedTrial
+                ? '$9/month. Cancel anytime. Built for people who actually want to follow through.'
+                : 'Try Premium free for 7 days, then $9/month. Cancel anytime.'}
             </p>
             <button
               type="button"
@@ -198,7 +207,7 @@ export function PremiumPage() {
               ) : (
                 <>
                   <Sparkles className="w-5 h-5" />
-                  Upgrade to Premium
+                  {hasUsedTrial ? 'Upgrade to Premium' : 'Start free 7-day trial'}
                 </>
               )}
             </button>

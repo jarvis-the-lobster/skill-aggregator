@@ -127,13 +127,14 @@ describe('HomePage', () => {
   });
 
   it('shows error for rate-limited search', async () => {
-    apiService.searchSkill.mockResolvedValue({ skill: null, status: 'rate_limited', message: 'Too many new skill requests.' });
+    apiService.searchSkill.mockResolvedValue({ skill: null, status: 'rate_limited', message: 'Free accounts can only create 5 new skills total. Upgrade to premium to create more.' });
     renderWithRouter(<HomePage />);
     await screen.findByText('Python Programming');
     const searchInput = screen.getByPlaceholderText(/Search Python/);
     const user = userEvent.setup();
     await user.type(searchInput, 'newskill{Enter}');
-    expect(await screen.findByText('Too many new skill requests.')).toBeInTheDocument();
+    expect(await screen.findByText('Free accounts can only create 5 new skills total. Upgrade to premium to create more.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /upgrade to premium/i })).toHaveAttribute('href', '/premium');
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

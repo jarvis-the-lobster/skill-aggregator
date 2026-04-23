@@ -153,6 +153,7 @@ function PremiumPitchScreen({ onSkip }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const hasUsedTrial = Boolean(user?.premium_trial_started_at);
 
   const perks = [
     { icon: <Sparkles className="w-4 h-4 text-teal" />, text: 'Personalized plans built around your goals and schedule' },
@@ -232,11 +233,11 @@ function PremiumPitchScreen({ onSkip }) {
         ) : (
           <>
             <Sparkles className="w-5 h-5" />
-            Start my free 7-day trial
+            {hasUsedTrial ? 'Upgrade to Premium' : 'Start my free 7-day trial'}
           </>
         )}
       </button>
-      <p className="text-xs text-slate-500 mb-6">$9/month after trial · Cancel anytime</p>
+      <p className="text-xs text-slate-500 mb-6">{hasUsedTrial ? '$9/month · Cancel anytime' : '$9/month after trial · Cancel anytime'}</p>
 
       {error && (
         <p className="text-sm text-red-400 mb-6 max-w-xs" role="alert">{error}</p>
