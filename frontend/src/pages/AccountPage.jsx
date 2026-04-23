@@ -118,6 +118,7 @@ export function AccountPage() {
   const cancelledTrial = status === 'active' && isTrialing && cancelAtPeriodEnd;
   const cancelledButStillActive = status === 'cancelled' && hasFutureEndDate;
   const effectiveStatus = cancelledButStillActive ? 'cancelled' : (status === 'cancelled' ? 'free' : status);
+  const hasUsedTrial = Number(user?.premium_trial_starts_count || 0) > 0;
 
   return (
     <div className="min-h-screen bg-dark-bg">
@@ -240,7 +241,9 @@ export function AccountPage() {
           ) : (
             <div>
               <p className="text-slate-400 mb-6 leading-relaxed">
-                You're on the free plan. Upgrade to Premium for personalized plans, unlimited active courses, streak freezes, and more.
+                {hasUsedTrial
+                  ? "You're on the free plan. You've already used your free trial, so the next upgrade starts a regular Premium subscription at $9/month."
+                  : "You're on the free plan. Start your 7-day Premium trial for personalized plans, unlimited active courses, streak freezes, and more."}
               </p>
               <div className="flex flex-wrap items-center gap-4">
                 <button
@@ -250,13 +253,13 @@ export function AccountPage() {
                   className="inline-flex items-center gap-2 rounded-xl bg-teal px-6 py-3 text-sm font-semibold text-dark-bg transition-all duration-200 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-teal-light hover:shadow-[0_8px_24px_rgba(0,191,166,0.35)] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {checkoutLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  Upgrade to Premium — $9/month
+                  {hasUsedTrial ? 'Upgrade to Premium — $9/month' : 'Start free 7-day trial'}
                 </button>
                 <Link
                   to="/premium"
                   className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-100"
                 >
-                  See what's included →
+                  {hasUsedTrial ? "See what's included →" : 'See trial details →'}
                 </Link>
               </div>
             </div>

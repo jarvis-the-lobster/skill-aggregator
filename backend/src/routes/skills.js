@@ -26,7 +26,8 @@ router.get('/', async (req, res) => {
     const skills = await skillsService.getAllSkills();
     res.json({ skills });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error listing skills:', error.message);
+    res.status(500).json({ error: 'Failed to fetch skills' });
   }
 });
 
@@ -39,7 +40,10 @@ router.get('/search', searchLimiter, optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'Query parameter "q" is required' });
     }
     const sanitizedQuery = q.trim().slice(0, 200).replace(/[<>"']/g, '');
-    const result = await skillsService.searchSkill(sanitizedQuery);
+    const result = await skillsService.searchSkill(sanitizedQuery, {
+      user: req.user || null,
+      ip: req.ip,
+    });
     analytics.trackSkillSearched({
       skillId: result.skill?.id,
       skillName: result.skill?.name,
@@ -49,7 +53,8 @@ router.get('/search', searchLimiter, optionalAuth, async (req, res) => {
     });
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error searching skills:', error.message);
+    res.status(500).json({ error: 'Failed to search skills' });
   }
 });
 
@@ -75,7 +80,8 @@ router.get('/:skill', optionalAuth, async (req, res) => {
     }
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(`Error fetching skill content for ${req.params.skill}:`, error.message);
+    res.status(500).json({ error: 'Failed to fetch skill content' });
   }
 });
 
@@ -87,7 +93,8 @@ router.post('/:skill/scrape', async (req, res) => {
     const result = await skillsService.getSkillContent(skill);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(`Error fetching scrape content for ${req.params.skill}:`, error.message);
+    res.status(500).json({ error: 'Failed to fetch skill content' });
   }
 });
 
@@ -98,7 +105,8 @@ router.get('/:skill/stats', async (req, res) => {
     const stats = await skillsService.getSkillStats(skill);
     res.json({ skill, stats });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(`Error fetching stats for ${req.params.skill}:`, error.message);
+    res.status(500).json({ error: 'Failed to fetch skill stats' });
   }
 });
 

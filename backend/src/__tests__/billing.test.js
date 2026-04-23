@@ -108,6 +108,7 @@ describe('POST /api/billing/webhook', () => {
     expect(updated.subscription_status).toBe('active');
     expect(updated.subscription_id).toBe('sub_test123');
     expect(updated.stripe_customer_id).toBe('cus_test123');
+    expect(updated.premium_trial_starts_count).toBe(1);
   });
 
   test('checkout.session.completed: active subscription → sets status to active', async () => {
@@ -259,6 +260,45 @@ describe('POST /api/billing/cancel', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/billing/create-checkout-session', () => {
+  test('applies a trial for first-time premium signup', async () => {
+    const user = await createUserWithSubscription({ email: 'trialstart@example.com', status: 'free' });
+    stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_trialstart' });
+    await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_trialstart', user.id]);
+    stripeService.listCustomerSubscriptions.mockResolvedValue([]);
+    stripeService.createCheckoutSession.mockResolvedValue({ id: 'cs_trial_1', url: 'https://stripe.test/trial-1' });
+
+    const token = await loginAs('trialstart@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.trialApplied).toBe(true);
+    expect(stripeService.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({ trialPeriodDays: 7 }));
+  });
+
+  test('does not apply a trial after a prior premium trial start', async () => {
+    const user = await createUserWithSubscription({ email: 'notrial@example.com', status: 'free' });
+    stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_notrial' });
+    await db.insert(
+      'UPDATE users SET stripe_customer_id = ?, premium_trial_starts_count = 1 WHERE id = ?',
+      ['cus_notrial', user.id]
+    );
+    stripeService.listCustomerSubscriptions.mockResolvedValue([]);
+    stripeService.createCheckoutSession.mockResolvedValue({ id: 'cs_live_1', url: 'https://stripe.test/live-1' });
+
+    const token = await loginAs('notrial@example.com');
+    const res = await request(app)
+      .post('/api/billing/create-checkout-session')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.trialApplied).toBe(false);
+    expect(stripeService.createCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({ trialPeriodDays: 0 }));
   });
 });
 

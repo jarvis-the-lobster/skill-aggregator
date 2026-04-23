@@ -4,9 +4,11 @@ const mockDb = {};
 jest.mock('../models/database', () => mockDb);
 jest.mock('../services/scraperService', () => ({
   scrapeSkill: jest.fn().mockResolvedValue({ videos: [], articles: [] }),
+  scrapeArticles: jest.fn().mockResolvedValue([]),
 }));
 
 const skillsService = require('../services/skillsService');
+const scraperService = require('../services/scraperService');
 
 let db;
 
@@ -17,8 +19,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await clearTables(db);
-  // Reset rate limit counter between tests
-  skillsService._newSkillCount = null;
+  skillsService._newSkillCounts = new Map();
 });
 
 afterAll(async () => {
@@ -82,6 +83,12 @@ describe('searchSkill', () => {
     expect(result.message).toBeTruthy();
   });
 
+  test('does not trigger full scrape for search misses', async () => {
+    await skillsService.searchSkill('observability');
+    expect(scraperService.scrapeSkill).not.toHaveBeenCalled();
+    expect(scraperService.scrapeArticles).toHaveBeenCalled();
+  });
+
   test('blocks inappropriate search terms', async () => {
     const result = await skillsService.searchSkill('porn');
     expect(result.status).toBe('blocked');
@@ -93,16 +100,52 @@ describe('searchSkill', () => {
     expect(result.status).toBe('blocked');
   });
 
+  test('blocks obviously suspicious search terms', async () => {
+    const result = await skillsService.searchSkill("python' OR 1=1 --");
+    expect(result.status).toBe('blocked');
+    expect(result.skill).toBeNull();
+  });
+
   test('allows legitimate searches', async () => {
     const result = await skillsService.searchSkill('cocktail mixing');
     expect(result.status).not.toBe('blocked');
   });
 
-  test('rate limits after 10 new skills per 6 hours', async () => {
-    for (let i = 0; i < 10; i++) {
-      await skillsService.searchSkill(`newskill${i}`);
+  test('rate limits free users after 5 new skills total per IP', async () => {
+    for (let i = 0; i < 5; i++) {
+      await skillsService.searchSkill(`newskill${i}`, { ip: '1.2.3.4' });
     }
-    const result = await skillsService.searchSkill('newskill99');
+    const result = await skillsService.searchSkill('newskill99', { ip: '1.2.3.4' });
+    expect(result.status).toBe('rate_limited');
+    expect(result.skill).toBeNull();
+  });
+
+  test('tracks free-user new-skill limits by IP', async () => {
+    for (let i = 0; i < 5; i++) {
+      await skillsService.searchSkill(`infra${i}`, { ip: '5.6.7.8' });
+    }
+
+    const otherIpResult = await skillsService.searchSkill('terraform-cloud', { ip: '8.7.6.5' });
+    expect(['pending', 'scraping']).toContain(otherIpResult.status);
+  });
+
+  test('does not rate limit premium users on new skill creation window', async () => {
+    const premiumUser = { id: 42, subscription_status: 'active' };
+    for (let i = 0; i < 6; i++) {
+      const result = await skillsService.searchSkill(`premiumskill${i}`, { user: premiumUser, ip: '9.9.9.9' });
+      expect(['pending', 'scraping']).toContain(result.status);
+    }
+  });
+
+  test('uses persistent user free-skill count for logged-in free users', async () => {
+    const user = await db.createUser({ email: 'freeuser@example.com', password_hash: 'hash', name: 'Free User' });
+    await db.insert('UPDATE users SET free_skill_creations_count = 5 WHERE id = ?', [user.id]);
+
+    const result = await skillsService.searchSkill('vector-database', {
+      user: { id: user.id, subscription_status: 'free' },
+      ip: '10.0.0.1',
+    });
+
     expect(result.status).toBe('rate_limited');
     expect(result.skill).toBeNull();
   });

@@ -31,6 +31,9 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
 
+// Global rate limit on /api
+app.use('/api', apiLimiter);
+
 // Routes
 const skillRoutes = require('./routes/skills');
 const authRoutes = require('./routes/auth');
@@ -56,9 +59,6 @@ app.use('/api/push', pushRoutes);
 app.use('/api/onboarding', onboardingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/billing', billingRoutes);
-
-// Global rate limit on /api (applied after specific route limiters)
-app.use('/api', apiLimiter);
 
 // Sitemap
 const sitemapDb = require('./models/database');

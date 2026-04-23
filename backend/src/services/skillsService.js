@@ -585,6 +585,10 @@ function mapSkillRow(row) {
 }
 
 class SkillsService {
+  constructor() {
+    this._newSkillCounts = new Map();
+  }
+
   // Block inappropriate/NSFW search terms
   // Uses word boundary matching to avoid false positives (e.g. "cocktail", "assassination")
   BLOCKED_PATTERNS = [
@@ -594,6 +598,20 @@ class SkillsService {
     /\bcocaine\b/, /\bheroin\b/, /\bmeth\b/,
     /\bddos\b/, /\bphishing\b/,
     /\bmurder\b/, /\bsuicide method/, /\bbomb making/,
+  ];
+
+  SUSPICIOUS_SEARCH_PATTERNS = [
+    /=/,
+    /--/,
+    /\/\*/,
+    /\*\//,
+    /\bunion\b/i,
+    /\bselect\b/i,
+    /\bdrop\b/i,
+    /\binsert\b/i,
+    /\bupdate\b/i,
+    /\bdelete\b/i,
+    /\bor\s+1\s*=\s*1\b/i,
   ];
 
   // Seed the 5 MVP skills into DB on startup (idempotent)
@@ -627,10 +645,62 @@ class SkillsService {
   }
 
   // Search for a skill by arbitrary query; creates + scrapes if not found
-  async searchSkill(query) {
+  isSuspiciousSearch(query) {
+    const trimmed = query.trim();
+    if (!trimmed) return false;
+    return this.SUSPICIOUS_SEARCH_PATTERNS.some((pattern) => pattern.test(trimmed));
+  }
+
+  async canCreateNewSkill({ user = null, ip = 'anonymous' } = {}) {
+    if (user?.subscription_status === 'active') {
+      return { allowed: true };
+    }
+
+    const MAX_NEW_SKILLS = 5;
+    if (user?.id) {
+      const freshUser = await db.getUserById(user.id);
+      const count = Number(freshUser?.free_skill_creations_count || 0);
+      if (count >= MAX_NEW_SKILLS) {
+        return {
+          allowed: false,
+          remaining: 0,
+          message: 'Free accounts can only create 5 new skills total. Upgrade to premium to create more.',
+        };
+      }
+
+      await db.incrementFreeSkillCreations(user.id);
+      return {
+        allowed: true,
+        remaining: Math.max(0, MAX_NEW_SKILLS - (count + 1)),
+      };
+    }
+
+    const actorKey = `ip:${ip || 'anonymous'}`;
+    const count = this._newSkillCounts.get(actorKey) || 0;
+
+    if (count >= MAX_NEW_SKILLS) {
+      return {
+        allowed: false,
+        remaining: 0,
+        message: 'Free accounts can only create 5 new skills total. Upgrade to premium to create more.',
+      };
+    }
+
+    const nextCount = count + 1;
+    this._newSkillCounts.set(actorKey, nextCount);
+    return {
+      allowed: true,
+      remaining: Math.max(0, MAX_NEW_SKILLS - nextCount),
+    };
+  }
+
+  async searchSkill(query, context = {}) {
     const lowerQuery = query.toLowerCase().trim();
     if (this.BLOCKED_PATTERNS.some(pattern => pattern.test(lowerQuery))) {
       return { skill: null, status: 'blocked', message: 'This search term is not allowed.' };
+    }
+    if (this.isSuspiciousSearch(query)) {
+      return { skill: null, status: 'blocked', message: 'That search looks invalid. Try a skill name instead.' };
     }
 
     const rawId = normalizeSkillId(query);
@@ -647,32 +717,21 @@ class SkillsService {
       return { skill: mapSkillRow(existing), status: existing.status || 'scraping' };
     }
 
-    // Not found — create skill and immediately scrape articles (free, no quota).
-    // YouTube will be filled in by the nightly cron.
-    // Rate limit: max 10 new skills per hour to prevent abuse
-    // Rate limit: 9 new skills per 6 hours
-    // Math: 10k daily quota × 80% = 8k usable. Nightly scrape uses ~3.6k.
-    // Remaining 4.4k / 120 units per skill = 36/day = 9 per 6-hour window.
-    const SIX_HOURS = 6 * 60 * 60 * 1000;
-    const MAX_NEW_SKILLS = 10;
-    if (!this._newSkillCount) this._newSkillCount = { count: 0, resetAt: Date.now() + SIX_HOURS };
-    if (Date.now() > this._newSkillCount.resetAt) {
-      this._newSkillCount = { count: 0, resetAt: Date.now() + SIX_HOURS };
+    // Not found — create skill and only scrape articles immediately.
+    // Keep the search endpoint cheap; YouTube will be filled in by the nightly cron.
+    const limit = await this.canCreateNewSkill(context);
+    if (!limit.allowed) {
+      return { skill: null, status: 'rate_limited', message: limit.message };
     }
-    if (this._newSkillCount.count >= MAX_NEW_SKILLS) {
-      return { skill: null, status: 'rate_limited', message: 'Too many new skill requests. Please try again later.' };
-    }
-    this._newSkillCount.count++;
 
     const skill = await this.createSkill(skillId, skillName);
 
-    // Fire-and-forget: scrape both articles and YouTube for new skills
-    // Rate limit (30/hr) already protects against abuse
-    this.scrapeSkillContent(skillId).catch(err => {
-      console.error(`Scrape failed for new skill ${skillId}:`, err.message);
+    // Fire-and-forget: keep user-triggered search lightweight.
+    this.scrapeArticlesOnly(skillId).catch(err => {
+      console.error(`Articles-only scrape failed for new skill ${skillId}:`, err.message);
     });
 
-    return { skill, status: 'scraping', message: 'Gathering content for this skill...' };
+    return { skill, status: 'scraping', message: 'Gathering starter content for this skill...' };
   }
 
   // Get full skill details + content (used by SkillPage for polling)

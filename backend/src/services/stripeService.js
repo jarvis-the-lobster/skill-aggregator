@@ -22,9 +22,9 @@ async function getOrCreateCustomer({ user }) {
   return customer.id;
 }
 
-async function createCheckoutSession({ customerId, priceId, successUrl, cancelUrl, userId }) {
+async function createCheckoutSession({ customerId, priceId, successUrl, cancelUrl, userId, trialPeriodDays = 7 }) {
   assertConfigured();
-  return stripe.checkout.sessions.create({
+  const payload = {
     mode: 'subscription',
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
@@ -33,8 +33,13 @@ async function createCheckoutSession({ customerId, priceId, successUrl, cancelUr
     allow_promotion_codes: true,
     client_reference_id: String(userId),
     metadata: { user_id: String(userId) },
-    subscription_data: { trial_period_days: 7 },
-  });
+  };
+
+  if (trialPeriodDays > 0) {
+    payload.subscription_data = { trial_period_days: trialPeriodDays };
+  }
+
+  return stripe.checkout.sessions.create(payload);
 }
 
 async function retrieveCustomer(customerId) {
