@@ -510,8 +510,13 @@ describe('POST /api/billing/create-checkout-session (duplicate prevention)', () 
     expect(stripeService.createCheckoutSession).not.toHaveBeenCalled();
   });
 
-  test('blocks checkout when customer has a trialing subscription in Stripe', async () => {
-    const user = await createUserWithSubscription({ email: 'dup-trial@example.com', status: 'free' });
+  test('blocks checkout when customer has a trialing subscription in Stripe even if local DB is stale', async () => {
+    const futureDate = new Date(Date.now() + 7 * 86400 * 1000).toISOString();
+    const user = await createUserWithSubscription({
+      email: 'dup-trial@example.com',
+      status: 'active',
+      endDate: futureDate,
+    });
     await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_dup_trial', user.id]);
 
     stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_dup_trial' });
@@ -530,8 +535,13 @@ describe('POST /api/billing/create-checkout-session (duplicate prevention)', () 
     expect(stripeService.createCheckoutSession).not.toHaveBeenCalled();
   });
 
-  test('blocks checkout when customer has a past_due subscription in Stripe', async () => {
-    const user = await createUserWithSubscription({ email: 'dup-pastdue@example.com', status: 'free' });
+  test('blocks checkout when customer has a past_due subscription in Stripe, directing them to fix that sub instead of creating another', async () => {
+    const user = await createUserWithSubscription({
+      email: 'dup-pastdue@example.com',
+      status: 'past_due',
+      subscriptionId: 'sub_existing_pd',
+      endDate: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
+    });
     await db.insert('UPDATE users SET stripe_customer_id = ? WHERE id = ?', ['cus_dup_pd', user.id]);
 
     stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_dup_pd' });
