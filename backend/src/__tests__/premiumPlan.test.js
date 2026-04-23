@@ -7,6 +7,7 @@ jest.mock('../services/stripeService', () => ({
   retrieveCustomer: jest.fn(),
   getOrCreateCustomer: jest.fn(),
   createCheckoutSession: jest.fn(),
+  listCustomerSubscriptions: jest.fn().mockResolvedValue([]),
   cancelSubscriptionAtPeriodEnd: jest.fn(),
 }));
 
