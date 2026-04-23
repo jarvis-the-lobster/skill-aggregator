@@ -38,6 +38,7 @@ const app = require('../app');
 let db;
 
 beforeAll(async () => {
+  process.env.STRIPE_PRICE_ID = 'price_test_123';
   db = await createTestDb();
   Object.assign(mockDb, db);
 });
