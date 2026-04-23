@@ -73,11 +73,11 @@ const TABLE_SQL = [
     name TEXT,
     avatar_url TEXT,
     free_skill_creations_count INTEGER DEFAULT 0,
+    premium_trial_started_at TEXT,
     plan_tier TEXT DEFAULT 'free',
     subscription_status TEXT DEFAULT 'free',
     subscription_id TEXT,
     subscription_end_date TEXT,
-    premium_trial_starts_count INTEGER DEFAULT 0,
     stripe_customer_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME
@@ -424,10 +424,10 @@ function createTestDb() {
           return db.getUserById(userId);
         },
 
-        async incrementPremiumTrialStarts(userId) {
+        async markPremiumTrialStarted(userId, startedAt) {
           await insert(
-            'UPDATE users SET premium_trial_starts_count = COALESCE(premium_trial_starts_count, 0) + 1 WHERE id = ?',
-            [userId]
+            'UPDATE users SET premium_trial_started_at = COALESCE(premium_trial_started_at, ?) WHERE id = ?',
+            [startedAt, userId]
           );
           return db.getUserById(userId);
         },

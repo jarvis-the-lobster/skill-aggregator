@@ -118,7 +118,7 @@ export function AccountPage() {
   const cancelledTrial = status === 'active' && isTrialing && cancelAtPeriodEnd;
   const cancelledButStillActive = status === 'cancelled' && hasFutureEndDate;
   const effectiveStatus = cancelledButStillActive ? 'cancelled' : (status === 'cancelled' ? 'free' : status);
-  const hasUsedTrial = Number(user?.premium_trial_starts_count || 0) > 0;
+  const hasUsedTrial = Boolean(user?.premium_trial_started_at);
 
   return (
     <div className="min-h-screen bg-dark-bg">

@@ -37,7 +37,7 @@ export function PremiumPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const hasUsedTrial = Number(user?.premium_trial_starts_count || 0) > 0;
+  const hasUsedTrial = Boolean(user?.premium_trial_started_at);
 
   useEffect(() => {
     analytics.premiumPageViewed({ is_premium: isPremium, status });

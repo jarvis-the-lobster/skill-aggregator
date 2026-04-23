@@ -94,6 +94,7 @@ class Database {
         name TEXT,
         avatar_url TEXT,
         free_skill_creations_count INTEGER DEFAULT 0,
+        premium_trial_started_at TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_login DATETIME
       )`,
@@ -352,7 +353,7 @@ class Database {
         'ALTER TABLE users ADD COLUMN subscription_id TEXT',
         'ALTER TABLE users ADD COLUMN subscription_end_date TEXT',
         'ALTER TABLE users ADD COLUMN free_skill_creations_count INTEGER DEFAULT 0',
-        'ALTER TABLE users ADD COLUMN premium_trial_starts_count INTEGER DEFAULT 0',
+        'ALTER TABLE users ADD COLUMN premium_trial_started_at TEXT',
         'ALTER TABLE user_onboarding ADD COLUMN attribution_source TEXT',
         'ALTER TABLE user_onboarding ADD COLUMN created_at DATETIME',
         "ALTER TABLE premium_plan_days ADD COLUMN review_status TEXT DEFAULT 'ready'",
@@ -746,12 +747,12 @@ class Database {
     return this.getUserById(userId);
   }
 
-  async incrementPremiumTrialStarts(userId) {
+  async markPremiumTrialStarted(userId, startedAt) {
     await this.insert(
       `UPDATE users
-       SET premium_trial_starts_count = COALESCE(premium_trial_starts_count, 0) + 1
+       SET premium_trial_started_at = COALESCE(premium_trial_started_at, ?)
        WHERE id = ?`,
-      [userId]
+      [startedAt, userId]
     );
     return this.getUserById(userId);
   }

@@ -145,7 +145,7 @@ router.post('/create-checkout-session', requireAuth, async (req, res) => {
       url: `${req.protocol}://${req.get('host')}${req.originalUrl}`,
     });
 
-    const trialPeriodDays = Number(user.premium_trial_starts_count || 0) > 0 ? 0 : 7;
+    const trialPeriodDays = user.premium_trial_started_at ? 0 : 7;
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const session = await stripeService.createCheckoutSession({
@@ -216,7 +216,7 @@ async function handleWebhookEvent(event) {
         subscription_end_date: toIsoOrNull(sub.current_period_end),
       });
       if (sub.status === 'trialing' && existingUser?.subscription_id !== sub.id) {
-        await db.incrementPremiumTrialStarts(Number(userId));
+        await db.markPremiumTrialStarted(Number(userId), toIsoOrNull(sub.trial_start) || new Date().toISOString());
       }
     }
     return;

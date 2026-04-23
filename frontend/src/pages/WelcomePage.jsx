@@ -153,7 +153,7 @@ function PremiumPitchScreen({ onSkip }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const hasUsedTrial = Number(user?.premium_trial_starts_count || 0) > 0;
+  const hasUsedTrial = Boolean(user?.premium_trial_started_at);
 
   const perks = [
     { icon: <Sparkles className="w-4 h-4 text-teal" />, text: 'Personalized plans built around your goals and schedule' },

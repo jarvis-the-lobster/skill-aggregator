@@ -34,7 +34,7 @@ describe('AccountPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAuth.mockReturnValue({
-      user: { id: 1, email: 'trial@example.com', name: 'Trial User', premium_trial_starts_count: 0 },
+      user: { id: 1, email: 'trial@example.com', name: 'Trial User', premium_trial_started_at: null },
       loading: false,
     });
   });
@@ -99,7 +99,7 @@ describe('AccountPage', () => {
 
   it('does not offer another free trial once the account has already used one', () => {
     mockUseAuth.mockReturnValue({
-      user: { id: 1, email: 'trial@example.com', name: 'Trial User', premium_trial_starts_count: 1 },
+      user: { id: 1, email: 'trial@example.com', name: 'Trial User', premium_trial_started_at: '2026-04-01T00:00:00.000Z' },
       loading: false,
     });
     mockUseSubscription.mockReturnValue({

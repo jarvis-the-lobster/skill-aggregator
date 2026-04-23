@@ -108,7 +108,7 @@ describe('POST /api/billing/webhook', () => {
     expect(updated.subscription_status).toBe('active');
     expect(updated.subscription_id).toBe('sub_test123');
     expect(updated.stripe_customer_id).toBe('cus_test123');
-    expect(updated.premium_trial_starts_count).toBe(1);
+    expect(updated.premium_trial_started_at).toBeTruthy();
   });
 
   test('checkout.session.completed: active subscription → sets status to active', async () => {
@@ -285,8 +285,8 @@ describe('POST /api/billing/create-checkout-session', () => {
     const user = await createUserWithSubscription({ email: 'notrial@example.com', status: 'free' });
     stripeService.retrieveCustomer.mockResolvedValue({ id: 'cus_notrial' });
     await db.insert(
-      'UPDATE users SET stripe_customer_id = ?, premium_trial_starts_count = 1 WHERE id = ?',
-      ['cus_notrial', user.id]
+      'UPDATE users SET stripe_customer_id = ?, premium_trial_started_at = ? WHERE id = ?',
+      ['cus_notrial', '2026-04-01T00:00:00.000Z', user.id]
     );
     stripeService.listCustomerSubscriptions.mockResolvedValue([]);
     stripeService.createCheckoutSession.mockResolvedValue({ id: 'cs_live_1', url: 'https://stripe.test/live-1' });
