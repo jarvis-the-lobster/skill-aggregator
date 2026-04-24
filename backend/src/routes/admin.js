@@ -604,6 +604,14 @@ router.delete('/skills/:id', async (req, res) => {
     const skill = await db.query('SELECT id FROM skills WHERE id = ?', [id]);
     if (skill.length === 0) return res.status(404).json({ error: 'Skill not found' });
 
+    await db.insert(
+      `DELETE FROM review_submission_answers
+       WHERE submission_id IN (SELECT id FROM review_submissions WHERE skill_id = ?)`,
+      [id]
+    );
+    await db.insert('DELETE FROM review_submissions WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM premium_plan_days WHERE skill_id = ?', [id]);
+    await db.insert('DELETE FROM user_learning_plans WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM content WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM learning_plans WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM user_courses WHERE skill_id = ?', [id]);
@@ -648,6 +656,11 @@ router.post('/skills/:id/rename', async (req, res) => {
     await db.insert('UPDATE user_courses SET skill_id = ? WHERE skill_id = ?', [newId, id]);
     await db.insert('UPDATE user_plan_progress SET skill_id = ? WHERE skill_id = ?', [newId, id]);
     await db.insert('UPDATE scrape_log SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE user_learning_plans SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE premium_plan_days SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE plan_jobs SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE plan_review_content SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.insert('UPDATE review_submissions SET skill_id = ? WHERE skill_id = ?', [newId, id]);
     await db.insert('DELETE FROM skills WHERE id = ?', [id]);
 
     res.json({ ok: true, renamed: `${id} → ${newId}` });
