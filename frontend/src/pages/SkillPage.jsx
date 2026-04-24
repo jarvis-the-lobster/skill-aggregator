@@ -495,7 +495,7 @@ export function SkillPage() {
                   <>
                     {totalVideos > SKILL_PAGE_CONTENT_LIMIT && (
                       <p className="text-sm text-slate-400">
-                        Showing the top {SKILL_PAGE_CONTENT_LIMIT} videos to keep this page focused.
+                        Showing {SKILL_PAGE_CONTENT_LIMIT} of {totalVideos} videos.
                       </p>
                     )}
                     {displayedVideos.map((video) => (
@@ -575,7 +575,7 @@ export function SkillPage() {
                   <>
                     {totalArticles > SKILL_PAGE_CONTENT_LIMIT && (
                       <p className="text-sm text-slate-400">
-                        Showing the top {SKILL_PAGE_CONTENT_LIMIT} articles to keep this page focused.
+                        Showing {SKILL_PAGE_CONTENT_LIMIT} of {totalArticles} articles.
                       </p>
                     )}
                     {displayedArticles.map((article) => (

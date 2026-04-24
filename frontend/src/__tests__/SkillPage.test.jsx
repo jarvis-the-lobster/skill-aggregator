@@ -173,13 +173,13 @@ describe('SkillPage', () => {
 
     expect(await screen.findByText('Python')).toBeInTheDocument();
     expect(screen.getByText(`Videos (${SKILL_PAGE_CONTENT_LIMIT} of 9)`)).toBeInTheDocument();
-    expect(screen.getByText(`Showing the top ${SKILL_PAGE_CONTENT_LIMIT} videos to keep this page focused.`)).toBeInTheDocument();
+    expect(screen.getByText(`Showing ${SKILL_PAGE_CONTENT_LIMIT} of 9 videos.`)).toBeInTheDocument();
     expect(screen.getByText(`Python Video ${SKILL_PAGE_CONTENT_LIMIT}`)).toBeInTheDocument();
     expect(screen.queryByText(`Python Video ${SKILL_PAGE_CONTENT_LIMIT + 1}`)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: new RegExp(`Articles \\(${SKILL_PAGE_CONTENT_LIMIT} of 9\\)`) }));
 
-    expect(screen.getByText(`Showing the top ${SKILL_PAGE_CONTENT_LIMIT} articles to keep this page focused.`)).toBeInTheDocument();
+    expect(screen.getByText(`Showing ${SKILL_PAGE_CONTENT_LIMIT} of 9 articles.`)).toBeInTheDocument();
     expect(screen.getByText(`Python Article ${SKILL_PAGE_CONTENT_LIMIT}`)).toBeInTheDocument();
     expect(screen.queryByText(`Python Article ${SKILL_PAGE_CONTENT_LIMIT + 1}`)).not.toBeInTheDocument();
   });
