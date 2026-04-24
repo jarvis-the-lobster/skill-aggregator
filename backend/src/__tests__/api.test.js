@@ -1198,3 +1198,232 @@ describe('POST /api/admin/send-streak-reminders', () => {
     expect(pushService.sendStreakReminder).not.toHaveBeenCalledWith(noPushUserId, expect.anything());
   });
 });
+
+describe('POST /api/admin/skills/:id/rename', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  test('moves personal, premium, review, and job data to the new skill id', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.insert("INSERT INTO users (email, password_hash) VALUES ('rename@example.com', 'hash')");
+    const [user] = await db.query("SELECT id FROM users WHERE email = 'rename@example.com'");
+
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('py-1', 'python', 'video', 'Python Basics', 'https://example.com/python', 'youtube')"
+    );
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason) VALUES ('python', 1, 'py-1', 'video', 'shared plan')"
+    );
+    await db.insert(
+      "INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason) VALUES (?, 'python', 1, 'py-1', 'video', 'personal plan')",
+      [user.id]
+    );
+    await db.insert(
+      "INSERT INTO premium_plan_days (user_id, skill_id, day_number, content_id, content_type, reason, status) VALUES (?, 'python', 8, 'py-1', 'video', 'premium plan', 'pending_merge')",
+      [user.id]
+    );
+    await db.saveReviewContent({
+      skill_id: 'python',
+      user_id: user.id,
+      day_number: 7,
+      review_type: 'weekly_checkin',
+      title: 'Week 1',
+      body: {
+        summary: 'Review',
+        content_covered: [{ day: 1, type: 'video', title: 'Python Basics' }],
+        knowledge_checks: [
+          {
+            question: 'What is Python?',
+            topic: 'basics',
+            helper_text: 'Answer briefly.',
+            expected_points: ['A programming language'],
+            placeholder: 'Write your answer',
+          },
+        ],
+        reflection_prompts: ['What still feels fuzzy?'],
+      },
+      plan_created_at: '2026-04-24T16:00:00Z',
+    });
+    await db.createReviewSubmission({
+      user_id: user.id,
+      skill_id: 'python',
+      day_number: 7,
+      status: 'completed',
+      result_summary: JSON.stringify({ ok: true }),
+      reflection: 'solid',
+    });
+    await db.createPlanJob({
+      skill_id: 'python',
+      user_id: user.id,
+      job_type: 'premium_plan_generation',
+      day_number: 7,
+      payload: { triggerDay: 7 },
+      plan_created_at: '2026-04-24T16:00:00Z',
+    });
+    await db.insert(
+      "INSERT INTO user_plan_progress (user_id, skill_id, completed_days) VALUES (?, 'python', '[]')",
+      [user.id]
+    );
+    await db.insert(
+      "INSERT INTO user_courses (user_id, skill_id, enrolled_at) VALUES (?, 'python', CURRENT_TIMESTAMP)",
+      [user.id]
+    );
+    await db.insert(
+      "INSERT INTO scrape_log (skill_id, source, status, scraped_at) VALUES ('python', 'manual', 'success', CURRENT_TIMESTAMP)"
+    );
+
+    const res = await request(app)
+      .post('/api/admin/skills/python/rename')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ newId: 'python-advanced', newName: 'Python Advanced' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, renamed: 'python → python-advanced' });
+
+    const tables = [
+      'content',
+      'learning_plans',
+      'user_courses',
+      'user_plan_progress',
+      'scrape_log',
+      'user_learning_plans',
+      'premium_plan_days',
+      'plan_jobs',
+      'plan_review_content',
+      'review_submissions',
+    ];
+
+    for (const table of tables) {
+      const oldRows = await db.query(`SELECT COUNT(*) as count FROM ${table} WHERE skill_id = 'python'`);
+      const newRows = await db.query(`SELECT COUNT(*) as count FROM ${table} WHERE skill_id = 'python-advanced'`);
+      expect(oldRows[0].count).toBe(0);
+      expect(newRows[0].count).toBeGreaterThan(0);
+    }
+
+    const [newSkill] = await db.query("SELECT id, name FROM skills WHERE id = 'python-advanced'");
+    const [oldSkill] = await db.query("SELECT COUNT(*) as count FROM skills WHERE id = 'python'");
+    expect(newSkill).toEqual({ id: 'python-advanced', name: 'Python Advanced' });
+    expect(oldSkill.count).toBe(0);
+  });
+});
+
+describe('DELETE /api/admin/skills/:id', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  test('deletes personal plans, premium plans, and review submissions for the skill', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.insert("INSERT INTO users (email, password_hash) VALUES ('cleanup@example.com', 'hash')");
+    const [user] = await db.query("SELECT id FROM users WHERE email = 'cleanup@example.com'");
+
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('py-1', 'python', 'video', 'Python Basics', 'https://example.com/python', 'youtube')"
+    );
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason) VALUES ('python', 1, 'py-1', 'video', 'shared plan')"
+    );
+    await db.insert(
+      "INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason) VALUES (?, 'python', 1, 'py-1', 'video', 'personal plan')",
+      [user.id]
+    );
+    await db.insert(
+      "INSERT INTO premium_plan_days (user_id, skill_id, day_number, content_id, content_type, reason, status) VALUES (?, 'python', 8, 'py-1', 'video', 'premium plan', 'pending_merge')",
+      [user.id]
+    );
+    await db.saveReviewContent({
+      skill_id: 'python',
+      user_id: user.id,
+      day_number: 7,
+      review_type: 'weekly_checkin',
+      title: 'Week 1',
+      body: {
+        summary: 'Review',
+        content_covered: [{ day: 1, type: 'video', title: 'Python Basics' }],
+        knowledge_checks: [
+          {
+            question: 'What is Python?',
+            topic: 'basics',
+            helper_text: 'Answer briefly.',
+            expected_points: ['A programming language'],
+            placeholder: 'Write your answer',
+          },
+        ],
+        reflection_prompts: ['What still feels fuzzy?'],
+      },
+      plan_created_at: '2026-04-24T16:00:00Z',
+    });
+    const submission = await db.createReviewSubmission({
+      user_id: user.id,
+      skill_id: 'python',
+      day_number: 7,
+      status: 'completed',
+      result_summary: JSON.stringify({ ok: true }),
+      reflection: 'solid',
+    });
+    await db.saveReviewSubmissionAnswers(submission.id, [
+      {
+        check_id: 'kc-1',
+        question: 'What is Python?',
+        check_type: 'short_answer',
+        answer: 'A language',
+        correct: null,
+      },
+    ]);
+    await db.createPlanJob({
+      skill_id: 'python',
+      user_id: user.id,
+      job_type: 'premium_plan_generation',
+      day_number: 7,
+      payload: { triggerDay: 7 },
+      plan_created_at: '2026-04-24T16:00:00Z',
+    });
+    await db.insert(
+      "INSERT INTO user_plan_progress (user_id, skill_id, completed_days) VALUES (?, 'python', '[]')",
+      [user.id]
+    );
+    await db.insert(
+      "INSERT INTO user_courses (user_id, skill_id, enrolled_at) VALUES (?, 'python', CURRENT_TIMESTAMP)",
+      [user.id]
+    );
+    await db.insert(
+      "INSERT INTO scrape_log (skill_id, source, status, scraped_at) VALUES ('python', 'manual', 'success', CURRENT_TIMESTAMP)"
+    );
+
+    const res = await request(app)
+      .delete('/api/admin/skills/python')
+      .set('Authorization', 'Bearer test-cron-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, deleted: 'python' });
+
+    const [skillCount] = await db.query("SELECT COUNT(*) as count FROM skills WHERE id = 'python'");
+    const [userPlanCount] = await db.query("SELECT COUNT(*) as count FROM user_learning_plans WHERE skill_id = 'python'");
+    const [premiumPlanCount] = await db.query("SELECT COUNT(*) as count FROM premium_plan_days WHERE skill_id = 'python'");
+    const [reviewContentCount] = await db.query("SELECT COUNT(*) as count FROM plan_review_content WHERE skill_id = 'python'");
+    const [reviewSubmissionCount] = await db.query("SELECT COUNT(*) as count FROM review_submissions WHERE skill_id = 'python'");
+    const [reviewAnswerCount] = await db.query('SELECT COUNT(*) as count FROM review_submission_answers');
+
+    expect(skillCount.count).toBe(0);
+    expect(userPlanCount.count).toBe(0);
+    expect(premiumPlanCount.count).toBe(0);
+    expect(reviewContentCount.count).toBe(0);
+    expect(reviewSubmissionCount.count).toBe(0);
+    expect(reviewAnswerCount.count).toBe(0);
+  });
+});
