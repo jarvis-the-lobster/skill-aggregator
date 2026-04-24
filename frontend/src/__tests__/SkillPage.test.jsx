@@ -35,6 +35,7 @@ vi.mock('../hooks/useCourses', () => ({
 import { SkillPage } from '../pages/SkillPage';
 import { apiService } from '../services/api';
 import analytics from '../services/analytics';
+import { SKILL_PAGE_CONTENT_LIMIT } from '../utils/skillContent';
 
 function renderSkillPage(skillId = 'python') {
   return render(
@@ -132,5 +133,54 @@ describe('SkillPage', () => {
     expect(analytics.contentLinkClicked).toHaveBeenCalledWith(
       'python', 'vid1', 'video', expect.any(String)
     );
+  });
+
+
+  it('caps visible videos and articles to keep the page focused', async () => {
+    const manyItemsResponse = {
+      ...MOCK_SKILL_RESPONSE,
+      content: {
+        ...MOCK_SKILL_RESPONSE.content,
+        videos: Array.from({ length: 9 }, (_, i) => ({
+          id: `vid${i + 1}`,
+          title: `Python Video ${i + 1}`,
+          description: `Video description ${i + 1}`,
+          channel: 'TechChannel',
+          source: 'youtube',
+          duration: '10:00',
+          views: 1000 + i,
+          rating: 4.5,
+          url: `https://youtube.com/watch?v=vid${i + 1}`,
+          thumbnail: `https://img.youtube.com/vi/vid${i + 1}/0.jpg`,
+        })),
+        articles: Array.from({ length: 9 }, (_, i) => ({
+          id: `art${i + 1}`,
+          title: `Python Article ${i + 1}`,
+          description: `Article description ${i + 1}`,
+          source: 'RealPython',
+          author: 'John Doe',
+          readTime: '15 min',
+          publishedDate: '2026-01-15',
+          url: `https://realpython.com/article-${i + 1}`,
+        })),
+      },
+    };
+
+    apiService.getSkillContent.mockResolvedValue(manyItemsResponse);
+
+    renderSkillPage();
+    const user = userEvent.setup();
+
+    expect(await screen.findByText('Python')).toBeInTheDocument();
+    expect(screen.getByText(`Videos (${SKILL_PAGE_CONTENT_LIMIT} of 9)`)).toBeInTheDocument();
+    expect(screen.getByText(`Showing ${SKILL_PAGE_CONTENT_LIMIT} of 9 videos.`)).toBeInTheDocument();
+    expect(screen.getByText(`Python Video ${SKILL_PAGE_CONTENT_LIMIT}`)).toBeInTheDocument();
+    expect(screen.queryByText(`Python Video ${SKILL_PAGE_CONTENT_LIMIT + 1}`)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: new RegExp(`Articles \\(${SKILL_PAGE_CONTENT_LIMIT} of 9\\)`) }));
+
+    expect(screen.getByText(`Showing ${SKILL_PAGE_CONTENT_LIMIT} of 9 articles.`)).toBeInTheDocument();
+    expect(screen.getByText(`Python Article ${SKILL_PAGE_CONTENT_LIMIT}`)).toBeInTheDocument();
+    expect(screen.queryByText(`Python Article ${SKILL_PAGE_CONTENT_LIMIT + 1}`)).not.toBeInTheDocument();
   });
 });

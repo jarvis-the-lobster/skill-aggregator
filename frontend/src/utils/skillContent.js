@@ -1,0 +1,1 @@
+export const SKILL_PAGE_CONTENT_LIMIT = 7;
