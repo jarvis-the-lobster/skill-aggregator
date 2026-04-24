@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useInitialData } from '../contexts/InitialDataContext';
 import { useEnrollment } from '../hooks/useCourses';
 import { RatingButtons } from '../components/RatingButtons';
+import { SKILL_PAGE_CONTENT_LIMIT } from '../utils/skillContent';
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 60000;
@@ -239,9 +240,14 @@ export function SkillPage() {
     );
   }
 
+  const totalVideos = content.videos?.length || 0;
+  const totalArticles = content.articles?.length || 0;
+  const displayedVideos = (content.videos || []).slice(0, SKILL_PAGE_CONTENT_LIMIT);
+  const displayedArticles = (content.articles || []).slice(0, SKILL_PAGE_CONTENT_LIMIT);
+
   // Check if we have any content despite non-ready status
-  const hasArticles = content.articles?.length > 0;
-  const hasVideos = content.videos?.length > 0;
+  const hasArticles = totalArticles > 0;
+  const hasVideos = totalVideos > 0;
   const hasAnyContent = hasArticles || hasVideos;
 
   // --- Scraping in progress (only show if truly zero content) ---
@@ -444,7 +450,7 @@ export function SkillPage() {
               >
                 <div className="flex items-center space-x-2">
                   <Play className="w-4 h-4" />
-                  <span>Videos ({content.videos?.length || 0})</span>
+                  <span>Videos ({Math.min(totalVideos, SKILL_PAGE_CONTENT_LIMIT)}{totalVideos > SKILL_PAGE_CONTENT_LIMIT ? ` of ${totalVideos}` : ''})</span>
                 </div>
               </button>
 
@@ -458,7 +464,7 @@ export function SkillPage() {
               >
                 <div className="flex items-center space-x-2">
                   <BookOpen className="w-4 h-4" />
-                  <span>Articles ({content.articles?.length || 0})</span>
+                  <span>Articles ({Math.min(totalArticles, SKILL_PAGE_CONTENT_LIMIT)}{totalArticles > SKILL_PAGE_CONTENT_LIMIT ? ` of ${totalArticles}` : ''})</span>
                 </div>
               </button>
 
@@ -485,62 +491,69 @@ export function SkillPage() {
                     <p>Video content for this skill is being gathered and will be available within 24 hours. Check out the <button onClick={() => handleTabChange('articles')} className="underline font-medium hover:text-teal">articles</button> in the meantime!</p>
                   </div>
                 )}
-                {content.videos?.length > 0 ? (
-                  content.videos.map((video) => (
-                    <div key={video.id} className="content-card overflow-hidden">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4">
-                        <img
-                          src={video.thumbnail || 'https://via.placeholder.com/320x180'}
-                          alt={video.title}
-                          className="w-full sm:w-32 h-44 sm:h-20 object-cover rounded-lg flex-shrink-0 mb-3 sm:mb-0"
-                        />
-                        <div className="min-w-0 flex-grow">
-                          <h3 className="text-base sm:text-lg font-semibold text-slate-100 mb-2 break-words">
-                            {video.title}
-                          </h3>
-                          <p className="text-slate-400 text-sm mb-3 line-clamp-2">{video.description}</p>
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
-                              <span>{video.channel || video.source}</span>
-                              <div className="flex items-center space-x-1">
-                                <Clock className="w-3 h-3" />
-                                <span>{video.duration}</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <Eye className="w-3 h-3" />
-                                <span>{formatViews(video.views)} views</span>
-                              </div>
-                              {video.rating && (
+                {displayedVideos.length > 0 ? (
+                  <>
+                    {totalVideos > SKILL_PAGE_CONTENT_LIMIT && (
+                      <p className="text-sm text-slate-400">
+                        Showing the top {SKILL_PAGE_CONTENT_LIMIT} videos to keep this page focused.
+                      </p>
+                    )}
+                    {displayedVideos.map((video) => (
+                      <div key={video.id} className="content-card overflow-hidden">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4">
+                          <img
+                            src={video.thumbnail || 'https://via.placeholder.com/320x180'}
+                            alt={video.title}
+                            className="w-full sm:w-32 h-44 sm:h-20 object-cover rounded-lg flex-shrink-0 mb-3 sm:mb-0"
+                          />
+                          <div className="min-w-0 flex-grow">
+                            <h3 className="text-base sm:text-lg font-semibold text-slate-100 mb-2 break-words">
+                              {video.title}
+                            </h3>
+                            <p className="text-slate-400 text-sm mb-3 line-clamp-2">{video.description}</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                                <span>{video.channel || video.source}</span>
                                 <div className="flex items-center space-x-1">
-                                  <Star className="w-3 h-3" />
-                                  <span>{video.rating}/5</span>
+                                  <Clock className="w-3 h-3" />
+                                  <span>{video.duration}</span>
                                 </div>
-                              )}
-                            </div>
-                            <div className="flex items-center space-x-3">
-                              <RatingButtons
-                                contentId={video.id}
-                                skillId={skillId}
-                                initialCounts={ratings.counts[video.id]}
-                                initialUserRating={ratings.userRatings[video.id]}
-                              />
-                              <a
-                                href={video.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn-primary flex items-center space-x-2"
-                                onClick={() => analytics.contentLinkClicked(skillId, video.id, 'video', video.url)}
-                              >
-                                <Play className="w-4 h-4" />
-                                <span>Watch</span>
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
+                                <div className="flex items-center space-x-1">
+                                  <Eye className="w-3 h-3" />
+                                  <span>{formatViews(video.views)} views</span>
+                                </div>
+                                {video.rating && (
+                                  <div className="flex items-center space-x-1">
+                                    <Star className="w-3 h-3" />
+                                    <span>{video.rating}/5</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center space-x-3">
+                                <RatingButtons
+                                  contentId={video.id}
+                                  skillId={skillId}
+                                  initialCounts={ratings.counts[video.id]}
+                                  initialUserRating={ratings.userRatings[video.id]}
+                                />
+                                <a
+                                  href={video.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn-primary flex items-center space-x-2"
+                                  onClick={() => analytics.contentLinkClicked(skillId, video.id, 'video', video.url)}
+                                >
+                                  <Play className="w-4 h-4" />
+                                  <span>Watch</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </>
                 ) : (
                   <div className="text-center py-12">
                     <Play className="w-16 h-16 text-slate-600 mx-auto mb-4" />
@@ -558,47 +571,54 @@ export function SkillPage() {
 
             {activeTab === 'articles' && (
               <div className="space-y-6">
-                {content.articles?.length > 0 ? (
-                  content.articles.map((article) => (
-                    <div key={article.id} className="content-card overflow-hidden">
-                      <h3 className="text-base sm:text-lg font-semibold text-slate-100 mb-2 break-words">
-                        {article.title}
-                      </h3>
-                      <p className="text-slate-400 mb-4 text-sm sm:text-base line-clamp-3">{article.excerpt || article.description}</p>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
-                          <span>{article.source}</span>
-                          <span>by {article.author}</span>
-                          {article.readTime && (
-                            <div className="flex items-center space-x-1">
-                              <Clock className="w-3 h-3" />
-                              <span>{article.readTime}</span>
-                            </div>
-                          )}
-                          <span>{new Date(article.publishedDate).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <RatingButtons
-                            contentId={article.id}
-                            skillId={skillId}
-                            initialCounts={ratings.counts[article.id]}
-                            initialUserRating={ratings.userRatings[article.id]}
-                          />
-                          <a
-                            href={article.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-secondary flex items-center space-x-2"
-                            onClick={() => analytics.contentLinkClicked(skillId, article.id, 'article', article.url)}
-                          >
-                            <BookOpen className="w-4 h-4" />
-                            <span>Read</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                {displayedArticles.length > 0 ? (
+                  <>
+                    {totalArticles > SKILL_PAGE_CONTENT_LIMIT && (
+                      <p className="text-sm text-slate-400">
+                        Showing the top {SKILL_PAGE_CONTENT_LIMIT} articles to keep this page focused.
+                      </p>
+                    )}
+                    {displayedArticles.map((article) => (
+                      <div key={article.id} className="content-card overflow-hidden">
+                        <h3 className="text-base sm:text-lg font-semibold text-slate-100 mb-2 break-words">
+                          {article.title}
+                        </h3>
+                        <p className="text-slate-400 mb-4 text-sm sm:text-base line-clamp-3">{article.excerpt || article.description}</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                            <span>{article.source}</span>
+                            <span>by {article.author}</span>
+                            {article.readTime && (
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{article.readTime}</span>
+                              </div>
+                            )}
+                            <span>{new Date(article.publishedDate).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <RatingButtons
+                              contentId={article.id}
+                              skillId={skillId}
+                              initialCounts={ratings.counts[article.id]}
+                              initialUserRating={ratings.userRatings[article.id]}
+                            />
+                            <a
+                              href={article.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-secondary flex items-center space-x-2"
+                              onClick={() => analytics.contentLinkClicked(skillId, article.id, 'article', article.url)}
+                            >
+                              <BookOpen className="w-4 h-4" />
+                              <span>Read</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </>
                 ) : (
                   <div className="text-center py-12">
                     <BookOpen className="w-16 h-16 text-slate-600 mx-auto mb-4" />
