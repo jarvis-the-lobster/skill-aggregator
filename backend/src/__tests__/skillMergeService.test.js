@@ -76,6 +76,66 @@ async function seedScrapeLog(skillId, source = 'youtube') {
   );
 }
 
+async function seedPremiumUser(id) {
+  await db.insert(
+    "INSERT INTO users (id, email, password_hash, subscription_status) VALUES (?, ?, 'hash', 'active')",
+    [id, `premium${id}@test.com`]
+  );
+}
+
+async function seedPlanJob(skillId, userId, opts = {}) {
+  const result = await db.insert(
+    `INSERT INTO plan_jobs (skill_id, user_id, job_type, status, day_number)
+     VALUES (?, ?, ?, ?, ?)`,
+    [skillId, userId, opts.job_type || 'review_content', opts.status || 'pending', opts.day_number || 1]
+  );
+  return result.id;
+}
+
+async function seedPlanReviewContent(skillId, userId, dayNumber, opts = {}) {
+  const result = await db.insert(
+    `INSERT INTO plan_review_content (skill_id, user_id, day_number, review_type, title, body)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [skillId, userId, dayNumber, opts.review_type || 'weekly_checkin', opts.title || 'Review', opts.body || '{}']
+  );
+  return result.id;
+}
+
+async function seedReviewSubmission(userId, skillId, dayNumber, opts = {}) {
+  const result = await db.insert(
+    `INSERT INTO review_submissions (user_id, skill_id, day_number, status, result_summary, reflection)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, skillId, dayNumber, opts.status || 'completed', opts.result_summary || null, opts.reflection || null]
+  );
+  return result.id;
+}
+
+async function seedReviewSubmissionAnswer(submissionId, checkId, opts = {}) {
+  await db.insert(
+    `INSERT INTO review_submission_answers (submission_id, check_id, question, check_type, answer, correct)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [submissionId, checkId, opts.question || 'Q?', opts.check_type || 'short_answer', opts.answer || 'A', opts.correct ?? null]
+  );
+}
+
+async function seedPremiumPlanDay(userId, skillId, dayNumber, opts = {}) {
+  await db.insert(
+    `INSERT INTO premium_plan_days (user_id, skill_id, day_number, content_id, content_type, reason, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [userId, skillId, dayNumber, opts.content_id || null, opts.content_type || 'video', opts.reason || null, opts.status || 'pending_merge']
+  );
+}
+
+async function seedUserLearningPlanWithReview(userId, skillId, day, contentId, opts = {}) {
+  await db.insert(
+    `INSERT INTO user_learning_plans (user_id, skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body, timestamp_start_seconds, timestamp_end_seconds)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [userId, skillId, day, contentId, opts.content_type || 'video', opts.reason || null,
+     opts.review_status || 'ready', opts.review_title || null, opts.review_body || null,
+     opts.timestamp_start_seconds ?? null, opts.timestamp_end_seconds ?? null]
+  );
+}
+
 // ── tests ───────────────────────────────────────────────────────────
 
 describe('SkillMergeService', () => {
@@ -607,6 +667,433 @@ describe('SkillMergeService', () => {
       const plans = await db.query("SELECT * FROM learning_plans WHERE skill_id = 'tgt'");
       expect(plans.length).toBe(1);
       expect(plans[0].content_id).toBe('c2'); // target's kept
+    });
+  });
+
+  // ── Premium user winner-plan behavior ──────────────────────────────
+
+  describe('premium user learning plan merge (winner-pick)', () => {
+    test('source-only premium plans repoint to target', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedPremiumUser(10);
+      await seedUserLearningPlan(10, 'src', 1, 'c1');
+      await seedUserLearningPlan(10, 'src', 2, 'c2');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const plans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 10 ORDER BY day_number");
+      expect(plans.length).toBe(2);
+      expect(plans[0].content_id).toBe('c1');
+      expect(plans[1].content_id).toBe('c2');
+
+      const srcPlans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'src'");
+      expect(srcPlans.length).toBe(0);
+    });
+
+    test('target-only premium plans are kept as-is', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedPremiumUser(10);
+      // No source plans for user 10, but they have target plans
+      await seedUserLearningPlan(10, 'tgt', 1, 'tc1');
+      // Need source plans for another user to trigger merge
+      await seedUser(99);
+      await seedUserLearningPlan(99, 'src', 1, 'sc1');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const plans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 10");
+      expect(plans.length).toBe(1);
+      expect(plans[0].content_id).toBe('tc1');
+    });
+
+    test('both sides: source wins when it has more completed days', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedPremiumUser(10);
+
+      await seedPlanProgress(10, 'src', { completed_days: '[1,2,3]' });
+      await seedPlanProgress(10, 'tgt', { completed_days: '[1]' });
+
+      await seedUserLearningPlan(10, 'src', 1, 'sc1');
+      await seedUserLearningPlan(10, 'src', 2, 'sc2');
+      await seedUserLearningPlan(10, 'src', 3, 'sc3');
+      await seedUserLearningPlan(10, 'tgt', 1, 'tc1');
+      await seedUserLearningPlan(10, 'tgt', 2, 'tc2');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const plans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 10 ORDER BY day_number");
+      expect(plans.length).toBe(3);
+      // Source plan won
+      expect(plans[0].content_id).toBe('sc1');
+      expect(plans[1].content_id).toBe('sc2');
+      expect(plans[2].content_id).toBe('sc3');
+    });
+
+    test('both sides: target wins on tie (same completed day count)', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedPremiumUser(10);
+
+      await seedPlanProgress(10, 'src', { completed_days: '[1,2]' });
+      await seedPlanProgress(10, 'tgt', { completed_days: '[3,4]' });
+
+      await seedUserLearningPlan(10, 'src', 1, 'sc1');
+      await seedUserLearningPlan(10, 'src', 2, 'sc2');
+      await seedUserLearningPlan(10, 'tgt', 1, 'tc1');
+      await seedUserLearningPlan(10, 'tgt', 2, 'tc2');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const plans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 10 ORDER BY day_number");
+      expect(plans.length).toBe(2);
+      // Target plan won (tie-breaker)
+      expect(plans[0].content_id).toBe('tc1');
+      expect(plans[1].content_id).toBe('tc2');
+
+      const srcPlans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'src'");
+      expect(srcPlans.length).toBe(0);
+    });
+
+    test('progress is still unioned even when premium winner-pick deletes loser plan', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedPremiumUser(10);
+
+      await seedPlanProgress(10, 'src', { completed_days: '[1,2,3]', enrolled_at: '2025-01-01' });
+      await seedPlanProgress(10, 'tgt', { completed_days: '[4,5]', enrolled_at: '2025-02-01' });
+
+      await seedUserLearningPlan(10, 'src', 1, 'sc1');
+      await seedUserLearningPlan(10, 'tgt', 1, 'tc1');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      // Progress should be unioned regardless of winner-pick
+      const progress = await db.query("SELECT * FROM user_plan_progress WHERE skill_id = 'tgt' AND user_id = 10");
+      expect(progress.length).toBe(1);
+      expect(JSON.parse(progress[0].completed_days)).toEqual([1, 2, 3, 4, 5]);
+    });
+
+    test('free user in same merge still uses smart content-family merge', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedPremiumUser(10);
+      await seedUser(20); // free user
+
+      // Shared plan for realignment
+      await seedContent('shared-c1', 'tgt');
+      await seedLearningPlan('tgt', 1, 'shared-c1');
+
+      // Premium user: both sides
+      await seedPlanProgress(10, 'src', { completed_days: '[1]' });
+      await seedPlanProgress(10, 'tgt', { completed_days: '[]' });
+      await seedUserLearningPlan(10, 'src', 1, 'premium-sc1');
+      await seedUserLearningPlan(10, 'tgt', 1, 'premium-tc1');
+
+      // Free user: source-only
+      await seedUserLearningPlan(20, 'src', 1, 'free-sc1');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      // Premium user: source wins (1 completed vs 0)
+      const premiumPlans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 10");
+      expect(premiumPlans.length).toBe(1);
+      expect(premiumPlans[0].content_id).toBe('premium-sc1');
+
+      // Free user: smart merge realigns to shared plan
+      const freePlans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 20");
+      expect(freePlans.length).toBeGreaterThanOrEqual(1);
+      const day1 = freePlans.find(r => r.day_number === 1);
+      expect(day1.content_id).toBe('shared-c1'); // realigned to shared plan
+    });
+  });
+
+  // ── Premium plan days merge ────────────────────────────────────────
+
+  describe('premium_plan_days merge', () => {
+    test('source-only premium_plan_days repoint to target', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      await seedPremiumPlanDay(1, 'src', 1, { content_id: 'c1' });
+      await seedPremiumPlanDay(1, 'src', 2, { content_id: 'c2' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const days = await db.query("SELECT * FROM premium_plan_days WHERE skill_id = 'tgt' AND user_id = 1 ORDER BY day_number");
+      expect(days.length).toBe(2);
+      expect(days[0].content_id).toBe('c1');
+      expect(days[1].content_id).toBe('c2');
+
+      const srcDays = await db.query("SELECT * FROM premium_plan_days WHERE skill_id = 'src'");
+      expect(srcDays.length).toBe(0);
+    });
+
+    test('target wins on conflict for same (user_id, day_number)', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+
+      // Conflict on day 1, no conflict on day 2
+      await seedPremiumPlanDay(1, 'src', 1, { content_id: 'src-c1', reason: 'from source' });
+      await seedPremiumPlanDay(1, 'src', 2, { content_id: 'src-c2', reason: 'source only' });
+      await seedPremiumPlanDay(1, 'tgt', 1, { content_id: 'tgt-c1', reason: 'from target' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const days = await db.query("SELECT * FROM premium_plan_days WHERE skill_id = 'tgt' AND user_id = 1 ORDER BY day_number");
+      expect(days.length).toBe(2);
+      // Day 1: target wins
+      expect(days[0].content_id).toBe('tgt-c1');
+      expect(days[0].reason).toBe('from target');
+      // Day 2: source moved
+      expect(days[1].content_id).toBe('src-c2');
+      expect(days[1].reason).toBe('source only');
+
+      const srcDays = await db.query("SELECT * FROM premium_plan_days WHERE skill_id = 'src'");
+      expect(srcDays.length).toBe(0);
+    });
+  });
+
+  // ── plan_jobs, plan_review_content, review_submissions merge ───────
+
+  describe('plan_jobs repointing in safeMerge', () => {
+    test('merge: plan_jobs repoint from source to target', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      await seedPlanJob('src', 1, { job_type: 'review_content', day_number: 1 });
+      await seedPlanJob('src', 1, { job_type: 'premium_plan_generation', day_number: 2 });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const srcJobs = await db.query("SELECT * FROM plan_jobs WHERE skill_id = 'src'");
+      expect(srcJobs.length).toBe(0);
+
+      const tgtJobs = await db.query("SELECT * FROM plan_jobs WHERE skill_id = 'tgt' ORDER BY day_number");
+      expect(tgtJobs.length).toBe(2);
+      expect(tgtJobs[0].job_type).toBe('review_content');
+      expect(tgtJobs[1].job_type).toBe('premium_plan_generation');
+    });
+
+    test('rename: plan_jobs repoint from source to target', async () => {
+      await seedSkill('src', 'Source');
+      await seedUser(1);
+      await seedPlanJob('src', 1, { job_type: 'review_content', day_number: 5 });
+
+      await skillMergeService.safeMerge('src', 'new-tgt', { dryRun: false });
+
+      const tgtJobs = await db.query("SELECT * FROM plan_jobs WHERE skill_id = 'new-tgt'");
+      expect(tgtJobs.length).toBe(1);
+      expect(tgtJobs[0].day_number).toBe(5);
+    });
+  });
+
+  describe('plan_review_content repointing in safeMerge', () => {
+    test('merge: plan_review_content repoint from source to target', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      await seedPlanReviewContent('src', 1, 7, { title: 'Week 1 Review' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const srcContent = await db.query("SELECT * FROM plan_review_content WHERE skill_id = 'src'");
+      expect(srcContent.length).toBe(0);
+
+      const tgtContent = await db.query("SELECT * FROM plan_review_content WHERE skill_id = 'tgt'");
+      expect(tgtContent.length).toBe(1);
+      expect(tgtContent[0].title).toBe('Week 1 Review');
+    });
+  });
+
+  describe('review_submissions merge in safeMerge', () => {
+    test('source-only submissions repoint to target', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      const subId = await seedReviewSubmission(1, 'src', 7, { result_summary: 'good', reflection: 'learned a lot' });
+      await seedReviewSubmissionAnswer(subId, 'check1', { question: 'What did you learn?', answer: 'Everything' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const srcSubs = await db.query("SELECT * FROM review_submissions WHERE skill_id = 'src'");
+      expect(srcSubs.length).toBe(0);
+
+      const tgtSubs = await db.query("SELECT * FROM review_submissions WHERE skill_id = 'tgt'");
+      expect(tgtSubs.length).toBe(1);
+      expect(tgtSubs[0].result_summary).toBe('good');
+      expect(tgtSubs[0].reflection).toBe('learned a lot');
+
+      // Answers should still be attached via submission_id
+      const answers = await db.query("SELECT * FROM review_submission_answers WHERE submission_id = ?", [tgtSubs[0].id]);
+      expect(answers.length).toBe(1);
+      expect(answers[0].answer).toBe('Everything');
+    });
+
+    test('target wins on review_submissions conflict (same user_id + day_number)', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+
+      // Both have submissions for day 7
+      const srcSubId = await seedReviewSubmission(1, 'src', 7, { result_summary: 'src result' });
+      await seedReviewSubmissionAnswer(srcSubId, 'check1', { answer: 'src answer' });
+      const tgtSubId = await seedReviewSubmission(1, 'tgt', 7, { result_summary: 'tgt result' });
+      await seedReviewSubmissionAnswer(tgtSubId, 'check1', { answer: 'tgt answer' });
+
+      // Source has non-conflicting submission too
+      const srcSub2Id = await seedReviewSubmission(1, 'src', 14, { result_summary: 'src day 14' });
+      await seedReviewSubmissionAnswer(srcSub2Id, 'check2', { answer: 'day 14 answer' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const tgtSubs = await db.query("SELECT * FROM review_submissions WHERE skill_id = 'tgt' ORDER BY day_number");
+      expect(tgtSubs.length).toBe(2);
+      // Day 7: target wins
+      expect(tgtSubs[0].result_summary).toBe('tgt result');
+      // Day 14: source moved
+      expect(tgtSubs[1].result_summary).toBe('src day 14');
+
+      // Source conflict answers should be deleted
+      const srcAnswers = await db.query("SELECT * FROM review_submission_answers WHERE submission_id = ?", [srcSubId]);
+      expect(srcAnswers.length).toBe(0);
+
+      // Target answers preserved
+      const tgtAnswers = await db.query("SELECT * FROM review_submission_answers WHERE submission_id = ?", [tgtSubId]);
+      expect(tgtAnswers.length).toBe(1);
+      expect(tgtAnswers[0].answer).toBe('tgt answer');
+    });
+  });
+
+  // ── Review day preservation (bug fix regression) ───────────────────
+
+  describe('review-day field preservation in user_learning_plans merge', () => {
+    test('review_status, review_title, review_body are preserved for immutable completed review days', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+
+      const reviewBody = JSON.stringify({ checks: [{ id: 'c1', question: 'Q?' }] });
+
+      // Target user plan with a review day on day 7
+      await seedUserLearningPlanWithReview(1, 'tgt', 7, null, {
+        content_type: 'review',
+        review_status: 'ready',
+        review_title: 'Week 1 Check-in',
+        review_body: reviewBody,
+      });
+      // Also a regular day
+      await seedUserLearningPlanWithReview(1, 'tgt', 1, 'tc1');
+
+      // Day 7 is completed
+      await seedPlanProgress(1, 'tgt', { completed_days: '[7]' });
+
+      // Source plans
+      await seedUserLearningPlan(1, 'src', 1, 'sc1');
+
+      // Shared plan (to trigger realignment)
+      await seedLearningPlan('tgt', 1, 'shared-c1');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const plans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 1 ORDER BY day_number");
+      const day7 = plans.find(r => r.day_number === 7);
+      expect(day7).toBeTruthy();
+      expect(day7.content_type).toBe('review');
+      expect(day7.review_status).toBe('ready');
+      expect(day7.review_title).toBe('Week 1 Check-in');
+      expect(day7.review_body).toBe(reviewBody);
+    });
+
+    test('review fields from source are preserved when source-only user plans are merged', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+
+      const reviewBody = JSON.stringify({ checks: [{ id: 'c1', question: 'What did you learn?' }] });
+
+      // Source plan with review day on day 7
+      await seedUserLearningPlanWithReview(1, 'src', 7, null, {
+        content_type: 'review',
+        review_status: 'ready',
+        review_title: 'Source Review',
+        review_body: reviewBody,
+      });
+      await seedUserLearningPlan(1, 'src', 1, 'sc1');
+      await seedPlanProgress(1, 'src', { completed_days: '[7]' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const plans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 1 ORDER BY day_number");
+      const day7 = plans.find(r => r.day_number === 7);
+      expect(day7).toBeTruthy();
+      expect(day7.content_type).toBe('review');
+      expect(day7.review_status).toBe('ready');
+      expect(day7.review_title).toBe('Source Review');
+      expect(day7.review_body).toBe(reviewBody);
+    });
+
+    test('non-completed review days realign but preserve review fields from shared plan', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+
+      const reviewBody = JSON.stringify({ checks: [{ id: 'c1', question: 'Review Q' }] });
+
+      // Shared plan has review day 7
+      await db.insert(
+        `INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason, review_status, review_title, review_body)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ['tgt', 7, null, 'review', null, 'ready', 'Shared Review', reviewBody]
+      );
+
+      // User has target plan with day 7 as non-review (not completed)
+      await seedUserLearningPlan(1, 'tgt', 7, 'old-content');
+      await seedPlanProgress(1, 'tgt', { completed_days: '[]' });
+
+      // Source plan
+      await seedUserLearningPlan(1, 'src', 1, 'sc1');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const plans = await db.query("SELECT * FROM user_learning_plans WHERE skill_id = 'tgt' AND user_id = 1 ORDER BY day_number");
+      const day7 = plans.find(r => r.day_number === 7);
+      expect(day7).toBeTruthy();
+      // Should realign to shared plan review fields
+      expect(day7.content_type).toBe('review');
+      expect(day7.review_title).toBe('Shared Review');
+      expect(day7.review_body).toBe(reviewBody);
+    });
+  });
+
+  // ── Impact report includes new tables ──────────────────────────────
+
+  describe('dry-run impact report includes new tables', () => {
+    test('reports plan_jobs, plan_review_content, review_submissions, premium_plan_days counts', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      await seedPlanJob('src', 1);
+      await seedPlanReviewContent('src', 1, 7);
+      await seedReviewSubmission(1, 'src', 7);
+      await seedReviewSubmission(1, 'tgt', 7); // conflict
+      await seedPremiumPlanDay(1, 'src', 1, { content_id: 'c1' });
+      await seedPremiumPlanDay(1, 'src', 2, { content_id: 'c2' });
+      await seedPremiumPlanDay(1, 'tgt', 1, { content_id: 'c3' }); // conflict
+
+      const result = await skillMergeService.safeMerge('src', 'tgt', { dryRun: true });
+
+      expect(result.impact.plan_jobs.source_count).toBe(1);
+      expect(result.impact.plan_review_content.source_count).toBe(1);
+      expect(result.impact.review_submissions.source_count).toBe(1);
+      expect(result.impact.review_submissions.conflicts).toBe(1);
+      expect(result.impact.review_submissions.will_move).toBe(0);
+      expect(result.impact.premium_plan_days.source_count).toBe(2);
+      expect(result.impact.premium_plan_days.conflicts).toBe(1);
+      expect(result.impact.premium_plan_days.will_move).toBe(1);
     });
   });
 });

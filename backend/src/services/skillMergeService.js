@@ -11,6 +11,10 @@ const STATUS_RANK = { active: 2, completed: 1 };
  * 2. Merge:  source exists, target exists → merge rows with conflict resolution, delete source.
  *
  * Both flows support dry-run (read-only impact report) and execute (mutate + summary).
+ *
+ * Premium vs shared/free user_learning_plans merge strategy:
+ * - Shared/free users: smart content-family merge (existing behavior)
+ * - Premium users: winner-pick — keep the plan with more completed days, tie-break target
  */
 class SkillMergeService {
 
@@ -56,7 +60,11 @@ class SkillMergeService {
       sourceProgress, targetProgress,
       sourceUserPlans, targetUserPlans,
       sourceLearningPlans, targetLearningPlans,
-      sourceScrapeLogs
+      sourceScrapeLogs,
+      sourcePlanJobs, targetPlanJobs,
+      sourceReviewContent, targetReviewContent,
+      sourceReviewSubs, targetReviewSubs,
+      sourcePremiumDays, targetPremiumDays,
     ] = await Promise.all([
       db.query('SELECT id FROM content WHERE skill_id = ?', [sourceId]),
       isRename ? [] : db.query('SELECT id FROM content WHERE skill_id = ?', [targetId]),
@@ -69,6 +77,14 @@ class SkillMergeService {
       db.query('SELECT * FROM learning_plans WHERE skill_id = ?', [sourceId]),
       isRename ? [] : db.query('SELECT * FROM learning_plans WHERE skill_id = ?', [targetId]),
       db.query('SELECT id FROM scrape_log WHERE skill_id = ?', [sourceId]),
+      db.query('SELECT id FROM plan_jobs WHERE skill_id = ?', [sourceId]),
+      isRename ? [] : db.query('SELECT id FROM plan_jobs WHERE skill_id = ?', [targetId]),
+      db.query('SELECT id FROM plan_review_content WHERE skill_id = ?', [sourceId]),
+      isRename ? [] : db.query('SELECT id FROM plan_review_content WHERE skill_id = ?', [targetId]),
+      db.query('SELECT * FROM review_submissions WHERE skill_id = ?', [sourceId]),
+      isRename ? [] : db.query('SELECT * FROM review_submissions WHERE skill_id = ?', [targetId]),
+      db.query('SELECT * FROM premium_plan_days WHERE skill_id = ?', [sourceId]),
+      isRename ? [] : db.query('SELECT * FROM premium_plan_days WHERE skill_id = ?', [targetId]),
     ]);
 
     // Content duplicates (same id in both source and target)
@@ -110,6 +126,14 @@ class SkillMergeService {
     const ulpConflictUsers = sourceUlpUsers.filter(u => targetUlpUsers.has(u));
     const ulpMoveUsers = sourceUlpUsers.filter(u => !targetUlpUsers.has(u));
 
+    // Review submissions conflicts (same user_id + day_number in both)
+    const targetSubsByKey = new Set(targetReviewSubs.map(r => `${r.user_id}:${r.day_number}`));
+    const reviewSubConflicts = sourceReviewSubs.filter(r => targetSubsByKey.has(`${r.user_id}:${r.day_number}`));
+
+    // Premium plan days conflicts (same user_id + day_number in both)
+    const targetPremiumByKey = new Set(targetPremiumDays.map(r => `${r.user_id}:${r.day_number}`));
+    const premiumDayConflicts = sourcePremiumDays.filter(r => targetPremiumByKey.has(`${r.user_id}:${r.day_number}`));
+
     return {
       impact: {
         content: {
@@ -145,6 +169,24 @@ class SkillMergeService {
         scrape_log: {
           source_count: sourceScrapeLogs.length,
         },
+        plan_jobs: {
+          source_count: sourcePlanJobs.length,
+          target_count: targetPlanJobs.length,
+        },
+        plan_review_content: {
+          source_count: sourceReviewContent.length,
+          target_count: targetReviewContent.length,
+        },
+        review_submissions: {
+          source_count: sourceReviewSubs.length,
+          conflicts: reviewSubConflicts.length,
+          will_move: sourceReviewSubs.length - reviewSubConflicts.length,
+        },
+        premium_plan_days: {
+          source_count: sourcePremiumDays.length,
+          conflicts: premiumDayConflicts.length,
+          will_move: sourcePremiumDays.length - premiumDayConflicts.length,
+        },
       },
     };
   }
@@ -166,6 +208,10 @@ class SkillMergeService {
     await db.insert('UPDATE user_courses SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('UPDATE user_plan_progress SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('UPDATE user_learning_plans SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    await db.insert('UPDATE plan_jobs SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    await db.insert('UPDATE plan_review_content SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    await db.insert('UPDATE review_submissions SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    await db.insert('UPDATE premium_plan_days SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('DELETE FROM skills WHERE id = ?', [sourceId]);
   }
 
@@ -182,11 +228,15 @@ class SkillMergeService {
     // 2. User courses: merge with conflict resolution
     await this._mergeUserCourses(sourceId, targetId);
 
+    // Capture pre-merge progress before union (needed for premium winner-pick and immutability)
+    const preMergeSourceProgress = await db.query('SELECT * FROM user_plan_progress WHERE skill_id = ?', [sourceId]);
+    const preMergeTargetProgress = await db.query('SELECT * FROM user_plan_progress WHERE skill_id = ?', [targetId]);
+
     // 3. User plan progress: merge completed_days
     await this._mergeUserPlanProgress(sourceId, targetId);
 
-    // 4. User learning plans: merge carefully
-    await this._mergeUserLearningPlans(sourceId, targetId);
+    // 4. User learning plans: merge carefully (using pre-merge progress)
+    await this._mergeUserLearningPlans(sourceId, targetId, preMergeSourceProgress, preMergeTargetProgress);
 
     // 5. Learning plans: keep target if it has rows, otherwise move source
     const targetPlanCount = await db.query('SELECT COUNT(*) as cnt FROM learning_plans WHERE skill_id = ?', [targetId]);
@@ -198,7 +248,19 @@ class SkillMergeService {
 
     // 6. Scrape log: leave on source for historical accuracy
 
-    // 7. Delete source skill
+    // 7. Plan jobs: repoint source → target
+    await db.insert('UPDATE plan_jobs SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+
+    // 8. Plan review content: repoint source → target
+    await db.insert('UPDATE plan_review_content SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+
+    // 9. Review submissions: merge with conflict resolution (target wins on conflict)
+    await this._mergeReviewSubmissions(sourceId, targetId);
+
+    // 10. Premium plan days: merge with conflict resolution (target wins on conflict)
+    await this._mergePremiumPlanDays(sourceId, targetId);
+
+    // 11. Delete source skill
     await db.insert('DELETE FROM skills WHERE id = ?', [sourceId]);
   }
 
@@ -261,16 +323,21 @@ class SkillMergeService {
 
   // ── user_learning_plans merge ───────────────────────────────────────
   //
-  // Rules:
+  // Strategy differs by user type:
+  //
+  // Shared/free users (existing behavior):
   // - Completed days are immutable (user finished that day's work)
   // - Existing chunked/timestamped runs are immutable
   // - Avoid duplicate content_id families
   // - After locking immutable rows, remaining days realign toward the target shared plan
   //
-  // For users with NO target plan: simple repoint.
-  // For users WITH target plan: lock immutable target rows, fill gaps from source or shared plan.
+  // Premium users (simplified winner-pick):
+  // - Choose one canonical plan: the one with MORE completed days (tie-break: target)
+  // - Repoint winner plan rows to target skill_id
+  // - Delete loser plan rows
+  // - Completed progress is always preserved via user_plan_progress union (step 3)
 
-  async _mergeUserLearningPlans(sourceId, targetId) {
+  async _mergeUserLearningPlans(sourceId, targetId, preMergeSourceProgress, preMergeTargetProgress) {
     const sourceRows = await db.query('SELECT * FROM user_learning_plans WHERE skill_id = ?', [sourceId]);
     const targetRows = await db.query('SELECT * FROM user_learning_plans WHERE skill_id = ?', [targetId]);
 
@@ -286,29 +353,49 @@ class SkillMergeService {
       targetByUser.get(r.user_id).push(r);
     }
 
-    // Get completed days per user for target skill (to know which days are immutable)
-    const targetProgressRows = await db.query('SELECT * FROM user_plan_progress WHERE skill_id = ?', [targetId]);
-    const completedByUser = new Map();
-    for (const r of targetProgressRows) {
-      completedByUser.set(r.user_id, new Set(JSON.parse(r.completed_days || '[]')));
+    // Determine which users are premium
+    const allUserIds = [...new Set([...sourceByUser.keys(), ...targetByUser.keys()])];
+    const premiumUsers = new Set();
+    if (allUserIds.length > 0) {
+      const placeholders = allUserIds.map(() => '?').join(', ');
+      const users = await db.query(
+        `SELECT id, subscription_status FROM users WHERE id IN (${placeholders})`,
+        allUserIds
+      );
+      for (const u of users) {
+        if (u.subscription_status === 'active') premiumUsers.add(u.id);
+      }
     }
 
-    // Get the target shared plan for realignment
+    // Use pre-merge progress (captured before user_plan_progress was unioned)
+    const sourceCompletedByUser = new Map();
+    for (const r of (preMergeSourceProgress || [])) {
+      sourceCompletedByUser.set(r.user_id, new Set(JSON.parse(r.completed_days || '[]')));
+    }
+    const targetCompletedByUser = new Map();
+    for (const r of (preMergeTargetProgress || [])) {
+      targetCompletedByUser.set(r.user_id, new Set(JSON.parse(r.completed_days || '[]')));
+    }
+
+    // Get the target shared plan for realignment (used by shared/free merge)
     const sharedPlan = await db.query(
-      'SELECT day_number, content_id, content_type, reason, timestamp_start_seconds, timestamp_end_seconds FROM learning_plans WHERE skill_id = ? ORDER BY day_number',
+      'SELECT day_number, content_id, content_type, reason, review_status, review_title, review_body, timestamp_start_seconds, timestamp_end_seconds FROM learning_plans WHERE skill_id = ? ORDER BY day_number',
       [targetId]
     );
     const sharedByDay = new Map(sharedPlan.map(r => [r.day_number, r]));
 
     for (const [userId, srcPlans] of sourceByUser) {
       const tgtPlans = targetByUser.get(userId);
+      const isPremium = premiumUsers.has(userId);
 
+      if (isPremium) {
+        await this._mergePremiumUserPlans(userId, sourceId, targetId, srcPlans, tgtPlans, sourceCompletedByUser, targetCompletedByUser);
+        continue;
+      }
+
+      // Shared/free user merge (existing behavior)
       if (!tgtPlans) {
-        const sourceProgress = await db.query(
-          'SELECT * FROM user_plan_progress WHERE user_id = ? AND skill_id = ?',
-          [userId, sourceId]
-        );
-        const completedDays = new Set(JSON.parse(sourceProgress[0]?.completed_days || '[]'));
+        const completedDays = sourceCompletedByUser.get(userId) || new Set();
         const immutableRows = srcPlans.filter(row => (
           completedDays.has(row.day_number) ||
           row.timestamp_start_seconds != null ||
@@ -327,14 +414,7 @@ class SkillMergeService {
         const mergedByDay = new Map();
 
         for (const row of immutableRows) {
-          mergedByDay.set(row.day_number, {
-            day_number: row.day_number,
-            content_id: row.content_id,
-            content_type: row.content_type,
-            reason: row.reason,
-            timestamp_start_seconds: row.timestamp_start_seconds ?? null,
-            timestamp_end_seconds: row.timestamp_end_seconds ?? null,
-          });
+          mergedByDay.set(row.day_number, this._planRowFields(row));
         }
 
         const fallbackSharedRows = Array.from(sharedByDay.values()).filter(row => row && row.content_id);
@@ -344,31 +424,25 @@ class SkillMergeService {
           if (mergedByDay.has(day)) continue;
 
           const sharedDay = sharedByDay.get(day);
+          if (sharedDay && !sharedDay.content_id && sharedDay.content_type === 'review') {
+            mergedByDay.set(day, this._planRowFields(sharedDay, day));
+            continue;
+          }
           const sharedFamily = this._contentFamily(sharedDay?.content_id);
           if (sharedDay && sharedDay.content_id && (!sharedFamily || !usedContentFamilies.has(sharedFamily))) {
-            mergedByDay.set(day, {
-              day_number: day,
-              content_id: sharedDay.content_id,
-              content_type: sharedDay.content_type,
-              reason: sharedDay.reason,
-              timestamp_start_seconds: sharedDay.timestamp_start_seconds ?? null,
-              timestamp_end_seconds: sharedDay.timestamp_end_seconds ?? null,
-            });
+            mergedByDay.set(day, this._planRowFields(sharedDay, day));
             if (sharedFamily) usedContentFamilies.add(sharedFamily);
             continue;
           }
 
           const sourceDay = mutableSourceByDay.get(day);
+          if (sourceDay && !sourceDay.content_id && sourceDay.content_type === 'review') {
+            mergedByDay.set(day, this._planRowFields(sourceDay, day));
+            continue;
+          }
           const sourceFamily = this._contentFamily(sourceDay?.content_id);
           if (sourceDay && sourceDay.content_id && (!sourceFamily || !usedContentFamilies.has(sourceFamily))) {
-            mergedByDay.set(day, {
-              day_number: day,
-              content_id: sourceDay.content_id,
-              content_type: sourceDay.content_type,
-              reason: sourceDay.reason,
-              timestamp_start_seconds: sourceDay.timestamp_start_seconds ?? null,
-              timestamp_end_seconds: sourceDay.timestamp_end_seconds ?? null,
-            });
+            mergedByDay.set(day, this._planRowFields(sourceDay, day));
             if (sourceFamily) usedContentFamilies.add(sourceFamily);
             continue;
           }
@@ -379,14 +453,7 @@ class SkillMergeService {
           });
           if (fallbackShared) {
             const family = this._contentFamily(fallbackShared.content_id);
-            mergedByDay.set(day, {
-              day_number: day,
-              content_id: fallbackShared.content_id,
-              content_type: fallbackShared.content_type,
-              reason: fallbackShared.reason,
-              timestamp_start_seconds: fallbackShared.timestamp_start_seconds ?? null,
-              timestamp_end_seconds: fallbackShared.timestamp_end_seconds ?? null,
-            });
+            mergedByDay.set(day, this._planRowFields(fallbackShared, day));
             if (family) usedContentFamilies.add(family);
             continue;
           }
@@ -397,14 +464,7 @@ class SkillMergeService {
           });
           if (fallbackSource) {
             const family = this._contentFamily(fallbackSource.content_id);
-            mergedByDay.set(day, {
-              day_number: day,
-              content_id: fallbackSource.content_id,
-              content_type: fallbackSource.content_type,
-              reason: fallbackSource.reason,
-              timestamp_start_seconds: fallbackSource.timestamp_start_seconds ?? null,
-              timestamp_end_seconds: fallbackSource.timestamp_end_seconds ?? null,
-            });
+            mergedByDay.set(day, this._planRowFields(fallbackSource, day));
             if (family) usedContentFamilies.add(family);
           }
         }
@@ -417,8 +477,8 @@ class SkillMergeService {
         continue;
       }
 
-      // Conflict: merge carefully
-      const completedDays = completedByUser.get(userId) || new Set();
+      // Conflict: merge carefully (shared/free user)
+      const completedDays = targetCompletedByUser.get(userId) || new Set();
       const tgtByDay = new Map(tgtPlans.map(r => [r.day_number, r]));
 
       // Determine immutable target rows: completed days OR chunked/timestamped
@@ -437,17 +497,10 @@ class SkillMergeService {
       const srcByDay = new Map(srcPlans.map(r => [r.day_number, r]));
       for (const day of immutableDays) {
         const row = tgtByDay.get(day);
-        if (row && row.content_id) {
+        if (row) {
           const family = this._contentFamily(row.content_id);
           if (family) usedContentFamilies.add(family);
-          mergedByDay.set(day, {
-            day_number: row.day_number,
-            content_id: row.content_id,
-            content_type: row.content_type,
-            reason: row.reason,
-            timestamp_start_seconds: row.timestamp_start_seconds ?? null,
-            timestamp_end_seconds: row.timestamp_end_seconds ?? null,
-          });
+          mergedByDay.set(day, this._planRowFields(row));
         }
       }
 
@@ -460,17 +513,18 @@ class SkillMergeService {
         if (immutableDays.has(day)) continue; // locked
 
         const tryRow = (row) => {
-          if (!row || !row.content_id) return false;
+          if (!row) return false;
+          // Review days have null content_id — always allow them
+          if (!row.content_id) {
+            if (row.content_type === 'review') {
+              mergedByDay.set(day, this._planRowFields(row, day));
+              return true;
+            }
+            return false;
+          }
           const family = this._contentFamily(row.content_id);
           if (family && usedContentFamilies.has(family)) return false;
-          mergedByDay.set(day, {
-            day_number: day,
-            content_id: row.content_id,
-            content_type: row.content_type,
-            reason: row.reason,
-            timestamp_start_seconds: row.timestamp_start_seconds ?? null,
-            timestamp_end_seconds: row.timestamp_end_seconds ?? null,
-          });
+          mergedByDay.set(day, this._planRowFields(row, day));
           if (family) usedContentFamilies.add(family);
           return true;
         };
@@ -505,7 +559,104 @@ class SkillMergeService {
     }
   }
 
+  // ── premium user plan merge (winner-pick) ──────────────────────────
+
+  async _mergePremiumUserPlans(userId, sourceId, targetId, srcPlans, tgtPlans, sourceCompletedByUser, targetCompletedByUser) {
+    if (!tgtPlans) {
+      // Source-only: repoint to target
+      for (const row of srcPlans) {
+        await db.insert('UPDATE user_learning_plans SET skill_id = ? WHERE id = ?', [targetId, row.id]);
+      }
+      return;
+    }
+
+    if (!srcPlans || srcPlans.length === 0) {
+      // Target-only: keep target (nothing to do)
+      return;
+    }
+
+    // Both exist: pick winner by completed days count, tie-break → target
+    const srcCompleted = sourceCompletedByUser.get(userId) || new Set();
+    const tgtCompleted = targetCompletedByUser.get(userId) || new Set();
+
+    const sourceWins = srcCompleted.size > tgtCompleted.size;
+
+    if (sourceWins) {
+      // Delete target plan rows, repoint source to target
+      await db.insert('DELETE FROM user_learning_plans WHERE user_id = ? AND skill_id = ?', [userId, targetId]);
+      for (const row of srcPlans) {
+        await db.insert('UPDATE user_learning_plans SET skill_id = ? WHERE id = ?', [targetId, row.id]);
+      }
+    } else {
+      // Keep target, delete source plan rows
+      for (const row of srcPlans) {
+        await db.insert('DELETE FROM user_learning_plans WHERE id = ?', [row.id]);
+      }
+    }
+  }
+
+  // ── review_submissions merge ───────────────────────────────────────
+
+  async _mergeReviewSubmissions(sourceId, targetId) {
+    const sourceRows = await db.query('SELECT * FROM review_submissions WHERE skill_id = ?', [sourceId]);
+    const targetRows = await db.query('SELECT * FROM review_submissions WHERE skill_id = ?', [targetId]);
+    const targetByKey = new Set(targetRows.map(r => `${r.user_id}:${r.day_number}`));
+
+    for (const src of sourceRows) {
+      const key = `${src.user_id}:${src.day_number}`;
+      if (targetByKey.has(key)) {
+        // Conflict: target wins — delete source submission and its answers
+        await db.insert('DELETE FROM review_submission_answers WHERE submission_id = ?', [src.id]);
+        await db.insert('DELETE FROM review_submissions WHERE id = ?', [src.id]);
+      } else {
+        // No conflict: repoint to target
+        await db.insert('UPDATE review_submissions SET skill_id = ? WHERE id = ?', [targetId, src.id]);
+      }
+    }
+  }
+
+  // ── premium_plan_days merge ────────────────────────────────────────
+
+  async _mergePremiumPlanDays(sourceId, targetId) {
+    const sourceRows = await db.query('SELECT * FROM premium_plan_days WHERE skill_id = ?', [sourceId]);
+    const targetRows = await db.query('SELECT * FROM premium_plan_days WHERE skill_id = ?', [targetId]);
+    const targetByKey = new Set(targetRows.map(r => `${r.user_id}:${r.day_number}`));
+
+    for (const src of sourceRows) {
+      const key = `${src.user_id}:${src.day_number}`;
+      if (targetByKey.has(key)) {
+        // Conflict: target wins — delete source row
+        await db.insert('DELETE FROM premium_plan_days WHERE id = ?', [src.id]);
+      } else {
+        // No conflict: repoint to target
+        await db.insert('UPDATE premium_plan_days SET skill_id = ? WHERE id = ?', [targetId, src.id]);
+      }
+    }
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────
+
+  // Extract all plan-relevant fields from a row, preserving review fields.
+  // If dayOverride is provided, use it instead of row.day_number.
+  _planRowFields(row, dayOverride) {
+    // review_body is stored as a JSON string in the DB, but saveUserLearningPlan
+    // calls JSON.stringify on it again. Parse it here so it round-trips correctly.
+    let reviewBody = row.review_body ?? null;
+    if (typeof reviewBody === 'string') {
+      try { reviewBody = JSON.parse(reviewBody); } catch (_) { /* keep as-is */ }
+    }
+    return {
+      day_number: dayOverride ?? row.day_number,
+      content_id: row.content_id,
+      content_type: row.content_type,
+      reason: row.reason,
+      review_status: row.review_status ?? null,
+      review_title: row.review_title ?? null,
+      review_body: reviewBody,
+      timestamp_start_seconds: row.timestamp_start_seconds ?? null,
+      timestamp_end_seconds: row.timestamp_end_seconds ?? null,
+    };
+  }
 
   _resolveStatus(a, b) {
     const rankA = STATUS_RANK[a] || 0;
