@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock api service
 vi.mock('../services/api', () => ({
@@ -92,9 +92,16 @@ const MOCK_SKILL_RESPONSE = {
 
 describe('SkillPage', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
+    apiService.getSkillContent.mockReset();
+    apiService.getRatings.mockReset();
     apiService.getSkillContent.mockResolvedValue(MOCK_SKILL_RESPONSE);
     apiService.getRatings.mockResolvedValue({ counts: {}, userRatings: {} });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders skill name and description', async () => {
@@ -135,6 +142,35 @@ describe('SkillPage', () => {
     );
   });
 
+
+  it('stops polling after a 429 instead of retrying forever', async () => {
+    vi.useFakeTimers();
+    const pendingResponse = {
+      status: 'scraping',
+      skill: MOCK_SKILL_RESPONSE.skill,
+      content: { videos: [], articles: [], lastScrapedAt: null },
+    };
+
+    apiService.getSkillContent
+      .mockResolvedValueOnce(pendingResponse)
+      .mockRejectedValueOnce({ response: { status: 429 } });
+
+    renderSkillPage();
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(apiService.getSkillContent).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(apiService.getSkillContent).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+    expect(apiService.getSkillContent).toHaveBeenCalledTimes(2);
+  }, 10000);
 
   it('caps visible videos and articles to keep the page focused', async () => {
     const manyItemsResponse = {

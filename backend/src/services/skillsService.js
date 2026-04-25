@@ -644,6 +644,12 @@ class SkillsService {
     return mapSkillRow(await db.getSkillById(id));
   }
 
+  _triggerInitialSkillScrape(skillId) {
+    this.scrapeSkillContent(skillId, { force: true }).catch(err => {
+      console.error(`Initial scrape failed for ${skillId}:`, err.message);
+    });
+  }
+
   // Search for a skill by arbitrary query; creates + scrapes if not found
   isSuspiciousSearch(query) {
     const trimmed = query.trim();
@@ -717,21 +723,17 @@ class SkillsService {
       return { skill: mapSkillRow(existing), status: existing.status || 'scraping' };
     }
 
-    // Not found — create skill and only scrape articles immediately.
-    // Keep the search endpoint cheap; YouTube will be filled in by the nightly cron.
+    // Not found — create skill and kick off a full scrape.
+    // Rate limiting + per-skill scrape guards protect the YouTube API.
     const limit = await this.canCreateNewSkill(context);
     if (!limit.allowed) {
       return { skill: null, status: 'rate_limited', message: limit.message };
     }
 
     const skill = await this.createSkill(skillId, skillName);
+    this._triggerInitialSkillScrape(skillId);
 
-    // Fire-and-forget: keep user-triggered search lightweight.
-    this.scrapeArticlesOnly(skillId).catch(err => {
-      console.error(`Articles-only scrape failed for new skill ${skillId}:`, err.message);
-    });
-
-    return { skill, status: 'scraping', message: 'Gathering starter content for this skill...' };
+    return { skill, status: 'scraping', message: 'Gathering the best videos and articles for this skill...' };
   }
 
   // Get full skill details + content (used by SkillPage for polling)
@@ -750,19 +752,16 @@ class SkillsService {
           .map(w => w.charAt(0).toUpperCase() + w.slice(1))
           .join(' ');
         const skill = await this.createSkill(skillId, skillName);
+        this._triggerInitialSkillScrape(skillId);
         return { skill, status: 'pending', content: { videos: [], articles: [], courses: [] } };
       }
 
       if (skillRow.status === 'ready') {
         const content = await this.getCuratedContent(skillId, filters, skillRow);
-        // If marked ready but has no content, nightly scrape will handle it
-        // DON'T auto-scrape from user requests — prevents quota abuse
         return { skill: mapSkillRow(skillRow), status: 'ready', content };
       }
 
-      // Pending/error skills will be handled by the nightly scrape
-      // DON'T auto-scrape from user requests — prevents quota abuse
-      // But DO return any content already in the DB (e.g. articles from immediate scrape)
+      // Return any content already in the DB while an initial scrape is still running.
       const content = await this.getCuratedContent(skillId, filters, skillRow);
       const hasContent = (content.videos?.length || 0) + (content.articles?.length || 0) > 0;
 

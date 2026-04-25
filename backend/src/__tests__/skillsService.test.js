@@ -83,10 +83,11 @@ describe('searchSkill', () => {
     expect(result.message).toBeTruthy();
   });
 
-  test('does not trigger full scrape for search misses', async () => {
+  test('triggers full scrape for search misses', async () => {
+    const triggerSpy = jest.spyOn(skillsService, '_triggerInitialSkillScrape');
     await skillsService.searchSkill('observability');
-    expect(scraperService.scrapeSkill).not.toHaveBeenCalled();
-    expect(scraperService.scrapeArticles).toHaveBeenCalled();
+    expect(triggerSpy).toHaveBeenCalledWith('observability');
+    triggerSpy.mockRestore();
   });
 
   test('blocks inappropriate search terms', async () => {
@@ -171,7 +172,8 @@ describe('getSkillContent', () => {
     expect(result.content.articles.length).toBe(1);
   });
 
-  test('returns pending for non-existent skills and auto-creates', async () => {
+  test('returns pending for non-existent skills, auto-creates, and kicks off a full scrape', async () => {
+    const triggerSpy = jest.spyOn(skillsService, '_triggerInitialSkillScrape');
     const result = await skillsService.getSkillContent('golang');
     expect(['pending', 'scraping']).toContain(result.status);
     expect(result.skill.id).toBe('golang');
@@ -181,6 +183,8 @@ describe('getSkillContent', () => {
     const row = await db.getSkillById('golang');
     expect(row).not.toBeNull();
     expect(row.status).toBe('pending');
+    expect(triggerSpy).toHaveBeenCalledWith('golang');
+    triggerSpy.mockRestore();
   });
 
   test('returns pending status for pending skills without crashing', async () => {

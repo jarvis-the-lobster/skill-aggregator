@@ -76,6 +76,7 @@ export function SkillPage() {
 
   const pollTimer = useRef(null);
   const timeoutTimer = useRef(null);
+  const pollFailureCount = useRef(0);
   const initialTabSet = useRef(false);
 
   const skillViewedRef = useRef(false);
@@ -86,8 +87,15 @@ export function SkillPage() {
   };
 
   const clearTimers = useCallback(() => {
-    if (pollTimer.current) clearInterval(pollTimer.current);
-    if (timeoutTimer.current) clearTimeout(timeoutTimer.current);
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+    if (timeoutTimer.current) {
+      clearTimeout(timeoutTimer.current);
+      timeoutTimer.current = null;
+    }
+    pollFailureCount.current = 0;
   }, []);
 
   const fetchRatings = useCallback(async (videos, articles) => {
@@ -131,6 +139,8 @@ export function SkillPage() {
   }, [skillId]);
 
   const startPolling = useCallback(() => {
+    if (pollTimer.current || timeoutTimer.current) return;
+
     // Timeout after 60 seconds
     timeoutTimer.current = setTimeout(() => {
       clearTimers();
@@ -140,6 +150,7 @@ export function SkillPage() {
     pollTimer.current = setInterval(async () => {
       try {
         const result = await apiService.getSkillContent(skillId);
+        pollFailureCount.current = 0;
 
         let ratingsData = null;
         if (result.status === 'ready' && result.content) {
@@ -152,7 +163,14 @@ export function SkillPage() {
           clearTimers();
         }
       } catch (err) {
+        const responseStatus = err?.response?.status;
+        pollFailureCount.current += 1;
         console.error('Poll error:', err);
+
+        if (responseStatus === 429 || pollFailureCount.current >= 3) {
+          clearTimers();
+          setStatus('error');
+        }
       }
     }, POLL_INTERVAL_MS);
   }, [applyResult, clearTimers, fetchRatings, skillId]);
