@@ -878,6 +878,25 @@ describe('SkillMergeService', () => {
       expect(tgtJobs[1].job_type).toBe('premium_plan_generation');
     });
 
+    test('merge: target wins on duplicate plan_jobs conflict', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      await seedPlanJob('src', 1, { job_type: 'review_content', day_number: 7, status: 'pending' });
+      await seedPlanJob('src', 1, { job_type: 'premium_plan_generation', day_number: 8, status: 'pending' });
+      await seedPlanJob('tgt', 1, { job_type: 'review_content', day_number: 7, status: 'pending' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const tgtJobs = await db.query("SELECT user_id, day_number, job_type, status, skill_id FROM plan_jobs WHERE skill_id = 'tgt' ORDER BY day_number, job_type");
+      expect(tgtJobs.length).toBe(2);
+      expect(tgtJobs[0]).toMatchObject({ user_id: 1, day_number: 7, job_type: 'review_content', status: 'pending', skill_id: 'tgt' });
+      expect(tgtJobs[1]).toMatchObject({ user_id: 1, day_number: 8, job_type: 'premium_plan_generation', status: 'pending', skill_id: 'tgt' });
+
+      const srcJobs = await db.query("SELECT * FROM plan_jobs WHERE skill_id = 'src'");
+      expect(srcJobs.length).toBe(0);
+    });
+
     test('rename: plan_jobs repoint from source to target', async () => {
       await seedSkill('src', 'Source');
       await seedUser(1);
@@ -906,6 +925,26 @@ describe('SkillMergeService', () => {
       const tgtContent = await db.query("SELECT * FROM plan_review_content WHERE skill_id = 'tgt'");
       expect(tgtContent.length).toBe(1);
       expect(tgtContent[0].title).toBe('Week 1 Review');
+    });
+
+    test('merge: target wins on duplicate plan_review_content conflict', async () => {
+      await seedSkill('src', 'Source');
+      await seedSkill('tgt', 'Target');
+      await seedUser(1);
+      await seedPlanReviewContent('src', 1, 7, { review_type: 'weekly_checkin', title: 'Source Review', body: '{"source":true}' });
+      await seedPlanReviewContent('src', null, 14, { review_type: 'weekly_checkin', title: 'Shared Source Review', body: '{"shared":"source"}' });
+      await seedPlanReviewContent('tgt', 1, 7, { review_type: 'weekly_checkin', title: 'Target Review', body: '{"target":true}' });
+      await seedPlanReviewContent('tgt', null, 14, { review_type: 'weekly_checkin', title: 'Shared Target Review', body: '{"shared":"target"}' });
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const tgtContent = await db.query("SELECT user_id, day_number, review_type, title, body FROM plan_review_content WHERE skill_id = 'tgt' ORDER BY day_number, user_id");
+      expect(tgtContent.length).toBe(2);
+      expect(tgtContent[0]).toMatchObject({ user_id: 1, day_number: 7, review_type: 'weekly_checkin', title: 'Target Review', body: '{"target":true}' });
+      expect(tgtContent[1]).toMatchObject({ user_id: null, day_number: 14, review_type: 'weekly_checkin', title: 'Shared Target Review', body: '{"shared":"target"}' });
+
+      const srcContent = await db.query("SELECT * FROM plan_review_content WHERE skill_id = 'src'");
+      expect(srcContent.length).toBe(0);
     });
   });
 
@@ -1076,8 +1115,10 @@ describe('SkillMergeService', () => {
       await seedSkill('src', 'Source');
       await seedSkill('tgt', 'Target');
       await seedUser(1);
-      await seedPlanJob('src', 1);
-      await seedPlanReviewContent('src', 1, 7);
+      await seedPlanJob('src', 1, { job_type: 'review_content', day_number: 7, status: 'pending' });
+      await seedPlanJob('tgt', 1, { job_type: 'review_content', day_number: 7, status: 'pending' }); // conflict
+      await seedPlanReviewContent('src', 1, 7, { review_type: 'weekly_checkin' });
+      await seedPlanReviewContent('tgt', 1, 7, { review_type: 'weekly_checkin' }); // conflict
       await seedReviewSubmission(1, 'src', 7);
       await seedReviewSubmission(1, 'tgt', 7); // conflict
       await seedPremiumPlanDay(1, 'src', 1, { content_id: 'c1' });
@@ -1087,7 +1128,13 @@ describe('SkillMergeService', () => {
       const result = await skillMergeService.safeMerge('src', 'tgt', { dryRun: true });
 
       expect(result.impact.plan_jobs.source_count).toBe(1);
+      expect(result.impact.plan_jobs.target_count).toBe(1);
+      expect(result.impact.plan_jobs.conflicts).toBe(1);
+      expect(result.impact.plan_jobs.will_move).toBe(0);
       expect(result.impact.plan_review_content.source_count).toBe(1);
+      expect(result.impact.plan_review_content.target_count).toBe(1);
+      expect(result.impact.plan_review_content.conflicts).toBe(1);
+      expect(result.impact.plan_review_content.will_move).toBe(0);
       expect(result.impact.review_submissions.source_count).toBe(1);
       expect(result.impact.review_submissions.conflicts).toBe(1);
       expect(result.impact.review_submissions.will_move).toBe(0);

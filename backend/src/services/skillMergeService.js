@@ -126,6 +126,14 @@ class SkillMergeService {
     const ulpConflictUsers = sourceUlpUsers.filter(u => targetUlpUsers.has(u));
     const ulpMoveUsers = sourceUlpUsers.filter(u => !targetUlpUsers.has(u));
 
+    // Plan jobs conflicts (same user_id + day_number + job_type + status in both)
+    const targetJobsByKey = new Set(targetPlanJobs.map(r => this._planJobConflictKey(r)));
+    const planJobConflicts = sourcePlanJobs.filter(r => targetJobsByKey.has(this._planJobConflictKey(r)));
+
+    // Plan review content conflicts (same user_id + day_number + review_type in both)
+    const targetReviewContentByKey = new Set(targetReviewContent.map(r => this._planReviewContentConflictKey(r)));
+    const reviewContentConflicts = sourceReviewContent.filter(r => targetReviewContentByKey.has(this._planReviewContentConflictKey(r)));
+
     // Review submissions conflicts (same user_id + day_number in both)
     const targetSubsByKey = new Set(targetReviewSubs.map(r => `${r.user_id}:${r.day_number}`));
     const reviewSubConflicts = sourceReviewSubs.filter(r => targetSubsByKey.has(`${r.user_id}:${r.day_number}`));
@@ -172,10 +180,14 @@ class SkillMergeService {
         plan_jobs: {
           source_count: sourcePlanJobs.length,
           target_count: targetPlanJobs.length,
+          conflicts: planJobConflicts.length,
+          will_move: sourcePlanJobs.length - planJobConflicts.length,
         },
         plan_review_content: {
           source_count: sourceReviewContent.length,
           target_count: targetReviewContent.length,
+          conflicts: reviewContentConflicts.length,
+          will_move: sourceReviewContent.length - reviewContentConflicts.length,
         },
         review_submissions: {
           source_count: sourceReviewSubs.length,
@@ -248,11 +260,11 @@ class SkillMergeService {
 
     // 6. Scrape log: leave on source for historical accuracy
 
-    // 7. Plan jobs: repoint source → target
-    await db.insert('UPDATE plan_jobs SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    // 7. Plan jobs: merge with conflict resolution (target wins on conflict)
+    await this._mergePlanJobs(sourceId, targetId);
 
-    // 8. Plan review content: repoint source → target
-    await db.insert('UPDATE plan_review_content SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    // 8. Plan review content: merge with conflict resolution (target wins on conflict)
+    await this._mergePlanReviewContent(sourceId, targetId);
 
     // 9. Review submissions: merge with conflict resolution (target wins on conflict)
     await this._mergeReviewSubmissions(sourceId, targetId);
@@ -597,6 +609,36 @@ class SkillMergeService {
 
   // ── review_submissions merge ───────────────────────────────────────
 
+  async _mergePlanJobs(sourceId, targetId) {
+    const sourceRows = await db.query('SELECT * FROM plan_jobs WHERE skill_id = ?', [sourceId]);
+    const targetRows = await db.query('SELECT * FROM plan_jobs WHERE skill_id = ?', [targetId]);
+    const targetByKey = new Set(targetRows.map(r => this._planJobConflictKey(r)));
+
+    for (const src of sourceRows) {
+      const key = this._planJobConflictKey(src);
+      if (targetByKey.has(key)) {
+        await db.insert('DELETE FROM plan_jobs WHERE id = ?', [src.id]);
+      } else {
+        await db.insert('UPDATE plan_jobs SET skill_id = ? WHERE id = ?', [targetId, src.id]);
+      }
+    }
+  }
+
+  async _mergePlanReviewContent(sourceId, targetId) {
+    const sourceRows = await db.query('SELECT * FROM plan_review_content WHERE skill_id = ?', [sourceId]);
+    const targetRows = await db.query('SELECT * FROM plan_review_content WHERE skill_id = ?', [targetId]);
+    const targetByKey = new Set(targetRows.map(r => this._planReviewContentConflictKey(r)));
+
+    for (const src of sourceRows) {
+      const key = this._planReviewContentConflictKey(src);
+      if (targetByKey.has(key)) {
+        await db.insert('DELETE FROM plan_review_content WHERE id = ?', [src.id]);
+      } else {
+        await db.insert('UPDATE plan_review_content SET skill_id = ? WHERE id = ?', [targetId, src.id]);
+      }
+    }
+  }
+
   async _mergeReviewSubmissions(sourceId, targetId) {
     const sourceRows = await db.query('SELECT * FROM review_submissions WHERE skill_id = ?', [sourceId]);
     const targetRows = await db.query('SELECT * FROM review_submissions WHERE skill_id = ?', [targetId]);
@@ -656,6 +698,14 @@ class SkillMergeService {
       timestamp_start_seconds: row.timestamp_start_seconds ?? null,
       timestamp_end_seconds: row.timestamp_end_seconds ?? null,
     };
+  }
+
+  _planJobConflictKey(row) {
+    return `${row.user_id ?? 'null'}:${row.day_number ?? 'null'}:${row.job_type ?? 'null'}:${row.status ?? 'null'}`;
+  }
+
+  _planReviewContentConflictKey(row) {
+    return `${row.user_id ?? 'null'}:${row.day_number ?? 'null'}:${row.review_type ?? 'null'}`;
   }
 
   _resolveStatus(a, b) {
