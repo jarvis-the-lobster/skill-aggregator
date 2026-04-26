@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Clock, Eye, Star, ArrowLeft, ExternalLink, CalendarDays } from 'lucide-react';
 import { apiService } from '../services/api';
@@ -59,6 +59,7 @@ function SSRPlanSection({ plan }) {
 
 export function SkillPage() {
   const { id: skillId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { plan: initialPlan, planSkillId } = useInitialData();
   const { isEnrolled, loading: enrollLoading, enroll, unenroll, enrollError } = useEnrollment(skillId);
@@ -125,6 +126,16 @@ export function SkillPage() {
     try {
       const result = await apiService.getSkillContent(skillId);
 
+      if (!result?.skill) {
+        navigate('/', { replace: true });
+        return;
+      }
+
+      if (result.skill.id && result.skill.id !== skillId) {
+        navigate(`/skills/${result.skill.id}`, { replace: true });
+        return;
+      }
+
       // If content is ready, fetch ratings in parallel before rendering
       let ratingsData = { counts: {}, userRatings: {} };
       if (result.status === 'ready' && result.content) {
@@ -137,7 +148,7 @@ export function SkillPage() {
       console.error('Error loading skill data:', error);
       setStatus('error');
     }
-  }, [applyResult, fetchRatings, skillId]);
+  }, [applyResult, fetchRatings, navigate, skillId]);
 
   useEffect(() => {
     skillViewedRef.current = false;

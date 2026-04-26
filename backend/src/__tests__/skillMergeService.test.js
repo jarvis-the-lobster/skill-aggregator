@@ -203,6 +203,9 @@ describe('SkillMergeService', () => {
       expect(target.length).toBe(1);
       expect(target[0].name).toBe('Busines Consulting');
 
+      const alias = await db.getSkillAlias('busines-consulting');
+      expect(alias?.target_id).toBe('business-consulting');
+
       // All content migrated
       const content = await db.query("SELECT id FROM content WHERE skill_id = 'business-consulting'");
       expect(content.length).toBe(2);
@@ -431,6 +434,18 @@ describe('SkillMergeService', () => {
 
       const courses = await db.query("SELECT * FROM user_courses WHERE skill_id = 'tgt'");
       expect(courses[0].status).toBe('completed');
+    });
+  });
+
+  describe('skill aliases are preserved for canonical lookups', () => {
+    test('merge stores source slug as an alias of the target', async () => {
+      await seedSkill('src', 'Source Skill');
+      await seedSkill('tgt', 'Target Skill');
+
+      await skillMergeService.safeMerge('src', 'tgt', { dryRun: false });
+
+      const alias = await db.getSkillAlias('src');
+      expect(alias?.target_id).toBe('tgt');
     });
   });
 

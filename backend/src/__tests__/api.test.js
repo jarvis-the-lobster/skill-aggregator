@@ -90,11 +90,11 @@ describe('GET /api/skills/:id', () => {
     expect(res.body.content.videos.length).toBe(1);
   });
 
-  test('returns pending for non-existent skill without crashing', async () => {
+  test('returns not_found for non-existent skill without crashing', async () => {
     const res = await request(app).get('/api/skills/nonexistent-skill');
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('pending');
-    expect(res.body.skill).toBeDefined();
+    expect(res.body.status).toBe('not_found');
+    expect(res.body.skill).toBeNull();
   });
 });
 

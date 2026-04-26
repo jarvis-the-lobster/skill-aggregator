@@ -37,6 +37,11 @@ const TABLE_SQL = [
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     status TEXT DEFAULT 'pending'
   )`,
+  `CREATE TABLE IF NOT EXISTS skill_aliases (
+    source_id TEXT PRIMARY KEY,
+    target_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS content (
     id TEXT PRIMARY KEY,
     skill_id TEXT,
@@ -280,6 +285,7 @@ const INDEX_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_content_skill_id ON content(skill_id)',
   'CREATE INDEX IF NOT EXISTS idx_interactions_content_id ON user_interactions(content_id)',
   'CREATE INDEX IF NOT EXISTS idx_interactions_user_id ON user_interactions(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_skill_aliases_target_id ON skill_aliases(target_id)',
   'CREATE INDEX IF NOT EXISTS idx_user_plans_user_skill ON user_learning_plans(user_id, skill_id)',
 ];
 
@@ -314,6 +320,20 @@ function createTestDb() {
         async getSkillById(id) {
           const rows = await query('SELECT * FROM skills WHERE id = ?', [id]);
           return rows[0] || null;
+        },
+
+        async getSkillAlias(sourceId) {
+          const rows = await query('SELECT * FROM skill_aliases WHERE source_id = ?', [sourceId]);
+          return rows[0] || null;
+        },
+
+        async saveSkillAlias(sourceId, targetId) {
+          return insert(
+            `INSERT INTO skill_aliases (source_id, target_id)
+             VALUES (?, ?)
+             ON CONFLICT(source_id) DO UPDATE SET target_id = excluded.target_id`,
+            [sourceId, targetId]
+          );
         },
 
         async updateSkillStatus(id, status) {
@@ -1097,7 +1117,7 @@ function createTestDb() {
 
 async function clearTables(db) {
   const tables = [
-    'skills', 'content', 'users', 'user_streaks', 'user_interactions',
+    'skill_aliases', 'skills', 'content', 'users', 'user_streaks', 'user_interactions',
     'user_courses', 'push_subscriptions', 'subscribers', 'learning_plans',
     'user_plan_progress', 'scrape_log', 'user_onboarding', 'user_learning_plans',
     'plan_jobs', 'plan_review_content',

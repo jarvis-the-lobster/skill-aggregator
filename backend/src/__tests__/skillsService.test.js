@@ -90,6 +90,17 @@ describe('searchSkill', () => {
     triggerSpy.mockRestore();
   });
 
+  test('returns canonical target for merged or renamed aliases instead of recreating the source slug', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('skateboard-tricks', 'Skateboard Tricks', 'ready')");
+    await db.saveSkillAlias('skateboarding', 'skateboard-tricks');
+
+    const result = await skillsService.searchSkill('skateboarding');
+
+    expect(result.status).toBe('ready');
+    expect(result.skill.id).toBe('skateboard-tricks');
+    expect(await db.getSkillById('skateboarding')).toBeNull();
+  });
+
   test('blocks inappropriate search terms', async () => {
     const result = await skillsService.searchSkill('porn');
     expect(result.status).toBe('blocked');
@@ -172,19 +183,26 @@ describe('getSkillContent', () => {
     expect(result.content.articles.length).toBe(1);
   });
 
-  test('returns pending for non-existent skills, auto-creates, and kicks off a full scrape', async () => {
-    const triggerSpy = jest.spyOn(skillsService, '_triggerInitialSkillScrape');
+  test('returns not_found for non-existent skills instead of auto-creating from the URL', async () => {
     const result = await skillsService.getSkillContent('golang');
-    expect(['pending', 'scraping']).toContain(result.status);
-    expect(result.skill.id).toBe('golang');
+    expect(result.status).toBe('not_found');
+    expect(result.skill).toBeNull();
     expect(result.content.videos).toEqual([]);
+    expect(await db.getSkillById('golang')).toBeNull();
+  });
 
-    // Verify it was created in DB
-    const row = await db.getSkillById('golang');
-    expect(row).not.toBeNull();
-    expect(row.status).toBe('pending');
-    expect(triggerSpy).toHaveBeenCalledWith('golang');
-    triggerSpy.mockRestore();
+  test('returns canonical target content for aliased slugs', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('skateboard-tricks', 'Skateboard Tricks', 'ready')");
+    await db.saveSkillAlias('skateboarding', 'skateboard-tricks');
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source, duration, views) VALUES ('v1', 'skateboard-tricks', 'video', 'Kickflip Basics', 'https://example.com/v1', 'youtube', '10:00', 5000)"
+    );
+
+    const result = await skillsService.getSkillContent('skateboarding');
+
+    expect(result.status).toBe('ready');
+    expect(result.skill.id).toBe('skateboard-tricks');
+    expect(result.content.videos).toHaveLength(1);
   });
 
   test('returns pending status for pending skills without crashing', async () => {

@@ -75,10 +75,18 @@ const REFRESHED_PLAN = PERSONAL_PLAN.map((day, i) => {
   };
 });
 
-const SKILL_RESPONSE = {
-  skill: { id: 'python', name: 'Python' },
-  content: { videos: [], articles: [] },
-};
+function buildSkillResponse(skillId = 'python') {
+  return {
+    skill: {
+      id: skillId,
+      name: skillId
+        .split('-')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' '),
+    },
+    content: { videos: [], articles: [] },
+  };
+}
 
 function renderPlanPage(skillId = 'python') {
   return render(
@@ -96,7 +104,7 @@ describe('LearningPlanPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseAuth.mockReturnValue({ user: { id: 1, email: 'test@test.com' }, loading: false });
-    mockGetSkillContent.mockResolvedValue(SKILL_RESPONSE);
+    mockGetSkillContent.mockImplementation(async (skillId) => buildSkillResponse(skillId));
     mockGetRatings.mockResolvedValue({ counts: {}, userRatings: {} });
   });
 

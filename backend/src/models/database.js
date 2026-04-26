@@ -54,6 +54,13 @@ class Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`,
 
+      `CREATE TABLE IF NOT EXISTS skill_aliases (
+        source_id TEXT PRIMARY KEY,
+        target_id TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (target_id) REFERENCES skills (id)
+      )`,
+
       // Content table for videos, articles, courses
       `CREATE TABLE IF NOT EXISTS content (
         id TEXT PRIMARY KEY,
@@ -393,6 +400,8 @@ class Database {
         // Skills by status (nightly scrape filtering)
         'CREATE INDEX IF NOT EXISTS idx_skills_status ON skills(status)',
         'CREATE INDEX IF NOT EXISTS idx_skills_last_scraped ON skills(last_scraped_at)',
+        // Skill alias reverse lookups / integrity checks
+        'CREATE INDEX IF NOT EXISTS idx_skill_aliases_target_id ON skill_aliases(target_id)',
         // User learning plans by user+skill (plan fetch)
         'CREATE INDEX IF NOT EXISTS idx_user_plans_user_skill ON user_learning_plans(user_id, skill_id)',
         // Plan jobs by skill+status (readiness checks, job processing)
@@ -459,6 +468,20 @@ class Database {
   async getSkillById(id) {
     const rows = await this.query('SELECT * FROM skills WHERE id = ?', [id]);
     return rows[0] || null;
+  }
+
+  async getSkillAlias(sourceId) {
+    const rows = await this.query('SELECT * FROM skill_aliases WHERE source_id = ?', [sourceId]);
+    return rows[0] || null;
+  }
+
+  async saveSkillAlias(sourceId, targetId) {
+    return this.insert(
+      `INSERT INTO skill_aliases (source_id, target_id)
+       VALUES (?, ?)
+       ON CONFLICT(source_id) DO UPDATE SET target_id = excluded.target_id`,
+      [sourceId, targetId]
+    );
   }
 
   // Update skill status

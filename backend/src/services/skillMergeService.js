@@ -224,6 +224,7 @@ class SkillMergeService {
     await db.insert('UPDATE plan_review_content SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('UPDATE review_submissions SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
     await db.insert('UPDATE premium_plan_days SET skill_id = ? WHERE skill_id = ?', [targetId, sourceId]);
+    await db.saveSkillAlias(sourceId, targetId);
     await db.insert('DELETE FROM skills WHERE id = ?', [sourceId]);
   }
 
@@ -273,6 +274,7 @@ class SkillMergeService {
     await this._mergePremiumPlanDays(sourceId, targetId);
 
     // 11. Delete source skill
+    await db.saveSkillAlias(sourceId, targetId);
     await db.insert('DELETE FROM skills WHERE id = ?', [sourceId]);
   }
 

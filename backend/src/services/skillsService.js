@@ -589,6 +589,20 @@ class SkillsService {
     this._newSkillCounts = new Map();
   }
 
+  async resolveCanonicalSkillId(skillId) {
+    let canonicalId = SLUG_ALIASES[skillId] || skillId;
+    const seen = new Set();
+
+    while (!seen.has(canonicalId)) {
+      seen.add(canonicalId);
+      const alias = await db.getSkillAlias(canonicalId);
+      if (!alias?.target_id || alias.target_id === canonicalId) break;
+      canonicalId = alias.target_id;
+    }
+
+    return canonicalId;
+  }
+
   // Block inappropriate/NSFW search terms
   // Uses word boundary matching to avoid false positives (e.g. "cocktail", "assassination")
   BLOCKED_PATTERNS = [
@@ -710,7 +724,7 @@ class SkillsService {
     }
 
     const rawId = normalizeSkillId(query);
-    const skillId = SLUG_ALIASES[rawId] || rawId;
+    const skillId = await this.resolveCanonicalSkillId(rawId);
     const skillName = normalizeSkillName(query);
 
     const existing = await db.getSkillById(skillId);
@@ -736,33 +750,26 @@ class SkillsService {
     return { skill, status: 'scraping', message: 'Gathering the best videos and articles for this skill...' };
   }
 
-  // Get full skill details + content (used by SkillPage for polling)
+  // Get full skill details + content for existing/canonicalized skills only.
   async getSkillContent(skillId, filters = {}) {
     try {
-      const skillRow = await db.getSkillById(skillId);
+      const canonicalId = await this.resolveCanonicalSkillId(skillId);
+      const skillRow = await db.getSkillById(canonicalId);
 
       if (!skillRow) {
-        // Block inappropriate skill IDs from being auto-created via URL
         if (this.BLOCKED_PATTERNS.some(pattern => pattern.test(skillId))) {
           return { skill: null, status: 'blocked', content: { videos: [], articles: [], courses: [] } };
         }
-        // Auto-create with skillId as name (handles direct URL navigation)
-        const skillName = skillId
-          .split('-')
-          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' ');
-        const skill = await this.createSkill(skillId, skillName);
-        this._triggerInitialSkillScrape(skillId);
-        return { skill, status: 'pending', content: { videos: [], articles: [], courses: [] } };
+        return { skill: null, status: 'not_found', content: { videos: [], articles: [], courses: [] } };
       }
 
       if (skillRow.status === 'ready') {
-        const content = await this.getCuratedContent(skillId, filters, skillRow);
+        const content = await this.getCuratedContent(canonicalId, filters, skillRow);
         return { skill: mapSkillRow(skillRow), status: 'ready', content };
       }
 
       // Return any content already in the DB while an initial scrape is still running.
-      const content = await this.getCuratedContent(skillId, filters, skillRow);
+      const content = await this.getCuratedContent(canonicalId, filters, skillRow);
       const hasContent = (content.videos?.length || 0) + (content.articles?.length || 0) > 0;
 
       return {

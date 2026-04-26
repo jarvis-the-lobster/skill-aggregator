@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { Play, BookOpen, Lock, ArrowLeft, CheckCircle, ClipboardCheck, Loader } from 'lucide-react';
 import { ReviewCheckInPanel } from '../components/ReviewCheckInPanel';
@@ -34,6 +34,7 @@ function getEntryUrl(entry) {
 
 export function LearningPlanPage() {
   const { skillId } = useParams();
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { isPremium, loading: subscriptionLoading } = useSubscription();
   const { refresh: refreshStreak } = useStreak();
@@ -79,6 +80,16 @@ export function LearningPlanPage() {
       ];
       if (user) fetches.push(apiService.getPlanProgress(skillId).catch(() => null));
       const [planData, skillData, progressData] = await Promise.all(fetches);
+
+      if (!skillData?.skill) {
+        navigate('/', { replace: true });
+        return;
+      }
+
+      if (skillData.skill.id && skillData.skill.id !== skillId) {
+        navigate(`/skills/${skillData.skill.id}/plan`, { replace: true });
+        return;
+      }
 
       const hasPersonalPlan = Boolean(progressData?.enrolled && Array.isArray(progressData?.plan));
 
@@ -147,7 +158,7 @@ export function LearningPlanPage() {
     } finally {
       setLoading(false);
     }
-  }, [skillId, user, isPremium]);
+  }, [skillId, user, isPremium, navigate]);
 
   useEffect(() => {
     // Wait for auth to resolve before loading, otherwise user is null
