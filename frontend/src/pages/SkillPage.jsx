@@ -10,9 +10,6 @@ import { useEnrollment } from '../hooks/useCourses';
 import { RatingButtons } from '../components/RatingButtons';
 import { SKILL_PAGE_CONTENT_LIMIT } from '../utils/skillContent';
 
-const POLL_INTERVAL_MS = 3000;
-const POLL_TIMEOUT_MS = 60000;
-
 function formatViews(num) {
   if (!num && num !== 0) return '0';
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
@@ -67,16 +64,13 @@ export function SkillPage() {
   const { isEnrolled, loading: enrollLoading, enroll, unenroll, enrollError } = useEnrollment(skillId);
   const [skillData, setSkillData] = useState(null);
   const [content, setContent] = useState({ videos: [], articles: [] });
-  const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'ready' | 'error' | 'timeout'
+  const [status, setStatus] = useState('loading'); // 'loading' | 'scraping' | 'pending' | 'ready' | 'error'
   const [activeTab, setActiveTab] = useState('videos');
   const [ratings, setRatings] = useState({ counts: {}, userRatings: {} });
   const [lastScrapedAt, setLastScrapedAt] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState(null);
 
-  const pollTimer = useRef(null);
-  const timeoutTimer = useRef(null);
-  const pollFailureCount = useRef(0);
   const initialTabSet = useRef(false);
 
   const skillViewedRef = useRef(false);
@@ -85,18 +79,6 @@ export function SkillPage() {
     setActiveTab(tab);
     analytics.contentTabSwitched(tab, skillId);
   };
-
-  const clearTimers = useCallback(() => {
-    if (pollTimer.current) {
-      clearInterval(pollTimer.current);
-      pollTimer.current = null;
-    }
-    if (timeoutTimer.current) {
-      clearTimeout(timeoutTimer.current);
-      timeoutTimer.current = null;
-    }
-    pollFailureCount.current = 0;
-  }, []);
 
   const fetchRatings = useCallback(async (videos, articles) => {
     const ids = [
@@ -138,45 +120,7 @@ export function SkillPage() {
     setStatus(result.status || 'error');
   }, [skillId]);
 
-  const startPolling = useCallback(() => {
-    if (pollTimer.current || timeoutTimer.current) return;
-
-    // Timeout after 60 seconds
-    timeoutTimer.current = setTimeout(() => {
-      clearTimers();
-      setStatus('timeout');
-    }, POLL_TIMEOUT_MS);
-
-    pollTimer.current = setInterval(async () => {
-      try {
-        const result = await apiService.getSkillContent(skillId);
-        pollFailureCount.current = 0;
-
-        let ratingsData = null;
-        if (result.status === 'ready' && result.content) {
-          ratingsData = await fetchRatings(result.content.videos, result.content.articles);
-        }
-
-        applyResult(result, ratingsData);
-
-        if (result.status === 'ready' || result.status === 'error') {
-          clearTimers();
-        }
-      } catch (err) {
-        const responseStatus = err?.response?.status;
-        pollFailureCount.current += 1;
-        console.error('Poll error:', err);
-
-        if (responseStatus === 429 || pollFailureCount.current >= 3) {
-          clearTimers();
-          setStatus('error');
-        }
-      }
-    }, POLL_INTERVAL_MS);
-  }, [applyResult, clearTimers, fetchRatings, skillId]);
-
   const loadSkillData = useCallback(async () => {
-    clearTimers();
     setStatus('loading');
     try {
       const result = await apiService.getSkillContent(skillId);
@@ -189,27 +133,22 @@ export function SkillPage() {
 
       applyResult(result, ratingsData);
 
-      if (result.status === 'scraping' || result.status === 'pending') {
-        startPolling();
-      }
     } catch (error) {
       console.error('Error loading skill data:', error);
       setStatus('error');
     }
-  }, [applyResult, clearTimers, fetchRatings, skillId, startPolling]);
+  }, [applyResult, fetchRatings, skillId]);
 
   useEffect(() => {
     skillViewedRef.current = false;
     loadSkillData();
-    return () => clearTimers();
-  }, [skillId, loadSkillData, clearTimers]);
+  }, [skillId, loadSkillData]);
 
   const handleRefreshContent = async () => {
     setIsRefreshing(true);
     setRefreshMessage(null);
     analytics.track('skill_content_refresh_requested', { skill_id: skillId });
     try {
-      clearTimers();
       const prevLastScraped = lastScrapedAt;
       const [result] = await Promise.all([
         apiService.getSkillContent(skillId),
@@ -221,8 +160,7 @@ export function SkillPage() {
       }
       applyResult(result, ratingsData);
       if (result.status === 'scraping' || result.status === 'pending') {
-        startPolling();
-        setRefreshMessage('Scraping in progress...');
+        setRefreshMessage('Still gathering content — check again in a bit.');
         setTimeout(() => setRefreshMessage(null), 3000);
       } else if (result.content?.lastScrapedAt === prevLastScraped) {
         setRefreshMessage('already-up-to-date');
@@ -279,34 +217,9 @@ export function SkillPage() {
             <span className="text-teal">{skillData?.name || skillId}</span>…
           </h1>
           <p className="text-slate-400 mb-6">
-            We&apos;re scraping YouTube and top articles. This usually takes 15–30 seconds.
+            We&apos;re gathering the initial resources for this skill. Give it a moment, then check again.
           </p>
-          <div className="flex justify-center space-x-2">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-3 h-3 bg-teal rounded-full animate-bounce"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              />
-            ))}
-          </div>
-          <p className="text-xs text-slate-500 mt-6">Checking every 3 seconds…</p>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Timeout (only show if truly zero content) ---
-  if (status === 'timeout' && !hasAnyContent) {
-    return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-        <div className="text-center max-w-md px-4">
-          <p className="text-5xl mb-4">⏱️</p>
-          <h1 className="text-2xl font-bold text-slate-100 mb-3">Taking longer than expected</h1>
-          <p className="text-slate-400 mb-6">
-            Content gathering is still in progress. Check back in a moment.
-          </p>
-          <div className="flex justify-center space-x-3">
+          <div className="flex justify-center gap-3">
             <button onClick={loadSkillData} className="btn-primary">
               Check Again
             </button>
