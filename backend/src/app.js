@@ -48,7 +48,7 @@ const { router: billingRoutes } = require('./routes/billing');
 // Auth routes: no global limiter — route-level authLimiter handles login/register
 app.use('/api/auth', authRoutes);
 
-// Each route group gets its own limiter instance (300 req / 15 min per group, keyed by user or IP)
+// Each route group gets its own limiter instance (tiered per 15 min window: anon 100, free 200, premium 300; keyed by user or IP)
 app.use('/api/skills', createGeneralLimiter(), skillRoutes);
 app.use('/api/admin', createGeneralLimiter(), adminRoutes);
 app.use('/api/courses', createGeneralLimiter(), courseRoutes);
