@@ -91,6 +91,25 @@ describe('rateLimit middleware', () => {
     });
   });
 
+  describe('getUserTier', () => {
+    test('returns "anon" when userId is null', async () => {
+      const { getUserTier } = loadModule('test');
+      expect(await getUserTier(null)).toBe('anon');
+    });
+  });
+
+  describe('tier limits', () => {
+    test('general limits are 100/200/300 for anon/free/premium', () => {
+      const { GENERAL_MAX } = loadModule('test');
+      expect(GENERAL_MAX).toEqual({ anon: 100, free: 200, premium: 300 });
+    });
+
+    test('search limits are 20/40/60 for anon/free/premium', () => {
+      const { SEARCH_MAX } = loadModule('test');
+      expect(SEARCH_MAX).toEqual({ anon: 20, free: 40, premium: 60 });
+    });
+  });
+
   describe('skip behavior', () => {
     test('all limiters skip in test environment', () => {
       const mod = loadModule('test');
@@ -164,5 +183,31 @@ describe('app.js rate-limit wiring', () => {
   test('health endpoint is not rate-limited', async () => {
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
+  });
+
+  describe('getUserTier with DB', () => {
+    const { getUserTier, _tierCache } = require('../middleware/rateLimit');
+
+    beforeEach(() => {
+      _tierCache.clear();
+    });
+
+    test('returns "free" for a user without active subscription', async () => {
+      const user = await db.createUser({ email: 'free@test.com', password_hash: 'hashhash', name: 'Free User' });
+      expect(await getUserTier(user.id)).toBe('free');
+    });
+
+    test('returns "premium" for a user with active subscription', async () => {
+      const user = await db.createUser({ email: 'premium@test.com', password_hash: 'hashhash', name: 'Premium User' });
+      await db.updateUserSubscription(user.id, { subscription_status: 'active' });
+      expect(await getUserTier(user.id)).toBe('premium');
+    });
+
+    test('caches tier lookups', async () => {
+      const user = await db.createUser({ email: 'cached@test.com', password_hash: 'hashhash', name: 'Cached' });
+      await getUserTier(user.id);
+      expect(_tierCache.has(user.id)).toBe(true);
+      expect(_tierCache.get(user.id).tier).toBe('free');
+    });
   });
 });
