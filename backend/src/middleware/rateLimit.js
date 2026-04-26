@@ -1,8 +1,7 @@
 const rateLimit = require('express-rate-limit');
 
 const isTest = process.env.NODE_ENV === 'test';
-const isDev = process.env.NODE_ENV === 'development' || (!process.env.NODE_ENV && !isTest);
-const skipLocally = (isTest || isDev) ? () => true : () => false;
+const skipInTest = isTest ? () => true : () => false;
 const rateLimitMessage = { error: 'Too many requests, please try again later.' };
 
 // Key generator: use authenticated user ID when available, fall back to IP.
@@ -18,7 +17,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: rateLimitMessage,
-  skip: skipLocally,
+  skip: skipInTest,
 });
 
 // Search: 30 req / 15 min anon, 60 authed — protects YouTube quota
@@ -29,7 +28,7 @@ const searchLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: rateLimitMessage,
-  skip: skipLocally,
+  skip: skipInTest,
   validate: { keyGeneratorIpFallback: false },
 });
 
@@ -40,7 +39,7 @@ const bulkLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: rateLimitMessage,
-  skip: skipLocally,
+  skip: skipInTest,
 });
 
 // General API: 300 req / 15 min — applied per route group, not globally.
@@ -52,7 +51,7 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: rateLimitMessage,
-  skip: skipLocally,
+  skip: skipInTest,
   validate: { keyGeneratorIpFallback: false },
 });
 

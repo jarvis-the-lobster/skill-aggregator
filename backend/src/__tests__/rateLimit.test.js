@@ -60,7 +60,7 @@ describe('rateLimit middleware', () => {
       }
     });
 
-    test('all limiters skip in development environment', () => {
+    test('limiters are active in development environment', () => {
       const mod = loadModule('development');
       for (const name of ['authLimiter', 'searchLimiter', 'bulkLimiter', 'generalLimiter']) {
         expect(typeof mod[name]).toBe('function');
