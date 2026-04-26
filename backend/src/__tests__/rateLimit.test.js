@@ -13,56 +13,96 @@ describe('rateLimit middleware', () => {
   }
 
   describe('exports', () => {
-    test('exports authLimiter, searchLimiter, bulkLimiter, generalLimiter', () => {
+    test('exports authLimiter, searchLimiter, bulkLimiter, createGeneralLimiter', () => {
       const mod = loadModule('test');
       expect(mod.authLimiter).toBeDefined();
       expect(mod.searchLimiter).toBeDefined();
       expect(mod.bulkLimiter).toBeDefined();
-      expect(mod.generalLimiter).toBeDefined();
+      expect(typeof mod.createGeneralLimiter).toBe('function');
     });
 
     test('does not export apiLimiter (removed)', () => {
       const mod = loadModule('test');
       expect(mod.apiLimiter).toBeUndefined();
     });
+
+    test('createGeneralLimiter returns a new instance each call', () => {
+      const mod = loadModule('test');
+      const a = mod.createGeneralLimiter();
+      const b = mod.createGeneralLimiter();
+      expect(a).not.toBe(b);
+    });
+  });
+
+  describe('extractUserId', () => {
+    test('extracts userId from a valid Bearer token', () => {
+      const jwt = require('jsonwebtoken');
+      const secret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+      const token = jwt.sign({ userId: 99 }, secret, { expiresIn: '1h' });
+      const { extractUserId } = loadModule('test');
+
+      const req = { headers: { authorization: `Bearer ${token}` } };
+      expect(extractUserId(req)).toBe(99);
+    });
+
+    test('returns null for missing Authorization header', () => {
+      const { extractUserId } = loadModule('test');
+      expect(extractUserId({ headers: {} })).toBeNull();
+    });
+
+    test('returns null for malformed token', () => {
+      const { extractUserId } = loadModule('test');
+      const req = { headers: { authorization: 'Bearer garbage.token.here' } };
+      expect(extractUserId(req)).toBeNull();
+    });
+
+    test('returns null for expired token', () => {
+      const jwt = require('jsonwebtoken');
+      const secret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+      const token = jwt.sign({ userId: 1 }, secret, { expiresIn: '0s' });
+      const { extractUserId } = loadModule('test');
+
+      const req = { headers: { authorization: `Bearer ${token}` } };
+      expect(extractUserId(req)).toBeNull();
+    });
   });
 
   describe('keyByUserOrIp', () => {
-    test('returns user-scoped key for authenticated requests', () => {
+    test('uses req.user.id when already populated by auth middleware', () => {
       const { keyByUserOrIp } = loadModule('test');
-      const req = { user: { id: 42 }, ip: '1.2.3.4' };
+      const req = { user: { id: 42 }, ip: '1.2.3.4', headers: {} };
       expect(keyByUserOrIp(req)).toBe('user:42');
+    });
+
+    test('extracts userId from JWT when req.user is not set', () => {
+      const jwt = require('jsonwebtoken');
+      const secret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+      const token = jwt.sign({ userId: 7 }, secret, { expiresIn: '1h' });
+      const { keyByUserOrIp } = loadModule('test');
+
+      const req = { ip: '1.2.3.4', headers: { authorization: `Bearer ${token}` } };
+      expect(keyByUserOrIp(req)).toBe('user:7');
     });
 
     test('falls back to IP for anonymous requests', () => {
       const { keyByUserOrIp } = loadModule('test');
-      const req = { ip: '1.2.3.4' };
+      const req = { ip: '1.2.3.4', headers: {} };
       expect(keyByUserOrIp(req)).toBe('1.2.3.4');
-    });
-
-    test('falls back to IP when user has no id', () => {
-      const { keyByUserOrIp } = loadModule('test');
-      const req = { user: {}, ip: '10.0.0.1' };
-      expect(keyByUserOrIp(req)).toBe('10.0.0.1');
     });
   });
 
   describe('skip behavior', () => {
     test('all limiters skip in test environment', () => {
       const mod = loadModule('test');
-      const fakeReq = {};
-      // express-rate-limit v8 stores skip as a function option
-      // We verify by checking that the skip function returns true
-      for (const name of ['authLimiter', 'searchLimiter', 'bulkLimiter', 'generalLimiter']) {
-        // The skip option is set during construction; we verify the module
-        // was configured correctly by checking the exported middleware exists
+      for (const name of ['authLimiter', 'searchLimiter', 'bulkLimiter']) {
         expect(typeof mod[name]).toBe('function');
       }
+      expect(typeof mod.createGeneralLimiter()).toBe('function');
     });
 
     test('limiters are active in development environment', () => {
       const mod = loadModule('development');
-      for (const name of ['authLimiter', 'searchLimiter', 'bulkLimiter', 'generalLimiter']) {
+      for (const name of ['authLimiter', 'searchLimiter', 'bulkLimiter']) {
         expect(typeof mod[name]).toBe('function');
       }
     });
@@ -70,9 +110,6 @@ describe('rateLimit middleware', () => {
 });
 
 describe('app.js rate-limit wiring', () => {
-  // Verify auth routes are NOT behind the global limiter by checking that
-  // Google OAuth callback is reachable without a general rate-limit header.
-  // In test mode all limiters skip, so we just verify the routes are mounted.
   const { createTestDb, clearTables } = require('./helpers/testDb');
   const mockDb = {};
 
@@ -114,15 +151,12 @@ describe('app.js rate-limit wiring', () => {
     await db.close();
   });
 
-  test('auth/google endpoint is reachable (not blocked by global limiter)', async () => {
-    // Google OAuth will return 503 because GOOGLE_CLIENT_ID is not set in test,
-    // but the point is it's reachable — not 429'd
+  test('auth/google endpoint is reachable (not blocked by general limiter)', async () => {
     const res = await request(app).get('/api/auth/google');
     expect(res.status).not.toBe(429);
   });
 
   test('auth/me is reachable without general rate-limit exhaustion', async () => {
-    // Should get 401 (no token), not 429
     const res = await request(app).get('/api/auth/me');
     expect(res.status).toBe(401);
   });

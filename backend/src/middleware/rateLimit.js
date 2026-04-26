@@ -1,13 +1,28 @@
 const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 const isTest = process.env.NODE_ENV === 'test';
 const skipInTest = isTest ? () => true : () => false;
 const rateLimitMessage = { error: 'Too many requests, please try again later.' };
 
+// Extract user ID from the Bearer token without a DB round-trip.
+// Returns null if the token is missing, malformed, or expired.
+function extractUserId(req) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return null;
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET);
+    return payload.userId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Key generator: use authenticated user ID when available, fall back to IP.
-// This means authed users get their own bucket instead of sharing an IP pool.
 function keyByUserOrIp(req) {
-  return req.user?.id ? `user:${req.user.id}` : req.ip;
+  const userId = req.user?.id ?? extractUserId(req);
+  return userId ? `user:${userId}` : req.ip;
 }
 
 // Auth endpoints (login/register): 15 req / 15 min per IP — brute-force protection
@@ -23,7 +38,7 @@ const authLimiter = rateLimit({
 // Search: 30 req / 15 min anon, 60 authed — protects YouTube quota
 const searchLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: (req) => (req.user ? 60 : 30),
+  max: (req) => (extractUserId(req) ? 60 : 30),
   keyGenerator: keyByUserOrIp,
   standardHeaders: true,
   legacyHeaders: false,
@@ -42,17 +57,19 @@ const bulkLimiter = rateLimit({
   skip: skipInTest,
 });
 
-// General API: 300 req / 15 min — applied per route group, not globally.
-// Authed users get their own bucket via keyByUserOrIp.
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
-  keyGenerator: keyByUserOrIp,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: rateLimitMessage,
-  skip: skipInTest,
-  validate: { keyGeneratorIpFallback: false },
-});
+// Factory: creates a fresh limiter instance so each route group gets its own
+// counter store instead of sharing one global bucket.
+function createGeneralLimiter() {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    keyGenerator: keyByUserOrIp,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: rateLimitMessage,
+    skip: skipInTest,
+    validate: { keyGeneratorIpFallback: false },
+  });
+}
 
-module.exports = { authLimiter, searchLimiter, bulkLimiter, generalLimiter, keyByUserOrIp };
+module.exports = { authLimiter, searchLimiter, bulkLimiter, createGeneralLimiter, keyByUserOrIp, extractUserId };

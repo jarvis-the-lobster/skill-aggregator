@@ -4,7 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const passport = require('./config/passport');
 
-const { generalLimiter } = require('./middleware/rateLimit');
+const { createGeneralLimiter } = require('./middleware/rateLimit');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -48,18 +48,18 @@ const { router: billingRoutes } = require('./routes/billing');
 // Auth routes: no global limiter — route-level authLimiter handles login/register
 app.use('/api/auth', authRoutes);
 
-// All other API routes get the general limiter (300 req / 15 min, keyed by user or IP)
-app.use('/api/skills', generalLimiter, skillRoutes);
-app.use('/api/admin', generalLimiter, adminRoutes);
-app.use('/api/courses', generalLimiter, courseRoutes);
-app.use('/api/newsletter', generalLimiter, newsletterRoutes);
-app.use('/api/learning-plans', generalLimiter, learningPlanRoutes);
-app.use('/api/ratings', generalLimiter, ratingsRoutes);
-app.use('/api/streaks', generalLimiter, streakRoutes);
-app.use('/api/push', generalLimiter, pushRoutes);
-app.use('/api/onboarding', generalLimiter, onboardingRoutes);
-app.use('/api/notifications', generalLimiter, notificationRoutes);
-app.use('/api/billing', generalLimiter, billingRoutes);
+// Each route group gets its own limiter instance (300 req / 15 min per group, keyed by user or IP)
+app.use('/api/skills', createGeneralLimiter(), skillRoutes);
+app.use('/api/admin', createGeneralLimiter(), adminRoutes);
+app.use('/api/courses', createGeneralLimiter(), courseRoutes);
+app.use('/api/newsletter', createGeneralLimiter(), newsletterRoutes);
+app.use('/api/learning-plans', createGeneralLimiter(), learningPlanRoutes);
+app.use('/api/ratings', createGeneralLimiter(), ratingsRoutes);
+app.use('/api/streaks', createGeneralLimiter(), streakRoutes);
+app.use('/api/push', createGeneralLimiter(), pushRoutes);
+app.use('/api/onboarding', createGeneralLimiter(), onboardingRoutes);
+app.use('/api/notifications', createGeneralLimiter(), notificationRoutes);
+app.use('/api/billing', createGeneralLimiter(), billingRoutes);
 
 // Sitemap
 const sitemapDb = require('./models/database');
