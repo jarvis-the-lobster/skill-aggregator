@@ -4,7 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const passport = require('./config/passport');
 
-const { apiLimiter } = require('./middleware/rateLimit');
+const { createGeneralLimiter } = require('./middleware/rateLimit');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -31,10 +31,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
 
-// Global rate limit on /api
-app.use('/api', apiLimiter);
-
-// Routes
+// Routes — auth has its own scoped limiters; everything else uses generalLimiter
 const skillRoutes = require('./routes/skills');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -47,18 +44,22 @@ const pushRoutes = require('./routes/push');
 const onboardingRoutes = require('./routes/onboarding');
 const notificationRoutes = require('./routes/notifications');
 const { router: billingRoutes } = require('./routes/billing');
-app.use('/api/skills', skillRoutes);
+
+// Auth routes: no global limiter — route-level authLimiter handles login/register
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/newsletter', newsletterRoutes);
-app.use('/api/learning-plans', learningPlanRoutes);
-app.use('/api/ratings', ratingsRoutes);
-app.use('/api/streaks', streakRoutes);
-app.use('/api/push', pushRoutes);
-app.use('/api/onboarding', onboardingRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/billing', billingRoutes);
+
+// Each route group gets its own limiter instance (tiered per 15 min window: anon 100, free 200, premium 300; keyed by user or IP)
+app.use('/api/skills', createGeneralLimiter(), skillRoutes);
+app.use('/api/admin', createGeneralLimiter(), adminRoutes);
+app.use('/api/courses', createGeneralLimiter(), courseRoutes);
+app.use('/api/newsletter', createGeneralLimiter(), newsletterRoutes);
+app.use('/api/learning-plans', createGeneralLimiter(), learningPlanRoutes);
+app.use('/api/ratings', createGeneralLimiter(), ratingsRoutes);
+app.use('/api/streaks', createGeneralLimiter(), streakRoutes);
+app.use('/api/push', createGeneralLimiter(), pushRoutes);
+app.use('/api/onboarding', createGeneralLimiter(), onboardingRoutes);
+app.use('/api/notifications', createGeneralLimiter(), notificationRoutes);
+app.use('/api/billing', createGeneralLimiter(), billingRoutes);
 
 // Sitemap
 const sitemapDb = require('./models/database');
