@@ -143,33 +143,23 @@ describe('SkillPage', () => {
   });
 
 
-  it('stops polling after a 429 instead of retrying forever', async () => {
-    vi.useFakeTimers();
+  it('does not auto-poll while a skill is still gathering content', async () => {
     const pendingResponse = {
       status: 'scraping',
       skill: MOCK_SKILL_RESPONSE.skill,
       content: { videos: [], articles: [], lastScrapedAt: null },
     };
 
-    apiService.getSkillContent
-      .mockResolvedValueOnce(pendingResponse)
-      .mockRejectedValueOnce({ response: { status: 429 } });
+    apiService.getSkillContent.mockResolvedValue(pendingResponse);
 
     renderSkillPage();
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await screen.findByText(/Gathering the best resources for/i);
     expect(apiService.getSkillContent).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
-    });
-    expect(apiService.getSkillContent).toHaveBeenCalledTimes(2);
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(9000);
-    });
-    expect(apiService.getSkillContent).toHaveBeenCalledTimes(2);
+    expect(apiService.getSkillContent).toHaveBeenCalledTimes(1);
   }, 10000);
 
   it('caps visible videos and articles to keep the page focused', async () => {
