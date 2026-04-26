@@ -400,6 +400,8 @@ class Database {
         // Skills by status (nightly scrape filtering)
         'CREATE INDEX IF NOT EXISTS idx_skills_status ON skills(status)',
         'CREATE INDEX IF NOT EXISTS idx_skills_last_scraped ON skills(last_scraped_at)',
+        // Skill alias reverse lookups / integrity checks
+        'CREATE INDEX IF NOT EXISTS idx_skill_aliases_target_id ON skill_aliases(target_id)',
         // User learning plans by user+skill (plan fetch)
         'CREATE INDEX IF NOT EXISTS idx_user_plans_user_skill ON user_learning_plans(user_id, skill_id)',
         // Plan jobs by skill+status (readiness checks, job processing)

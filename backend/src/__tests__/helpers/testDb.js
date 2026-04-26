@@ -285,6 +285,7 @@ const INDEX_SQL = [
   'CREATE INDEX IF NOT EXISTS idx_content_skill_id ON content(skill_id)',
   'CREATE INDEX IF NOT EXISTS idx_interactions_content_id ON user_interactions(content_id)',
   'CREATE INDEX IF NOT EXISTS idx_interactions_user_id ON user_interactions(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_skill_aliases_target_id ON skill_aliases(target_id)',
   'CREATE INDEX IF NOT EXISTS idx_user_plans_user_skill ON user_learning_plans(user_id, skill_id)',
 ];
 
