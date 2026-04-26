@@ -661,6 +661,7 @@ router.post('/skills/:id/rename', async (req, res) => {
     await db.insert('UPDATE plan_jobs SET skill_id = ? WHERE skill_id = ?', [newId, id]);
     await db.insert('UPDATE plan_review_content SET skill_id = ? WHERE skill_id = ?', [newId, id]);
     await db.insert('UPDATE review_submissions SET skill_id = ? WHERE skill_id = ?', [newId, id]);
+    await db.saveSkillAlias(id, newId);
     await db.insert('DELETE FROM skills WHERE id = ?', [id]);
 
     res.json({ ok: true, renamed: `${id} → ${newId}` });
@@ -696,6 +697,7 @@ router.post('/skills/:id/merge', async (req, res) => {
     await db.insert('DELETE FROM scrape_log WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM user_courses WHERE skill_id = ?', [id]);
     await db.insert('DELETE FROM user_plan_progress WHERE skill_id = ?', [id]);
+    await db.saveSkillAlias(id, targetId);
     await db.insert('DELETE FROM skills WHERE id = ?', [id]);
 
     res.json({

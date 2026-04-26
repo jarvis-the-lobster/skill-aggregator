@@ -54,6 +54,13 @@ class Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`,
 
+      `CREATE TABLE IF NOT EXISTS skill_aliases (
+        source_id TEXT PRIMARY KEY,
+        target_id TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (target_id) REFERENCES skills (id)
+      )`,
+
       // Content table for videos, articles, courses
       `CREATE TABLE IF NOT EXISTS content (
         id TEXT PRIMARY KEY,
@@ -459,6 +466,20 @@ class Database {
   async getSkillById(id) {
     const rows = await this.query('SELECT * FROM skills WHERE id = ?', [id]);
     return rows[0] || null;
+  }
+
+  async getSkillAlias(sourceId) {
+    const rows = await this.query('SELECT * FROM skill_aliases WHERE source_id = ?', [sourceId]);
+    return rows[0] || null;
+  }
+
+  async saveSkillAlias(sourceId, targetId) {
+    return this.insert(
+      `INSERT INTO skill_aliases (source_id, target_id)
+       VALUES (?, ?)
+       ON CONFLICT(source_id) DO UPDATE SET target_id = excluded.target_id`,
+      [sourceId, targetId]
+    );
   }
 
   // Update skill status
