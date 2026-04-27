@@ -719,6 +719,9 @@ router.post('/skills/:id/merge', async (req, res) => {
         await db.insert('ROLLBACK');
       } catch (rollbackErr) {
         console.error('Merge skill rollback error:', rollbackErr.message);
+        const fatalErr = new Error(`Merge skill rollback failed after error: ${err.message}; rollback error: ${rollbackErr.message}`);
+        console.error('Merge skill error:', fatalErr.message);
+        return res.status(500).json({ error: fatalErr.message });
       }
     }
     console.error('Merge skill error:', err.message);

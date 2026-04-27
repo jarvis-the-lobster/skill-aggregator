@@ -64,6 +64,7 @@ class SkillMergeService {
         await db.insert('ROLLBACK');
       } catch (rollbackErr) {
         console.error('safeMerge rollback error:', rollbackErr.message);
+        throw new Error(`safeMerge rollback failed after error: ${err.message}; rollback error: ${rollbackErr.message}`);
       }
       throw err;
     }
