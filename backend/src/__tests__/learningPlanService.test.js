@@ -576,12 +576,12 @@ describe('refreshUserPlan', () => {
 });
 
 describe('shared plan staleness', () => {
-  test('regenerates shared plan when older than 7 days', async () => {
+  test('regenerates shared plan when older than 15 days', async () => {
     await seedSkillWithPlan();
 
-    // Backdate shared plan to 8 days ago
+    // Backdate shared plan to 16 days ago
     await db.insert(
-      "UPDATE learning_plans SET created_at = datetime('now', '-8 days') WHERE skill_id = ?",
+      "UPDATE learning_plans SET created_at = datetime('now', '-16 days') WHERE skill_id = ?",
       [SKILL_ID]
     );
 
@@ -597,7 +597,7 @@ describe('shared plan staleness', () => {
     expect(freshStale).toBe(false);
   });
 
-  test('does not regenerate shared plan younger than 7 days', async () => {
+  test('does not regenerate shared plan younger than 15 days', async () => {
     await seedSkillWithPlan();
 
     // Plan was just created — should not be stale

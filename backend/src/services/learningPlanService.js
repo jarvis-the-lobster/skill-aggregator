@@ -5,7 +5,7 @@ const CHUNK_MAX_SECONDS = 40 * 60;     // hard max 40 minutes per chunk
 const CHUNK_THRESHOLD_SECONDS = 40 * 60; // only chunk videos > 40 min
 const MAX_CHUNKS = 7;                   // max chunks per video
 const EARLY_DAYS_MAX = 7;              // only chunk in days 1-7
-const SHARED_PLAN_STALE_DAYS = 7;      // regenerate shared plans older than this
+const SHARED_PLAN_STALE_DAYS = 15;     // regenerate shared plans older than this
 const REVIEW_DAY_NUMBERS = new Set([7, 14, 21, 28]);
 
 // Parse "M:SS" or "H:MM:SS" duration string to total seconds
