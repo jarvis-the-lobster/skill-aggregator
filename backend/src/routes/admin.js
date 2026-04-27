@@ -674,6 +674,9 @@ router.post('/skills/:id/rename', async (req, res) => {
 // POST /api/admin/skills/:id/merge — merge a skill into another (moves content, deletes source)
 router.post('/skills/:id/merge', async (req, res) => {
   if (!requireCronSecret(req, res)) return;
+
+  let transactionStarted = false;
+
   try {
     const { id } = req.params;
     const { targetId } = req.body;
@@ -684,6 +687,9 @@ router.post('/skills/:id/merge', async (req, res) => {
 
     const target = await db.query('SELECT id FROM skills WHERE id = ?', [targetId]);
     if (target.length === 0) return res.status(404).json({ error: `Target skill '${targetId}' not found` });
+
+    await db.insert('BEGIN IMMEDIATE TRANSACTION');
+    transactionStarted = true;
 
     // Move content that doesn't already exist in target (avoid duplicates)
     await db.insert(
@@ -699,6 +705,8 @@ router.post('/skills/:id/merge', async (req, res) => {
     await db.insert('DELETE FROM user_plan_progress WHERE skill_id = ?', [id]);
     await db.saveSkillAlias(id, targetId);
     await db.insert('DELETE FROM skills WHERE id = ?', [id]);
+    await db.insert('COMMIT');
+    transactionStarted = false;
 
     res.json({
       ok: true,
@@ -706,6 +714,13 @@ router.post('/skills/:id/merge', async (req, res) => {
       warning: 'Legacy merge endpoint does not safely preserve all user state. Prefer /api/admin/skills/:id/safe-merge for production use.'
     });
   } catch (err) {
+    if (transactionStarted) {
+      try {
+        await db.insert('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('Merge skill rollback error:', rollbackErr.message);
+      }
+    }
     console.error('Merge skill error:', err.message);
     res.status(500).json({ error: err.message });
   }

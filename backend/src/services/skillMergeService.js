@@ -37,18 +37,36 @@ class SkillMergeService {
       return { dryRun: true, mode: isRename ? 'rename' : 'merge', sourceId, targetId, ...report };
     }
 
-    // Execute
-    if (isRename) {
-      await this._executeRename(sourceId, targetId, source[0]);
-    } else {
-      await this._executeMerge(sourceId, targetId);
-    }
+    // Execute atomically — any mid-flight failure rolls back every write.
+    await this._runInTransaction(async () => {
+      if (isRename) {
+        await this._executeRename(sourceId, targetId, source[0]);
+      } else {
+        await this._executeMerge(sourceId, targetId);
+      }
 
-    // Verify source is gone
-    const check = await db.query('SELECT id FROM skills WHERE id = ?', [sourceId]);
-    if (check.length > 0) throw new Error('Post-merge verification failed: source skill still exists');
+      // Verify source is gone (inside the txn so a failed verification rolls back too)
+      const check = await db.query('SELECT id FROM skills WHERE id = ?', [sourceId]);
+      if (check.length > 0) throw new Error('Post-merge verification failed: source skill still exists');
+    });
 
     return { dryRun: false, mode: isRename ? 'rename' : 'merge', sourceId, targetId, ...report };
+  }
+
+  async _runInTransaction(fn) {
+    await db.insert('BEGIN IMMEDIATE TRANSACTION');
+    try {
+      const result = await fn();
+      await db.insert('COMMIT');
+      return result;
+    } catch (err) {
+      try {
+        await db.insert('ROLLBACK');
+      } catch (rollbackErr) {
+        console.error('safeMerge rollback error:', rollbackErr.message);
+      }
+      throw err;
+    }
   }
 
   // ── impact report (read-only) ───────────────────────────────────────
