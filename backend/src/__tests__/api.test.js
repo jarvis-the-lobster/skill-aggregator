@@ -1315,6 +1315,188 @@ describe('POST /api/admin/skills/:id/rename', () => {
   });
 });
 
+describe('POST /api/admin/skills/:id/merge', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  test('merges the source skill into the target skill', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python-basics', 'Python Basics', 'ready')");
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('py-1', 'python-basics', 'video', 'Intro', 'https://example.com/intro', 'youtube')"
+    );
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason) VALUES ('python-basics', 1, 'py-1', 'video', 'legacy plan')"
+    );
+
+    const res = await request(app)
+      .post('/api/admin/skills/python-basics/merge')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ targetId: 'python' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.merged).toBe('python-basics → python');
+
+    const sourceSkill = await db.query("SELECT id FROM skills WHERE id = 'python-basics'");
+    const movedContent = await db.query("SELECT id, skill_id FROM content WHERE id = 'py-1'");
+    const sourcePlans = await db.query("SELECT id FROM learning_plans WHERE skill_id = 'python-basics'");
+    const alias = await db.getSkillAlias('python-basics');
+
+    expect(sourceSkill.length).toBe(0);
+    expect(movedContent).toEqual([{ id: 'py-1', skill_id: 'python' }]);
+    expect(sourcePlans.length).toBe(0);
+    expect(alias?.target_id).toBe('python');
+  });
+
+  test('rolls back the merge if a later step fails', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python-basics', 'Python Basics', 'ready')");
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('py-1', 'python-basics', 'video', 'Intro', 'https://example.com/intro', 'youtube')"
+    );
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason) VALUES ('python-basics', 1, 'py-1', 'video', 'legacy plan')"
+    );
+
+    const originalSaveSkillAlias = mockDb.saveSkillAlias;
+    mockDb.saveSkillAlias = jest.fn().mockRejectedValue(new Error('alias write failed'));
+
+    const res = await request(app)
+      .post('/api/admin/skills/python-basics/merge')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ targetId: 'python' });
+
+    mockDb.saveSkillAlias = originalSaveSkillAlias;
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'alias write failed' });
+
+    const sourceSkill = await db.query("SELECT id FROM skills WHERE id = 'python-basics'");
+    const sourceContent = await db.query("SELECT id, skill_id FROM content WHERE id = 'py-1'");
+    const sourcePlans = await db.query("SELECT id FROM learning_plans WHERE skill_id = 'python-basics'");
+    const alias = await db.getSkillAlias('python-basics');
+
+    expect(sourceSkill).toEqual([{ id: 'python-basics' }]);
+    expect(sourceContent).toEqual([{ id: 'py-1', skill_id: 'python-basics' }]);
+    expect(sourcePlans.length).toBe(1);
+    expect(alias).toBeNull();
+  });
+});
+
+describe('POST /api/admin/skills/:id/safe-merge', () => {
+  const originalCronSecret = process.env.CRON_SECRET;
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-cron-secret';
+  });
+
+  afterAll(() => {
+    if (originalCronSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCronSecret;
+  });
+
+  test('dry-run reports impact and does not mutate any table', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python-basics', 'Python Basics', 'ready')");
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('py-1', 'python-basics', 'video', 'Intro', 'https://example.com/intro', 'youtube')"
+    );
+
+    const res = await request(app)
+      .post('/api/admin/skills/python-basics/safe-merge')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ targetId: 'python', mode: 'dry-run' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.dryRun).toBe(true);
+    expect(res.body.mode).toBe('merge');
+    expect(res.body.impact.content.source_count).toBe(1);
+
+    const sourceSkill = await db.query("SELECT id FROM skills WHERE id = 'python-basics'");
+    const sourceContent = await db.query("SELECT id, skill_id FROM content WHERE id = 'py-1'");
+    const alias = await db.getSkillAlias('python-basics');
+    expect(sourceSkill).toEqual([{ id: 'python-basics' }]);
+    expect(sourceContent).toEqual([{ id: 'py-1', skill_id: 'python-basics' }]);
+    expect(alias).toBeNull();
+  });
+
+  test('execute mode merges atomically and commits all writes', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python-basics', 'Python Basics', 'ready')");
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('py-1', 'python-basics', 'video', 'Intro', 'https://example.com/intro', 'youtube')"
+    );
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason) VALUES ('python-basics', 1, 'py-1', 'video', 'legacy plan')"
+    );
+
+    const res = await request(app)
+      .post('/api/admin/skills/python-basics/safe-merge')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ targetId: 'python', mode: 'execute' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.dryRun).toBe(false);
+    expect(res.body.mode).toBe('merge');
+
+    const sourceSkill = await db.query("SELECT id FROM skills WHERE id = 'python-basics'");
+    const movedContent = await db.query("SELECT id, skill_id FROM content WHERE id = 'py-1'");
+    const sourcePlans = await db.query("SELECT id FROM learning_plans WHERE skill_id = 'python-basics'");
+    const targetPlans = await db.query("SELECT id FROM learning_plans WHERE skill_id = 'python'");
+    const alias = await db.getSkillAlias('python-basics');
+
+    expect(sourceSkill.length).toBe(0);
+    expect(movedContent).toEqual([{ id: 'py-1', skill_id: 'python' }]);
+    expect(sourcePlans.length).toBe(0);
+    expect(targetPlans.length).toBe(1);
+    expect(alias?.target_id).toBe('python');
+  });
+
+  test('rolls back the merge if a later step fails', async () => {
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python-basics', 'Python Basics', 'ready')");
+    await db.insert("INSERT INTO skills (id, name, status) VALUES ('python', 'Python', 'ready')");
+    await db.insert(
+      "INSERT INTO content (id, skill_id, type, title, url, source) VALUES ('py-1', 'python-basics', 'video', 'Intro', 'https://example.com/intro', 'youtube')"
+    );
+    await db.insert(
+      "INSERT INTO learning_plans (skill_id, day_number, content_id, content_type, reason) VALUES ('python-basics', 1, 'py-1', 'video', 'legacy plan')"
+    );
+
+    const originalSaveSkillAlias = mockDb.saveSkillAlias;
+    mockDb.saveSkillAlias = jest.fn().mockRejectedValue(new Error('alias write failed'));
+
+    const res = await request(app)
+      .post('/api/admin/skills/python-basics/safe-merge')
+      .set('Authorization', 'Bearer test-cron-secret')
+      .send({ targetId: 'python', mode: 'execute' });
+
+    mockDb.saveSkillAlias = originalSaveSkillAlias;
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'alias write failed' });
+
+    // Every write made before the failing step must be undone by the rollback.
+    const sourceSkill = await db.query("SELECT id FROM skills WHERE id = 'python-basics'");
+    const sourceContent = await db.query("SELECT id, skill_id FROM content WHERE id = 'py-1'");
+    const sourcePlans = await db.query("SELECT id FROM learning_plans WHERE skill_id = 'python-basics'");
+    const alias = await db.getSkillAlias('python-basics');
+
+    expect(sourceSkill).toEqual([{ id: 'python-basics' }]);
+    expect(sourceContent).toEqual([{ id: 'py-1', skill_id: 'python-basics' }]);
+    expect(sourcePlans.length).toBe(1);
+    expect(alias).toBeNull();
+  });
+});
+
 describe('DELETE /api/admin/skills/:id', () => {
   const originalCronSecret = process.env.CRON_SECRET;
 
